@@ -1,0 +1,12 @@
+.home {
+  display: grid;
+  place-items: center;
+  min-height: 52dvh;
+  padding: 40px 20px;
+}
+
+.home__vazio {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-faint);
+}

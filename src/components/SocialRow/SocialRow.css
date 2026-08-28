@@ -1,0 +1,66 @@
+.social {
+  margin-top: 20px;
+}
+
+.social__divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-faint);
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.social__divider::before,
+.social__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+}
+
+.social__list {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.social__btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--text-base);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  box-shadow: inset 0 1px 0 var(--glass-sheen-b);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.social__logo {
+  width: 21px;
+  height: 21px;
+  object-fit: contain;
+  /* logo em escala de cinza */
+  filter: grayscale(1);
+}
+
+/* sobre o preto o cinza precisa de um empurrao para se ler */
+:root[data-theme='dark'] .social__logo {
+  filter: grayscale(1) brightness(1.7);
+}
+
+.social__btn:hover {
+  transform: translateY(-3px);
+  color: var(--text-strong);
+  background: var(--control-bg-hover);
+}
