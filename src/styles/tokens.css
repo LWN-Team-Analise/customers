@@ -1,0 +1,195 @@
+/* ============================================================
+   Tokens de design — paleta preto e branco.
+   Tema padrao: CLARO (:root). O escuro entra por
+   [data-theme='dark'] no <html>, ligado pelo botao lua/sol.
+   ============================================================ */
+
+:root {
+  /* ---- Layout ---- */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 26px;
+  --radius-pill: 999px;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 700ms;
+  --dur-theme: 420ms;
+
+  /* ---- Textura de granulacao (ruido) ---- */
+  --grain-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+
+  /* =========================================================
+     TEMA CLARO — fundo branco
+     ========================================================= */
+  color-scheme: light;
+
+  --page-bg: #ffffff;
+  --surface: #ffffff;
+
+  --text-strong: #0d0d0d;
+  --text-base: rgba(13, 13, 13, 0.78);
+  --text-muted: rgba(13, 13, 13, 0.55);
+  --text-faint: rgba(13, 13, 13, 0.38);
+  --link: rgba(13, 13, 13, 0.72);
+  --link-hover: #0d0d0d;
+
+  --line: rgba(13, 13, 13, 0.14);
+  --line-strong: rgba(13, 13, 13, 0.26);
+  --control-bg: rgba(13, 13, 13, 0.05);
+  --control-bg-hover: rgba(13, 13, 13, 0.1);
+  --control-border: rgba(13, 13, 13, 0.16);
+  /* azul escuro: cor das acoes (botoes, foco, checkbox) */
+  --accent: #123b7a;
+  --accent-strong: #0b2a5c;
+  --control-on-bg: var(--accent);
+  --control-on-fg: #ffffff;
+
+  /* ---- Botao primario: vidro azul ---- */
+  /* bolha de vidro em azul marinho */
+  --btn-bg: rgba(14, 40, 92, 0.88);
+  --btn-fg: #ffffff;
+  --btn-border: rgba(255, 255, 255, 0.42);
+  --btn-inner: inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.14);
+  --btn-gloss: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.07) 46%,
+    transparent 62%
+  );
+  --btn-shadow: 0 14px 30px -18px rgba(9, 30, 74, 0.75);
+  --btn-shadow-hover: 0 18px 36px -18px rgba(9, 30, 74, 0.6);
+  --btn-glow: rgba(255, 255, 255, 0.16);
+
+  /* ---- Liquid glass ---- */
+  --glass-bg: linear-gradient(
+    148deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.62) 45%,
+    rgba(240, 240, 240, 0.55) 100%
+  );
+  --glass-border: rgba(13, 13, 13, 0.09);
+  --glass-blur: 18px;
+  --glass-shadow: 0 30px 60px -32px rgba(0, 0, 0, 0.38),
+    0 4px 18px -12px rgba(0, 0, 0, 0.18);
+  --glass-inner: inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.5);
+  --glass-sheen-a: rgba(255, 255, 255, 0.6);
+  --glass-sheen-b: rgba(255, 255, 255, 0.18);
+  --glass-sheen-c: rgba(255, 255, 255, 0.45);
+  --glass-edge-a: rgba(255, 255, 255, 0.95);
+  --glass-edge-b: rgba(13, 13, 13, 0.07);
+  --glass-edge-opacity: 0.8;
+  --glass-fallback: #f7f7f7;
+
+  /* ---- Foto (dentro das faixas) ---- */
+  --photo-veil: rgba(255, 255, 255, 0.7);
+  --photo-rim: rgba(13, 13, 13, 0.1);
+  --photo-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0) 45%,
+    rgba(255, 255, 255, 0.28) 100%
+  );
+
+  /* gradiente animado da palavra CLIENTES */
+  /* grade de quadradinhos do fundo */
+  --grid-line: rgba(37, 82, 152, 0.16);
+  --grid-size: 26px;
+
+  /* gradiente ESCURO no tema claro */
+  --grad-a: #071a3a;
+  --grad-b: #1b4386;
+
+
+  --danger: #b3261e;
+  --danger-bg: rgba(179, 38, 30, 0.08);
+  --danger-border: rgba(179, 38, 30, 0.28);
+  --success: #1f6f4a;
+}
+
+/* =========================================================
+   TEMA ESCURO — fundo preto
+   ========================================================= */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --page-bg: #000000;
+  --surface: #0d0d0d;
+
+  --text-strong: #ffffff;
+  --text-base: rgba(255, 255, 255, 0.82);
+  --text-muted: rgba(255, 255, 255, 0.55);
+  --text-faint: rgba(255, 255, 255, 0.36);
+  --link: rgba(255, 255, 255, 0.7);
+  --link-hover: #ffffff;
+
+  --line: rgba(255, 255, 255, 0.16);
+  --line-strong: rgba(255, 255, 255, 0.3);
+  --control-bg: rgba(255, 255, 255, 0.07);
+  --control-bg-hover: rgba(255, 255, 255, 0.14);
+  --control-border: rgba(255, 255, 255, 0.2);
+  /* no preto o azul precisa de um pouco mais de luz para se ler */
+  --accent: #2c63bd;
+  --accent-strong: #1b4a90;
+  --control-on-bg: var(--accent);
+  --control-on-fg: #ffffff;
+
+  /* mesma bolha de vidro do tema claro, so que em azul clarinho */
+  --btn-bg: rgba(160, 200, 250, 0.84);
+  --btn-fg: #0b2447;
+  --btn-border: rgba(216, 236, 255, 0.6);
+  --btn-inner: inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.22);
+  --btn-gloss: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.1) 46%,
+    transparent 62%
+  );
+  --btn-shadow: 0 14px 30px -18px rgba(120, 170, 240, 0.45);
+  --btn-shadow-hover: 0 18px 36px -18px rgba(150, 195, 255, 0.5);
+  --btn-glow: rgba(255, 255, 255, 0.45);
+
+  /* cartao escuro: superficie solida e limpa, sem aspecto leitoso */
+  --glass-bg: linear-gradient(
+    160deg,
+    rgba(26, 26, 28, 0.94) 0%,
+    rgba(15, 15, 17, 0.96) 100%
+  );
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 34px 70px -34px rgba(0, 0, 0, 1),
+    0 4px 18px -10px rgba(0, 0, 0, 0.85);
+  --glass-inner: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+  --glass-sheen-a: rgba(255, 255, 255, 0.05);
+  --glass-sheen-b: rgba(255, 255, 255, 0.02);
+  --glass-sheen-c: rgba(255, 255, 255, 0.04);
+  --glass-edge-a: rgba(255, 255, 255, 0.16);
+  --glass-edge-b: rgba(255, 255, 255, 0.03);
+  --glass-edge-opacity: 0.5;
+  --glass-fallback: #121214;
+
+  --photo-veil: rgba(0, 0, 0, 0.74);
+  --photo-rim: rgba(255, 255, 255, 0.22);
+  --photo-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0) 45%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
+
+  --grid-line: rgba(255, 255, 255, 0.22);
+
+  /* gradiente CLARO no tema escuro */
+  --grad-a: #4d8ff0;
+  --grad-b: #a5d2ff;
+
+
+  --danger: #ff8a9c;
+  --danger-bg: rgba(255, 138, 156, 0.12);
+  --danger-border: rgba(255, 138, 156, 0.3);
+  --success: #6fe3b4;
+}
