@@ -1,17 +1,45 @@
+import { Link } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
+import { useDados } from '@/context/DadosContext'
+import { etapaAtual, obraConcluida, setoresPendentes } from '@/domain/obras'
 import './Home.css'
 
-/**
- * Tela inicial depois do login: a casca (barra lateral + barra superior)
- * com a area de conteudo ainda livre para os modulos.
- */
+/** Tela inicial: um resumo curto, com atalho para cada modulo. */
 export default function Home() {
+  const { obras, clientes, equipe } = useDados()
+
+  const abertas = obras.filter((o) => !obraConcluida(o))
+  const emergencias = abertas.filter((o) => o.tipo === 'emergencia')
+  const pendentes = abertas.filter((o) => setoresPendentes(o, etapaAtual(o)).length > 0)
+  const concluidas = obras.filter(obraConcluida)
+
+  const cartoes = [
+    { rotulo: 'Obras em andamento', valor: abertas.length, rota: '/app/obras' },
+    { rotulo: 'Emergências abertas', valor: emergencias.length, rota: '/app/obras', tom: 'alerta' },
+    { rotulo: 'Aguardando setor', valor: pendentes.length, rota: '/app/obras', tom: 'aviso' },
+    { rotulo: 'Concluídas', valor: concluidas.length, rota: '/app/concluidas', tom: 'ok' },
+    { rotulo: 'Clientes', valor: clientes.length, rota: '/app/clientes' },
+    { rotulo: 'Pessoas na equipe', valor: equipe.length, rota: '/app/usuarios' },
+  ]
+
   return (
-    <AppShell ativo="inicio">
+    <AppShell>
       <section className="home">
-        <p className="home__vazio">
-          Escolha um módulo na barra lateral para começar.
-        </p>
+        <header>
+          <h1 className="tela__titulo">Página inicial</h1>
+          <p className="tela__lead">Como está a casa hoje.</p>
+        </header>
+
+        <ul className="home__grade">
+          {cartoes.map((c) => (
+            <li key={c.rotulo}>
+              <Link className="resumo" to={c.rota} data-tom={c.tom}>
+                <span className="resumo__valor">{c.valor}</span>
+                <span className="resumo__rotulo">{c.rotulo}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
     </AppShell>
   )

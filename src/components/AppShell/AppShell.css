@@ -1,94 +1,273 @@
 /* ============================================================
-   Casca do sistema: barra lateral flutuante + barra superior,
-   ambas em pastilha de vidro, no mesmo padrao do login.
+   Casca do sistema: barra lateral de altura inteira (icone +
+   descricao) e barra superior em pastilha de vidro.
    ============================================================ */
 
 .shell {
-  position: relative;
+  display: flex;
+  align-items: stretch;
   min-height: 100dvh;
-  padding: 18px 18px 24px 96px;
-  background: var(--page-bg);
+  /* abre espaco para a bolha, que e flutuante */
+  padding-left: 106px;
 }
 
-/* ---------------- Barra lateral ---------------- */
+/* ---------------- Logo ----------------
+   Solta no canto superior esquerdo do site, fora da bolha. */
+
+.marca {
+  position: fixed;
+  left: 26px;
+  top: 22px;
+  z-index: 21;
+  display: grid;
+  place-items: center;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.marca img {
+  /* monograma quadrado: largura e altura iguais */
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.marca:hover {
+  opacity: 0.75;
+}
+
+/* ---------------- Barra lateral ----------------
+   Bolha de vidro flutuante, colada a esquerda e centralizada na
+   vertical. Leva so os itens de navegacao: a logo fica no topo da
+   pagina e o avatar no rodape, os dois fora dela.
+   ------------------------------------------------------- */
 
 .rail {
   position: fixed;
-  left: 18px;
+  left: 14px;
   top: 50%;
   z-index: 20;
+  transform: translateY(-50%);
+  width: 92px;
+  max-height: calc(100dvh - 190px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 10px 8px;
-  transform: translateY(-50%);
-  border-radius: var(--radius-pill);
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: 30px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-inner);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(165%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(165%);
+}
+
+/* brilho de cima, que da o aspecto de bolha */
+.rail::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    170deg,
+    var(--glass-sheen-a) 0%,
+    var(--glass-sheen-b) 38%,
+    transparent 62%
+  );
+  pointer-events: none;
+}
+
+.rail > * {
+  position: relative;
+  z-index: 1;
 }
 
 .rail__lista {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .rail__btn {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 10px 4px 8px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 18px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  text-align: center;
+  text-decoration: none;
   transition: background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out);
 }
 
-.rail__btn:hover:not(:disabled) {
+.rail__btn:hover {
   background: var(--control-bg);
   color: var(--text-strong);
 }
 
-.rail__btn:active:not(:disabled) {
+.rail__glifo {
+  display: grid;
+  place-items: center;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.rail__btn:active .rail__glifo {
+  transform: scale(0.9);
+}
+
+.rail__rotulo {
+  font-size: 0.66rem;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  hyphens: auto;
+}
+
+/* item atual: bolha cheia dentro da bolha, como na referencia */
+.rail__btn.is-atual {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 var(--glass-edge-a), 0 4px 12px -8px rgba(0, 0, 0, 0.6);
+}
+
+.rail__btn.is-atual .rail__glifo {
+  color: var(--accent);
+}
+
+:root[data-theme='dark'] .rail__btn.is-atual .rail__glifo {
+  color: var(--grad-b);
+}
+
+/* ---------------- Avatar + menu ----------------
+   Solto no canto inferior esquerdo, fora da bolha do menu. */
+
+.euzinho {
+  position: fixed;
+  left: 25px;
+  bottom: 22px;
+  z-index: 21;
+}
+
+.euzinho__botao {
+  display: grid;
+  place-items: center;
+  padding: 3px;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  cursor: pointer;
+  transition: box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.euzinho__botao:hover,
+.euzinho__botao.is-aberto {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.euzinho__botao:active {
   transform: scale(0.94);
 }
 
-.rail__btn:disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
-}
-
-/* item atual: circulo cheio, como na referencia */
-.rail__btn.is-atual {
-  background: var(--control-on-bg);
-  color: var(--control-on-fg);
-  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.5);
-}
-
-.rail__sair {
-  position: relative;
-  margin-top: 10px;
-}
-
-.rail__sair::before {
-  content: '';
+.euzinho__menu {
   position: absolute;
-  top: -6px;
-  left: 8px;
-  right: 8px;
-  height: 1px;
-  background: var(--line);
+  bottom: calc(100% + 8px);
+  left: 6px;
+  z-index: 30;
+  width: 216px;
+  padding: 7px;
+  border-radius: var(--radius-md);
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-borda);
+  box-shadow: var(--modal-sombra);
+  animation: menu-sobe var(--dur-fast) var(--ease-out);
+}
+
+@keyframes menu-sobe {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.euzinho__quem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 11px 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 5px;
+}
+
+.euzinho__quem strong {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.euzinho__quem span {
+  font-size: 0.73rem;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.euzinho__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-base);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.euzinho__item:hover {
+  background: var(--control-bg);
+  color: var(--text-strong);
+}
+
+.euzinho__item--sair:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* ---------------- Coluna direita ---------------- */
+
+.shell__coluna {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 18px 24px;
 }
 
 /* ---------------- Barra superior ---------------- */
@@ -100,33 +279,13 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 9px 10px 9px 12px;
+  padding: 9px 10px 9px 18px;
   border-radius: var(--radius-pill);
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-inner);
   backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-}
-
-.topbar__usuario {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-right: 4px;
-}
-
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: var(--control-on-bg);
-  color: var(--control-on-fg);
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
 }
 
 .topbar__saudacao {
@@ -260,47 +419,96 @@
 /* ---------------- Conteudo ---------------- */
 
 .shell__conteudo {
-  margin-top: 20px;
+  flex: 1;
+  min-width: 0;
+  margin-top: 18px;
 }
 
 /* ---------------- Responsivo ---------------- */
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .shell {
-    padding: 14px 14px 96px;
+    padding-left: 94px;
   }
 
-  /* no celular a barra vira uma faixa no rodape */
   .rail {
-    left: 50%;
-    right: auto;
+    width: 82px;
+    left: 10px;
+  }
+
+  .rail__rotulo {
+    font-size: 0.62rem;
+  }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    flex-direction: column;
+    padding-left: 0;
+  }
+
+  /* no celular a bolha deita e vira uma faixa no rodape.
+     width: 100% (em vez de left+right) porque com width:auto a barra
+     estica ate caber os seis itens e vaza a tela. */
+  .rail {
+    position: fixed;
     top: auto;
-    bottom: 14px;
+    bottom: 8px;
+    left: 8px;
+    width: calc(100% - 16px);
+    max-height: none;
+    transform: none;
     flex-direction: row;
-    padding: 8px 10px;
-    transform: translateX(-50%);
-    max-width: calc(100vw - 28px);
-    overflow-x: auto;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: 22px;
   }
 
   .rail__lista {
+    margin: 0;
+  }
+
+  /* min-width: 0 deixa a lista encolher: os itens rolam por dentro dela,
+     em vez de empurrarem a barra para fora da tela */
+  .rail__lista {
+    flex: 1;
+    min-width: 0;
     flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
   }
 
-  .rail__sair {
-    margin: 0 0 0 10px;
+  .rail__btn {
+    min-width: 62px;
+    padding: 7px 4px 6px;
   }
 
-  .rail__sair::before {
-    top: 8px;
-    bottom: 8px;
-    left: -6px;
-    right: auto;
-    width: 1px;
-    height: auto;
+  .rail__rotulo {
+    font-size: 0.58rem;
+    white-space: nowrap;
+  }
+
+  /* no celular a logo sai da tela e o avatar entra na faixa de baixo */
+  .marca {
+    display: none;
+  }
+
+  .euzinho {
+    position: static;
+  }
+
+  .euzinho__menu {
+    left: auto;
+    right: 0;
+  }
+
+  .shell__coluna {
+    padding: 14px 14px 104px;
   }
 
   .topbar {
+    top: 14px;
     flex-wrap: wrap;
     border-radius: var(--radius-lg);
     padding: 12px;

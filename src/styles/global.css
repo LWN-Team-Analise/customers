@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './comum.css';
 
 *,
 *::before,
@@ -14,8 +15,15 @@ body,
 
 body {
   margin: 0;
+  /* a malha e fixa: rola o conteudo, nao o fundo */
+  background-attachment: fixed;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  background: var(--page-bg);
+  background-color: var(--page-bg);
+  background-image:
+    radial-gradient(70% 55% at 8% 92%, var(--mesh-a) 0%, transparent 70%),
+    radial-gradient(65% 50% at 96% 78%, var(--mesh-b) 0%, transparent 72%),
+    radial-gradient(90% 40% at 50% 108%, var(--mesh-c) 0%, transparent 75%),
+    radial-gradient(120% 70% at 50% -10%, var(--mesh-topo) 0%, transparent 60%);
   color: var(--text-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

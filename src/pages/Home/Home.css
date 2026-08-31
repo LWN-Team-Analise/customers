@@ -1,12 +1,53 @@
 .home {
-  display: grid;
-  place-items: center;
-  min-height: 52dvh;
-  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.home__vazio {
+.home__grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 12px;
   margin: 0;
-  font-size: 0.9rem;
-  color: var(--text-faint);
+  padding: 0;
+  list-style: none;
 }
+
+.resumo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  padding: 18px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  color: var(--text-base);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.resumo:hover {
+  transform: translateY(-2px);
+  color: var(--text-base);
+}
+
+.resumo__valor {
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+
+.resumo[data-tom='alerta'] .resumo__valor { color: var(--pri-alta); }
+.resumo[data-tom='aviso'] .resumo__valor { color: var(--pri-media); }
+.resumo[data-tom='ok'] .resumo__valor { color: var(--etapa-ok); }
+
+.resumo__rotulo {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+

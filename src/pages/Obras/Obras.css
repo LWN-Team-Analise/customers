@@ -1,0 +1,362 @@
+/* ============================================================
+   Quadro de obras: painel de filtros, barra de acoes e as tres
+   colunas (padrao, emergencia, enviar aviso).
+   ============================================================ */
+
+.obras {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------------- Painel de filtros ---------------- */
+
+.painel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 15px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+
+.painel__filtros {
+  display: flex;
+  align-items: flex-start;
+  gap: 26px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.filtro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filtro__nome {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.filtro__nome em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.filtro__linha {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filtro__data {
+  padding: 6px 11px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--text-strong);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.filtro__data:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filtro__dataleg {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+/* o "+N" dos setores: mesma pastilha, so que tracejada */
+.chip--mais {
+  border-style: dashed;
+  font-weight: 700;
+}
+
+.filtro__cliente {
+  max-width: 190px;
+  padding: 6px 11px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--text-strong);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.filtro__cliente:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filtro__cliente option {
+  background: var(--surface);
+  color: var(--text-strong);
+}
+
+/* ---- membros, agora na mesma linha dos filtros ---- */
+
+.filtro--membros {
+  flex-shrink: 0;
+  margin-left: auto;
+  align-items: flex-end;
+}
+
+.equipe {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.equipe:hover:not(:disabled) {
+  background: var(--control-bg-hover);
+}
+
+.equipe:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.equipe__avatares {
+  display: inline-flex;
+  --avatar-anel: var(--surface);
+}
+
+.equipe__avatares > * + * {
+  margin-left: -9px;
+}
+
+.equipe__resto,
+.equipe__vazio {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.equipe__vazio {
+  padding: 5px 6px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+/* ---------------- Barra de acoes ---------------- */
+
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.barra__total {
+  margin: 0 6px 0 2px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.barra__total strong {
+  margin-right: 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.barra__direita {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* ---------------- Quadro ---------------- */
+
+.quadro {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.coluna {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--coluna-borda);
+  border-radius: var(--radius-lg);
+  background: var(--coluna-bg);
+}
+
+.coluna__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coluna__titulo {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--tom-bg);
+  color: var(--tom-fg);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.coluna__titulo[data-tom='padrao'] {
+  --tom-bg: var(--accent);
+  --tom-fg: #fff;
+}
+
+.coluna__titulo[data-tom='emergencia'] {
+  --tom-bg: var(--obra-emerg);
+  --tom-fg: var(--obra-emerg-fg);
+}
+
+.coluna__titulo[data-tom='aviso'] {
+  --tom-bg: var(--obra-aviso);
+  --tom-fg: var(--obra-aviso-fg);
+}
+
+.coluna__contador {
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-base);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.coluna__mais {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.coluna__mais:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.coluna__pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 128px;
+}
+
+.coluna__vazio {
+  margin: auto 0;
+  padding: 16px 6px;
+  text-align: center;
+  font-size: 0.79rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* ---- coluna de aviso: o card inteiro e o botao ---- */
+
+.coluna__todos {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--obra-aviso);
+  color: var(--obra-aviso-fg);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.coluna__todos:hover {
+  filter: brightness(1.08);
+}
+
+.coluna__todos:active {
+  transform: scale(0.97);
+}
+
+/* linha de instrucao no pe do card amarelo */
+.avisar__dica {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--obra-aviso-borda);
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.78;
+}
+
+/* ---------------- Responsivo ---------------- */
+
+@media (max-width: 720px) {
+  .painel {
+    padding: 14px;
+  }
+
+  .filtro--membros {
+    margin-left: 0;
+  }
+
+  .barra__direita {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .acao {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  /* na tela estreita a busca ganha a linha inteira; filtro e ordem
+     dividem a de baixo */
+  .barra__direita .procura {
+    flex-basis: 100%;
+  }
+
+  .filtro--membros {
+    width: 100%;
+  }
+}

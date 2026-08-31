@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { checarConexao } from './db.js'
 import authRouter from './routes/auth.js'
+import equipeRouter from './routes/equipe.js'
 
 const app = express()
 const porta = Number(process.env.API_PORT ?? 3001)
@@ -18,6 +19,7 @@ app.get('/api/health', async (_req, res) => {
 })
 
 app.use('/api/auth', authRouter)
+app.use('/api/equipe', equipeRouter)
 
 app.use((erro, _req, res, _next) => {
   console.error('[api]', erro)
