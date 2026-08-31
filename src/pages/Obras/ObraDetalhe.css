@@ -1,0 +1,646 @@
+/* ============================================================
+   Tela da obra: faixa colorida pelo tipo, informacoes, as cinco
+   etapas deslizando na horizontal e as observacoes fixas a direita.
+   ============================================================ */
+
+.detalhe {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------------- Faixa do topo ---------------- */
+
+.capa {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 22px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--tom-bg);
+  color: var(--tom-fg);
+  border: 1px solid var(--tom-borda);
+  box-shadow: 0 20px 44px -30px rgba(0, 0, 0, 0.8);
+}
+
+.capa[data-tom='padrao'] {
+  --tom-bg: var(--obra-padrao-grad);
+  --tom-fg: var(--obra-padrao-fg);
+  --tom-borda: var(--obra-padrao-borda);
+}
+
+.capa[data-tom='emergencia'] {
+  --tom-bg: var(--obra-emerg-grad);
+  --tom-fg: var(--obra-emerg-fg);
+  --tom-borda: var(--obra-emerg-borda);
+}
+
+.capa__voltar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.capa__voltar:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.capa__texto {
+  min-width: 0;
+  flex: 1;
+}
+
+.capa__trilha {
+  margin: 0 0 2px;
+  font-size: 0.78rem;
+  opacity: 0.78;
+}
+
+.capa__trilha a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.capa__trilha a:hover {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.capa__titulo {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.2vw, 2.15rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.capa__lado {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  max-width: 320px;
+  text-align: right;
+}
+
+.capa__selo {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.32);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.capa__desc {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+/* ---------------- Faixa de informacoes ---------------- */
+
+.infos {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 30px;
+  padding: 14px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.info__nome {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.info__valor {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.info__valor--pri {
+  align-self: flex-start;
+  padding: 3px 12px;
+  border-radius: var(--radius-pill);
+  color: var(--pri-fg);
+  background: var(--pri-bg);
+}
+
+.info__valor--pri[data-pri='alta'] { --pri-bg: var(--pri-alta); --pri-fg: var(--pri-alta-fg); }
+.info__valor--pri[data-pri='media'] { --pri-bg: var(--pri-media); --pri-fg: var(--pri-media-fg); }
+.info__valor--pri[data-pri='baixa'] { --pri-bg: var(--pri-baixa); --pri-fg: var(--pri-baixa-fg); }
+
+.info__linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.info__setor {
+  position: relative;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--setor-cor);
+  color: var(--setor-fg);
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.55;
+}
+
+.info__setor.is-pronto {
+  opacity: 1;
+}
+
+.info__setor.is-pronto::after {
+  content: '✓';
+  margin-left: 5px;
+  font-weight: 800;
+}
+
+
+.info--progresso {
+  min-width: 150px;
+}
+
+.barrinha {
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  overflow: hidden;
+}
+
+.barrinha__cheio {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--etapa-ok);
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+.info--membros {
+  margin-left: auto;
+}
+
+.info__avatares {
+  display: inline-flex;
+  --avatar-anel: var(--surface);
+}
+
+.info__avatares > * + * {
+  margin-left: -9px;
+}
+
+/* ---------------- Tabuleiro ---------------- */
+
+.tabuleiro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 14px;
+  align-items: start;
+}
+
+/* as cinco etapas: cabem tres na tela, as outras entram deslizando */
+.trilho {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(268px, 1fr);
+  gap: 14px;
+  padding-bottom: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximate;
+}
+
+.etapa {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--coluna-borda);
+  border-radius: var(--radius-lg);
+  background: var(--coluna-bg);
+  scroll-snap-align: start;
+}
+
+.etapa[data-estado='bloqueada'] {
+  border-style: dashed;
+}
+
+.etapa__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.etapa__titulo {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.etapa__contagem {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-base);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.etapa__nome {
+  margin: 0 0 2px;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.etapa__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.etapa__aviso {
+  margin: 4px 0 0;
+  font-size: 0.73rem;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+/* etapa travada: da para ler, mas nao para mexer */
+.etapa[data-estado='bloqueada'] .etapa__cards {
+  opacity: 0.42;
+  filter: saturate(0.6);
+}
+
+/* ---------------- Card de setor ---------------- */
+
+.setorcard {
+  padding: 11px 12px;
+  border-radius: var(--radius-md);
+  background: var(--setor-cor);
+  color: #fff;
+  box-shadow: 0 10px 20px -16px rgba(0, 0, 0, 0.8);
+  --avatar-anel: var(--setor-cor);
+}
+
+
+.setorcard.is-pronto {
+  box-shadow: 0 0 0 2px var(--etapa-ok), 0 10px 20px -16px rgba(0, 0, 0, 0.8);
+}
+
+/* etapa aberta, mas de outro cargo: da para ler, nao para marcar */
+.setorcard.is-deoutro {
+  opacity: 0.62;
+}
+
+.setorcard.is-deoutro .tarefa {
+  cursor: not-allowed;
+}
+
+.setorcard__cadeado {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.setorcard__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.setorcard__titulo {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+}
+
+.setorcard__placar {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.setorcard__tarefas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tarefa {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  padding: 4px 5px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.tarefa:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.tarefa:disabled {
+  cursor: not-allowed;
+}
+
+.tarefa__marca {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: 1.5px solid rgba(255, 255, 255, 0.75);
+  border-radius: 4px;
+  color: var(--setor-cor);
+  background: transparent;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.tarefa.is-feita .tarefa__marca {
+  background: #fff;
+  border-color: #fff;
+}
+
+.tarefa.is-feita {
+  opacity: 0.72;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* ---------------- Observacoes ---------------- */
+
+.obs {
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100dvh - 108px);
+  padding: 13px;
+  border: 1px solid var(--coluna-borda);
+  border-radius: var(--radius-lg);
+  background: var(--coluna-bg);
+}
+
+.obs__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.obs__titulo {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.obs__contagem {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-base);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.obs__mais {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--text-base);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.obs__mais:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.obs__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  overflow-y: auto;
+}
+
+.obs__vazio {
+  margin: 0;
+  padding: 18px 6px;
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.nota {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.nota__texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.nota__quem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+}
+
+.nota__quem strong {
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nota__nota {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--pri-baixa-suave);
+  color: var(--etapa-ok);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.nota__corpo {
+  margin: 0 0 7px;
+  font-size: 0.81rem;
+  line-height: 1.45;
+  color: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.nota__data {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+}
+
+/* foto centralizada na lateral direita, como pedido */
+.nota__lado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  --avatar-anel: var(--surface);
+}
+
+.nota__apagar {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.nota:hover .nota__apagar,
+.nota__apagar:focus-visible {
+  opacity: 1;
+}
+
+.nota__apagar:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* ---------------- Formulario da observacao ---------------- */
+
+.formobs {
+  display: grid;
+  gap: 15px;
+}
+
+.formobs__autor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.formobs__autor p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--text-strong);
+}
+
+/* ---------------- Responsivo ---------------- */
+
+@media (max-width: 1080px) {
+  .tabuleiro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .obs {
+    position: static;
+    max-height: none;
+  }
+
+  .obs__lista {
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 720px) {
+  .capa {
+    flex-wrap: wrap;
+  }
+
+  .capa__lado {
+    align-items: flex-start;
+    max-width: none;
+    text-align: left;
+  }
+
+  .info--membros {
+    margin-left: 0;
+  }
+
+  .trilho {
+    grid-auto-columns: minmax(248px, 86%);
+  }
+}

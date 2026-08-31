@@ -1,0 +1,216 @@
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.campo--largo {
+  grid-column: 1 / -1;
+}
+
+.campo__rotulo {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.campo__controle {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text-strong);
+  font-size: 0.88rem;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.campo__controle::placeholder {
+  color: var(--text-faint);
+}
+
+.campo__controle:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.campo__controle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.campo__area {
+  resize: vertical;
+  min-height: 78px;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.campo__envelope {
+  position: relative;
+  display: flex;
+}
+
+.campo__select {
+  appearance: none;
+  padding-right: 34px;
+  cursor: pointer;
+}
+
+/* o menu nativo herda a cor do sistema; forcamos a do tema */
+.campo__select option {
+  background: var(--surface);
+  color: var(--text-strong);
+}
+
+.campo__seta {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.campo__nota {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+.campo__nota--erro {
+  color: var(--danger);
+}
+
+.has-erro .campo__controle {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+/* ---------------- Pastilhas ---------------- */
+
+.pastilhas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pastilha {
+  padding: 8px 15px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.pastilha:hover {
+  color: var(--text-strong);
+  background: var(--control-bg-hover);
+}
+
+.pastilha.is-atual {
+  color: var(--tom-fg, var(--control-on-fg));
+  background: var(--tom-bg, var(--control-on-bg));
+  border-color: transparent;
+}
+
+/* tons: a pastilha ativa assume a cor daquilo que ela representa */
+.pastilha[data-tom='alta'] {
+  --tom-bg: var(--pri-alta);
+  --tom-fg: var(--pri-alta-fg);
+}
+
+.pastilha[data-tom='media'] {
+  --tom-bg: var(--pri-media);
+  --tom-fg: var(--pri-media-fg);
+}
+
+.pastilha[data-tom='baixa'] {
+  --tom-bg: var(--pri-baixa);
+  --tom-fg: var(--pri-baixa-fg);
+}
+
+.pastilha[data-tom='comercial'] {
+  --tom-bg: var(--setor-comercial);
+  --tom-fg: var(--setor-fg);
+}
+
+.pastilha[data-tom='adm'] {
+  --tom-bg: var(--setor-adm);
+  --tom-fg: var(--setor-fg);
+}
+
+.pastilha[data-tom='tecnico'] {
+  --tom-bg: var(--setor-tecnico);
+  --tom-fg: var(--setor-fg);
+}
+
+.pastilha[data-tom='gq'] {
+  --tom-bg: var(--setor-gq);
+  --tom-fg: var(--setor-fg);
+}
+
+.pastilha[data-tom='excelencia'] {
+  --tom-bg: var(--setor-excelencia);
+  --tom-fg: var(--setor-fg);
+}
+
+.pastilha[data-tom='padrao'] {
+  --tom-bg: var(--obra-padrao);
+  --tom-fg: var(--obra-padrao-fg);
+}
+
+.pastilha[data-tom='emergencia'] {
+  --tom-bg: var(--obra-emerg);
+  --tom-fg: var(--obra-emerg-fg);
+}
+
+/* ---------------- Foto ---------------- */
+
+.foto {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.foto__acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.foto__btn {
+  padding: 7px 13px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--text-base);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.foto__btn:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.foto__btn--fraco {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-faint);
+}
+
+.foto__btn--fraco:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+}

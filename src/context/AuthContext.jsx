@@ -38,6 +38,11 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  /** Atualiza o usuario da sessao (foto, nome, telefone...). */
+  const atualizarPerfil = useCallback((campos) => {
+    setSession((atual) => (atual ? { ...atual, user: { ...atual.user, ...campos } } : atual))
+  }, [])
+
   const logout = useCallback(async () => {
     await authService.signOut()
     setSession(null)
@@ -51,8 +56,9 @@ export function AuthProvider({ children }) {
       loading,
       login,
       logout,
+      atualizarPerfil,
     }),
-    [session, loading, login, logout],
+    [session, loading, login, logout, atualizarPerfil],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

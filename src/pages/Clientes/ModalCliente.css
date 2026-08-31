@@ -1,0 +1,16 @@
+.formcli {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* a foto ocupa a linha inteira, acima dos campos */
+.formcli > .campo:first-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 560px) {
+  .formcli {
+    grid-template-columns: 1fr;
+  }
+}

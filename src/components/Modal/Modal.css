@@ -1,0 +1,87 @@
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--modal-veu);
+  animation: modal-entra var(--dur-fast) var(--ease-out);
+}
+
+/* O pop-up e o unico lugar sem vidro: superficie opaca, sem desfoque
+   e sem brilho. Formulario tem que ser facil de ler. */
+.modal__caixa {
+  width: 100%;
+  max-height: min(88dvh, 860px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-borda);
+  box-shadow: var(--modal-sombra);
+  animation: modal-sobe var(--dur-base) var(--ease-out);
+}
+
+.modal__caixa:focus {
+  outline: none;
+}
+
+.modal__topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal__titulo {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.modal__sub {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.modal__x {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.modal__x:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.modal__corpo {
+  padding: 18px 20px 20px;
+  overflow-y: auto;
+}
+
+@keyframes modal-entra {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-sobe {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+}

@@ -19,22 +19,12 @@
     box-shadow var(--dur-base) var(--ease-out), opacity var(--dur-fast) linear;
 }
 
-/* Vidro azul: fundo translucido, desfoque do que passa atras,
-   aro claro e um brilho no topo (o "gloss" do vidro). */
+/* Azul solido: sem vidro, sem desfoque e sem brilho. O botao que
+   conclui uma acao tem que ser o elemento mais firme da tela. */
 .btn--primary {
   background-color: var(--btn-bg);
   border: 1px solid var(--btn-border);
-  box-shadow: var(--btn-shadow), var(--btn-inner);
-  backdrop-filter: blur(14px) saturate(170%);
-  -webkit-backdrop-filter: blur(14px) saturate(170%);
-}
-
-.btn--primary::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--btn-gloss);
+  box-shadow: var(--btn-shadow);
 }
 
 .btn--ghost {
@@ -56,7 +46,7 @@
 
 .btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: var(--btn-shadow-hover), var(--btn-inner);
+  box-shadow: var(--btn-shadow-hover);
 }
 
 .btn:hover:not(:disabled) .btn__glow {

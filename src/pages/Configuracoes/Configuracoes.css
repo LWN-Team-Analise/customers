@@ -1,0 +1,135 @@
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+}
+
+.config__bloco {
+  padding: 18px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+
+.config__titulo {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.config__nota {
+  margin: -8px 0 12px;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+}
+
+/* foto a esquerda, nome a direita */
+.config__cabeca {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.config__foto {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  --avatar-anel: transparent;
+}
+
+.config__foto:hover .config__trocar {
+  opacity: 1;
+}
+
+.config__trocar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 5px 0;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.config__nome {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config__semfoto {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 0.74rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.config__semfoto:hover {
+  color: var(--danger);
+}
+
+.config__grade {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.config__recado {
+  margin: 15px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--pri-baixa-suave);
+  font-size: 0.82rem;
+  color: var(--text-base);
+}
+
+.config__salvar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* o Button ocupa 100% por padrao; aqui ele so precisa do proprio tamanho */
+.config__salvar .btn {
+  width: auto;
+}
+
+.config__temas {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .config__grade {
+    grid-template-columns: 1fr;
+  }
+}
+

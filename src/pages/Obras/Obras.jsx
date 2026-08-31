@@ -1,0 +1,514 @@
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import AppShell from '@/components/AppShell/AppShell'
+import Avatar from '@/components/Avatar/Avatar'
+import { useDados } from '@/context/DadosContext'
+import { useAuth } from '@/context/AuthContext'
+import {
+  PRIORIDADES,
+  PRIORIDADE_PESO,
+  etapaAtual,
+  obraConcluida,
+  setoresPendentes,
+} from '@/domain/obras'
+import { dataExtensa } from '@/utils/formato'
+import CardObra from './CardObra'
+import ModalObra from './ModalObra'
+import ModalMembros from './ModalMembros'
+import ModalSetores from './ModalSetores'
+import './Obras.css'
+
+const ORDENACOES = [
+  { valor: 'prioridade', rotulo: 'Prioridade' },
+  { valor: 'data', rotulo: 'Data prevista' },
+  { valor: 'empresa', rotulo: 'Empresa' },
+  { valor: 'recentes', rotulo: 'Mais recentes' },
+]
+
+const Mais = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+)
+
+const Sino = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 15V10a6 6 0 1 0-12 0v5l-1.5 2.5h15z" />
+    <path d="M10 20a2 2 0 0 0 4 0" />
+  </svg>
+)
+
+export default function Obras() {
+  const {
+    obras,
+    clientes,
+    cargos,
+    clientePorId,
+    pessoaPorId,
+    cargoPorChave,
+    adicionarObra,
+    registrarAviso,
+  } = useDados()
+  const { user } = useAuth()
+  const navigate = useNavigate()
+
+  const [modalObra, setModalObra] = useState(null) // 'padrao' | 'emergencia' | null
+  const [modalMembros, setModalMembros] = useState(false)
+  const [modalSetores, setModalSetores] = useState(false)
+  const [filtrosAbertos, setFiltrosAbertos] = useState(true)
+  const [recado, setRecado] = useState('')
+
+  const [prioridade, setPrioridade] = useState(null)
+  const [ateData, setAteData] = useState('')
+  const [setores, setSetores] = useState([])
+  const [clienteId, setClienteId] = useState('')
+  const [busca, setBusca] = useState('')
+  const [ordem, setOrdem] = useState('prioridade')
+
+  /* o filtro mostra ate 5 cargos; o resto vai para o "+N" */
+  const LIMITE_SETORES = 5
+  const cargosVisiveis = cargos.slice(0, LIMITE_SETORES)
+  const cargosRestantes = Math.max(0, cargos.length - LIMITE_SETORES)
+
+  const alternarSetor = (id) =>
+    setSetores((atual) => (atual.includes(id) ? atual.filter((s) => s !== id) : [...atual, id]))
+
+  const limparFiltros = () => {
+    setPrioridade(null)
+    setAteData('')
+    setSetores([])
+    setClienteId('')
+    setBusca('')
+  }
+
+  const filtrosAtivos =
+    (prioridade ? 1 : 0) +
+    (ateData ? 1 : 0) +
+    setores.length +
+    (clienteId ? 1 : 0) +
+    (busca.trim() ? 1 : 0)
+
+  /* ------- filtro + ordenacao (as obras concluidas saem do quadro) ------- */
+  const visiveis = useMemo(() => {
+    const alvo = busca.trim().toLowerCase()
+
+    const filtradas = obras.filter((obra) => {
+      if (obraConcluida(obra)) return false
+      if (prioridade && obra.prioridade !== prioridade) return false
+      if (clienteId && obra.clienteId !== clienteId) return false
+      if (ateData && obra.dataPrevista && obra.dataPrevista > ateData) return false
+
+      if (setores.length > 0) {
+        const pendentes = setoresPendentes(obra, etapaAtual(obra))
+        if (!setores.some((s) => pendentes.includes(s))) return false
+      }
+
+      if (alvo) {
+        const empresa = clientePorId(obra.clienteId)?.nome ?? ''
+        const texto = `${empresa} ${obra.descricao}`.toLowerCase()
+        if (!texto.includes(alvo)) return false
+      }
+
+      return true
+    })
+
+    const comparar = {
+      prioridade: (a, b) => PRIORIDADE_PESO[b.prioridade] - PRIORIDADE_PESO[a.prioridade],
+      data: (a, b) => String(a.dataPrevista).localeCompare(String(b.dataPrevista)),
+      empresa: (a, b) =>
+        (clientePorId(a.clienteId)?.nome ?? '').localeCompare(
+          clientePorId(b.clienteId)?.nome ?? '',
+          'pt-BR',
+        ),
+      recentes: (a, b) => String(b.criadoEm).localeCompare(String(a.criadoEm)),
+    }[ordem]
+
+    return [...filtradas].sort(comparar)
+  }, [obras, prioridade, clienteId, ateData, setores, busca, ordem, clientePorId])
+
+  const padrao = visiveis.filter((o) => o.tipo === 'padrao')
+  const emergencia = visiveis.filter((o) => o.tipo === 'emergencia')
+  /* so entram na coluna de aviso as obras que realmente devem algo */
+  const pendentes = visiveis.filter((o) => setoresPendentes(o, etapaAtual(o)).length > 0)
+
+  const pessoasDa = (obra) => obra.membros.map(pessoaPorId).filter(Boolean)
+
+  /* Membros do cabecalho: so quem esta participando das obras em
+     exibicao — nao a equipe inteira. */
+  const participantes = useMemo(() => {
+    const ids = new Set(visiveis.flatMap((o) => o.membros.map(String)))
+    return [...ids].map(pessoaPorId).filter(Boolean)
+  }, [visiveis, pessoaPorId])
+
+  /** Avisa todos os setores que ainda devem informacao na etapa da obra. */
+  const avisarObra = (obra) => {
+    const faltando = setoresPendentes(obra, etapaAtual(obra))
+    if (faltando.length === 0) return
+    registrarAviso(obra.id, {
+      setores: faltando,
+      mensagem: `Pendência na ${etapaAtual(obra)}ª etapa.`,
+      autorNome: user?.name ?? 'Sistema',
+    })
+    const nomes = faltando.map((s) => cargoPorChave(s)?.nome ?? s).join(', ')
+    const empresa = clientePorId(obra.clienteId)?.nome ?? 'obra'
+    setRecado(`Aviso enviado para ${nomes} — ${empresa}.`)
+  }
+
+  const avisarTodas = () => {
+    if (pendentes.length === 0) return
+    pendentes.forEach((obra) => {
+      registrarAviso(obra.id, {
+        setores: setoresPendentes(obra, etapaAtual(obra)),
+        mensagem: `Pendência na ${etapaAtual(obra)}ª etapa.`,
+        autorNome: user?.name ?? 'Sistema',
+      })
+    })
+    setRecado(
+      `Aviso enviado a todos os setores pendentes de ${pendentes.length} obra${
+        pendentes.length > 1 ? 's' : ''
+      }.`,
+    )
+  }
+
+  return (
+    <AppShell>
+      <section className="obras">
+        {/* ---------------- cabecalho de filtros ---------------- */}
+        {filtrosAbertos && (
+          <div className="painel">
+            <div className="painel__filtros">
+              <div className="filtro">
+                <span className="filtro__nome">Prioridade</span>
+                <div className="filtro__linha">
+                  {PRIORIDADES.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`chip ${prioridade === p.id ? 'is-atual' : ''}`.trim()}
+                      data-tom={p.id}
+                      aria-pressed={prioridade === p.id}
+                      onClick={() => setPrioridade((atual) => (atual === p.id ? null : p.id))}
+                    >
+                      {p.rotulo}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* com muitos clientes, a lista e o caminho mais rapido ate a obra */}
+              <div className="filtro">
+                <span className="filtro__nome">Cliente</span>
+                <div className="filtro__linha">
+                  <select
+                    className="filtro__cliente"
+                    value={clienteId}
+                    onChange={(e) => setClienteId(e.target.value)}
+                    aria-label="Filtrar por cliente"
+                  >
+                    <option value="">Todos os clientes</option>
+                    {[...clientes]
+                      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="filtro">
+                <span className="filtro__nome">
+                  Data <em>até</em>
+                </span>
+                <div className="filtro__linha">
+                  <input
+                    type="date"
+                    className="filtro__data"
+                    value={ateData}
+                    onChange={(e) => setAteData(e.target.value)}
+                    aria-label="Mostrar obras previstas até esta data"
+                  />
+                  <span className="filtro__dataleg">
+                    {ateData ? dataExtensa(ateData) : 'todas as datas'}
+                  </span>
+                </div>
+              </div>
+
+              {/* mostra ate 5 cargos; do sexto em diante entra o "+N",
+                  que abre o detalhe do que cada setor esta devendo */}
+              <div className="filtro">
+                <span className="filtro__nome">Setor pendente</span>
+                <div className="filtro__linha">
+                  {cargosVisiveis.map((cargo) => {
+                    const ativo = setores.includes(cargo.chave)
+                    return (
+                      <button
+                        key={cargo.id}
+                        type="button"
+                        className={`chip ${ativo ? 'is-atual' : ''}`.trim()}
+                        style={ativo ? { '--tom': cargo.cor, '--tom-fg': '#fff' } : undefined}
+                        aria-pressed={ativo}
+                        onClick={() => alternarSetor(cargo.chave)}
+                      >
+                        {cargo.nome}
+                      </button>
+                    )
+                  })}
+
+                  {cargosRestantes > 0 && (
+                    <button
+                      type="button"
+                      className="chip chip--mais"
+                      onClick={() => setModalSetores(true)}
+                      title="Ver todos os setores e o que falta em cada um"
+                    >
+                      +{cargosRestantes}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* membros ancorado na direita do cabecalho */}
+            <div className="filtro filtro--membros">
+              <span className="filtro__nome">Membros</span>
+              <button
+                type="button"
+                className="equipe"
+                onClick={() => setModalMembros(true)}
+                title="Ver em que obra cada um está"
+                disabled={participantes.length === 0}
+              >
+                {participantes.length === 0 ? (
+                  <span className="equipe__vazio">ninguém ainda</span>
+                ) : (
+                  <>
+                    <span className="equipe__avatares">
+                      {participantes.slice(0, 5).map((p) => (
+                        <Avatar
+                          key={p.id}
+                          nome={p.nome}
+                          foto={p.foto}
+                          tamanho={30}
+                          titulo={p.nome}
+                        />
+                      ))}
+                    </span>
+                    {participantes.length > 5 && (
+                      <span className="equipe__resto">+{participantes.length - 5}</span>
+                    )}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- barra de acoes ---------------- */}
+        <div className="barra">
+          <p className="barra__total">
+            <strong>{visiveis.length}</strong> Obras
+          </p>
+
+          <button type="button" className="acao acao--padrao" onClick={() => setModalObra('padrao')}>
+            <Mais />
+            Adicionar obra padrão
+          </button>
+          <button
+            type="button"
+            className="acao acao--emergencia"
+            onClick={() => setModalObra('emergencia')}
+          >
+            <Mais />
+            Adicionar obra emergência
+          </button>
+
+          <div className="barra__direita">
+            <label className="procura">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="m16 16 4.5 4.5" />
+              </svg>
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar obra ou empresa..."
+                aria-label="Buscar obra ou empresa"
+              />
+            </label>
+
+            <button
+              type="button"
+              className={`ferramenta ${filtrosAtivos > 0 ? 'is-ativo' : ''}`.trim()}
+              onClick={() => setFiltrosAbertos((v) => !v)}
+              aria-expanded={filtrosAbertos}
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                <path d="M3.5 6h17M6.5 12h11M10 18h4" />
+              </svg>
+              Filtros
+              {filtrosAtivos > 0 && <span className="ferramenta__selo">{filtrosAtivos}</span>}
+            </button>
+
+            {filtrosAtivos > 0 && (
+              <button type="button" className="ferramenta ferramenta--fraca" onClick={limparFiltros}>
+                Limpar
+              </button>
+            )}
+
+            <label className="ferramenta ferramenta--sel">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" />
+              </svg>
+              <select value={ordem} onChange={(e) => setOrdem(e.target.value)} aria-label="Ordenar por">
+                {ORDENACOES.map((o) => (
+                  <option key={o.valor} value={o.valor}>
+                    {o.rotulo}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {recado && (
+          <p className="recado" role="status">
+            {recado}
+            <button type="button" onClick={() => setRecado('')} aria-label="Fechar aviso">
+              ×
+            </button>
+          </p>
+        )}
+
+        {/* ---------------- quadro ---------------- */}
+        <div className="quadro">
+          <Coluna
+            titulo="Obras padrão"
+            tom="padrao"
+            total={padrao.length}
+            aoAdicionar={() => setModalObra('padrao')}
+            vazio="Nenhuma obra padrão por aqui."
+          >
+            {padrao.map((obra) => (
+              <CardObra
+                key={obra.id}
+                obra={obra}
+                cliente={clientePorId(obra.clienteId)}
+                pessoas={pessoasDa(obra)}
+                aoAbrir={() => navigate(`/app/obras/${obra.id}`)}
+              />
+            ))}
+          </Coluna>
+
+          <Coluna
+            titulo="Obras emergência"
+            tom="emergencia"
+            total={emergencia.length}
+            aoAdicionar={() => setModalObra('emergencia')}
+            vazio="Nenhuma emergência aberta. Ótimo sinal."
+          >
+            {emergencia.map((obra) => (
+              <CardObra
+                key={obra.id}
+                obra={obra}
+                cliente={clientePorId(obra.clienteId)}
+                pessoas={pessoasDa(obra)}
+                aoAbrir={() => navigate(`/app/obras/${obra.id}`)}
+              />
+            ))}
+          </Coluna>
+
+          {/* o card inteiro dispara o aviso; o botao Todos fica no topo */}
+          <Coluna
+            titulo="Enviar aviso"
+            tom="aviso"
+            total={pendentes.length}
+            vazio="Ninguém está devendo informação agora."
+            acaoTopo={
+              pendentes.length > 0 && (
+                <button type="button" className="coluna__todos" onClick={avisarTodas}>
+                  <Sino />
+                  Todos
+                </button>
+              )
+            }
+          >
+            {pendentes.map((obra) => {
+              const faltando = setoresPendentes(obra, etapaAtual(obra))
+              const nomes = faltando.map((s) => cargoPorChave(s)?.nome ?? s).join(', ')
+              return (
+                <CardObra
+                  key={obra.id}
+                  obra={obra}
+                  cliente={clientePorId(obra.clienteId)}
+                  pessoas={pessoasDa(obra)}
+                  tom="aviso"
+                  aoAbrir={() => avisarObra(obra)}
+                  rotuloAcao={`Avisar ${nomes}`}
+                >
+                  <span className="avisar__dica">
+                    <Sino />
+                    Clique para avisar {nomes}
+                  </span>
+                </CardObra>
+              )
+            })}
+          </Coluna>
+        </div>
+      </section>
+
+      <ModalObra
+        aberto={modalObra !== null}
+        tipo={modalObra ?? 'padrao'}
+        clientes={clientes}
+        aoFechar={() => setModalObra(null)}
+        aoSalvar={(campos) => adicionarObra({ ...campos, autorId: user?.id })}
+      />
+
+      <ModalSetores
+        aberto={modalSetores}
+        aoFechar={() => setModalSetores(false)}
+        obras={visiveis}
+        selecionados={setores}
+        aoFiltrar={alternarSetor}
+      />
+
+      <ModalMembros
+        aberto={modalMembros}
+        aoFechar={() => setModalMembros(false)}
+        pessoas={participantes}
+      />
+    </AppShell>
+  )
+}
+
+/** Coluna do quadro: titulo, contador, acao e a pilha de cards. */
+function Coluna({ titulo, tom, total, aoAdicionar, acaoTopo, vazio, children }) {
+  return (
+    <section className="coluna">
+      <header className="coluna__topo">
+        <span className="coluna__titulo" data-tom={tom}>
+          {titulo}
+        </span>
+        <span className="coluna__contador">{total}</span>
+        {acaoTopo}
+        {aoAdicionar && (
+          <button
+            type="button"
+            className="coluna__mais"
+            onClick={aoAdicionar}
+            title="Adicionar"
+            aria-label="Adicionar"
+          >
+            <Mais />
+          </button>
+        )}
+      </header>
+
+      <div className="coluna__pilha">
+        {total === 0 ? <p className="coluna__vazio">{vazio}</p> : children}
+      </div>
+    </section>
+  )
+}

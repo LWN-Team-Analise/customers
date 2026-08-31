@@ -1,0 +1,226 @@
+.cargos {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cargos__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.cargos__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.cargos__item.is-editando {
+  border-color: var(--accent);
+  background: var(--control-bg);
+}
+
+.cargos__bolha {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.cargos__quem {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cargos__quem strong {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.cargos__quem span {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+
+.cargos__fixo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--text-faint);
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.cargos__botoes {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cargos__botoes button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.cargos__botoes button:hover:not(:disabled) {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.cargos__botoes button:last-child:hover:not(:disabled) {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.cargos__botoes button:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+/* ---------------- Formulario ---------------- */
+
+.cargos__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.cargos__titulo {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cargos__linha {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cargos__campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cargos__campo span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.cargos__campo input {
+  padding: 9px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text-strong);
+  font-size: 0.86rem;
+}
+
+.cargos__campo input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.cargos__campo--nome {
+  flex: 1;
+  min-width: 160px;
+}
+
+.cargos__campo--sigla input {
+  width: 82px;
+  text-align: center;
+}
+
+.cargos__campo--cor input {
+  width: 52px;
+  height: 38px;
+  padding: 3px;
+  cursor: pointer;
+}
+
+.cargos__paleta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cargos__cor {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.cargos__cor:hover {
+  transform: scale(1.12);
+}
+
+.cargos__cor.is-atual {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text-strong);
+}
+
+.cargos__total {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.82rem;
+  color: var(--text-base);
+  cursor: pointer;
+}
+
+.cargos__total input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.cargos__erro {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+
+.cargos__acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}

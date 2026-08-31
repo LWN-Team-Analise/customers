@@ -1,0 +1,252 @@
+.usuarios {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.usuarios__topo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.usuarios__acoes {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.usuarios__nota {
+  margin: 0;
+  padding: 11px 15px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--pri-media-suave);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-base);
+}
+
+.usuarios__nota code {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--control-bg-hover);
+  font-size: 0.94em;
+}
+
+.usuarios__filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.usuarios__grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 13px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.usuarios__vazio {
+  margin: 0;
+  padding: 46px 20px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--text-faint);
+}
+
+/* ---------------- Card da pessoa ---------------- */
+
+.pessoa {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 15px;
+  /* tarja com a cor do cargo */
+  padding-left: 20px;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inner);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  --avatar-anel: transparent;
+}
+
+.pessoa::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--cargo-cor);
+}
+
+.pessoa.is-eu {
+  border-color: var(--accent);
+}
+
+/* editar e excluir aparecem ao passar o mouse pelo card */
+.pessoa__botoes {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.pessoa:hover .pessoa__botoes,
+.pessoa:focus-within .pessoa__botoes {
+  opacity: 1;
+}
+
+.pessoa__botoes button {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.pessoa__botoes button:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.pessoa__botoes button:last-child:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.pessoa__topo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pessoa__quem {
+  flex: 1;
+  min-width: 0;
+}
+
+.pessoa__nome {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 5px;
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.pessoa__eu {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pessoa__cargo {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  background: var(--cargo-cor);
+  color: #fff;
+  font-size: 0.71rem;
+  font-weight: 600;
+}
+
+.pessoa__contato {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.pessoa__contato > div {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.pessoa__contato dt {
+  flex-shrink: 0;
+  width: 62px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.pessoa__contato dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.pessoa__base {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.pessoa__nota {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pessoa__nota strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.pessoa__nota em {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+}
+
+.pessoa__semnota {
+  padding: 3px 10px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.pessoa__andamento {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
