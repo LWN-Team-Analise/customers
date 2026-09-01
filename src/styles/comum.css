@@ -29,16 +29,6 @@
   transform: scale(0.98);
 }
 
-.acao--padrao {
-  background: var(--accent);
-  box-shadow: 0 10px 22px -14px var(--accent);
-}
-
-.acao--emergencia {
-  background: var(--btn-emergencia);
-  box-shadow: 0 10px 22px -14px rgba(255, 60, 0, 0.9);
-}
-
 /* ---------------- Pastilha de filtro ---------------- */
 
 .chip {
@@ -52,17 +42,6 @@
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-}
-
-.chip:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.chip.is-atual {
-  background: var(--tom, var(--control-on-bg));
-  color: var(--tom-fg, var(--control-on-fg));
-  border-color: transparent;
 }
 
 .chip[data-tom='alta'] { --tom: var(--pri-alta); --tom-fg: var(--pri-alta-fg); }
@@ -119,16 +98,6 @@
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
 
-.ferramenta:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.ferramenta.is-ativo {
-  border-color: var(--accent);
-  color: var(--text-strong);
-}
-
 .ferramenta--fraca {
   border-style: dashed;
   color: var(--text-faint);
@@ -145,24 +114,6 @@
   color: #fff;
   font-size: 0.64rem;
   font-weight: 700;
-}
-
-.ferramenta--sel select {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
-  appearance: none;
-}
-
-.ferramenta--sel select:focus {
-  outline: none;
-}
-
-.ferramenta--sel option {
-  background: var(--surface);
-  color: var(--text-strong);
 }
 
 /* ---------------- Recado (confirmacao curta) ---------------- */
@@ -258,15 +209,208 @@
   }
 }
 
-/* acao secundaria: mesma forma do botao de acao, sem o peso do azul */
+
+
+/* ============================================================
+   LIQUID GLASS — so nas SUPERFICIES
+
+   O vidro veste o que e painel: header, menu da esquerda, faixa
+   de informacoes, colunas. Em BOTAO ele saiu — o reflexo deixava
+   a pastilha branca no hover e sumia com a cor de quem estava
+   selecionado.
+
+   A unica excecao sao os dois botoes de adicionar obra, que sao
+   a acao principal do quadro: eles ficam com o vidro sobre a cor
+   (e sem borda).
+
+   Regra da casa: pop-up nunca leva vidro.
+   ============================================================ */
+
+.vidro {
+  position: relative;
+  background: var(--vidro-fundo);
+  border: 1px solid var(--vidro-borda);
+  box-shadow: var(--vidro-realce), var(--vidro-sombra);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+}
+
+/* O reflexo diagonal saiu daqui.
+   Ele era o "gradiente que comeca branco em cima a esquerda e termina
+   preto embaixo a direita": aparecia no menu, no header e em quase
+   todo card do modo escuro. O vidro agora e so cor translucida +
+   desfoque do que passa por tras — que e o efeito de verdade. */
+
+.vidro > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   Botao de acao — chapado, sem reflexo
+   ============================================================ */
+
+.acao {
+  border: 0;
+  box-shadow: none;
+}
+
+.acao--padrao {
+  background: var(--accent);
+  box-shadow: 0 10px 22px -14px var(--accent);
+}
+
+.acao--emergencia {
+  background: var(--btn-emergencia);
+  box-shadow: 0 10px 22px -14px rgba(255, 60, 0, 0.9);
+}
+
+/* As duas excecoes: adicionar obra padrao e adicionar obra
+   emergencia ficam com o vidro por cima da cor — e sem borda. */
+.acao--padrao,
+.acao--emergencia {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 0;
+}
+
+.acao--padrao::after,
+.acao--emergencia::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--vidro-brilho-cor);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.acao--padrao > *,
+.acao--emergencia > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* acao secundaria: superficie simples do tema */
 .acao--fraca {
   background: var(--control-bg);
   border: 1px solid var(--control-border);
   color: var(--text-base);
+  box-shadow: none;
 }
 
 .acao--fraca:hover {
   background: var(--control-bg-hover);
   color: var(--text-strong);
   filter: none;
+}
+
+/* ============================================================
+   Filtros e ferramentas
+
+   Sem vidro. E o hover NUNCA passa por cima de quem esta
+   selecionado: era isso que fazia a pastilha escolhida
+   "sumir" quando o mouse encostava nela.
+   ============================================================ */
+
+.chip,
+.procura,
+.ferramenta {
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.chip:hover:not(.is-atual),
+.ferramenta:hover:not(.is-ativo) {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+/* pastilha ligada: a cor dela manda, inclusive no hover e no foco */
+.chip.is-atual,
+.chip.is-atual:hover,
+.chip.is-atual:focus-visible {
+  background: var(--tom, var(--control-on-bg));
+  color: var(--tom-fg, var(--control-on-fg));
+  border-color: transparent;
+}
+
+.ferramenta.is-ativo,
+.ferramenta.is-ativo:hover {
+  border-color: var(--accent);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* ============================================================
+   Acao destrutiva no rodape do pop-up (excluir cargo, card,
+   check, etapa). Fica no comum porque quatro telas usam.
+   ============================================================ */
+
+.formrot__apagar {
+  margin-right: auto;
+  padding: 10px 16px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--danger);
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.formrot__apagar:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+.formrot__apagar.is-confirmando {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.formrot__apagar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.formrot__aviso {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* ============================================================
+   Pop-up: superficie opaca, sem vidro nenhum.
+   ============================================================ */
+
+.modal__caixa .vidro {
+  background: var(--control-bg);
+  border-color: var(--control-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ============================================================
+   Menu lateral e barra superior
+
+   Os dois ficam SO com o desfoque: uma camada translucida que
+   borra o que passa por baixo, sem degrade nenhum pintado por
+   cima. E o unico "efeito" que sobra neles.
+   ============================================================ */
+
+.rail,
+.topbar {
+  background: var(--vidro-fundo);
+  box-shadow: var(--vidro-sombra);
 }

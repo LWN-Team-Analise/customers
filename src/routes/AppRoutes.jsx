@@ -9,11 +9,15 @@ import Concluidas from '@/pages/Concluidas/Concluidas'
 import Avaliacoes from '@/pages/Avaliacoes/Avaliacoes'
 import Usuarios from '@/pages/Usuarios/Usuarios'
 import Configuracoes from '@/pages/Configuracoes/Configuracoes'
+import RetornoOutlook from '@/pages/Login/RetornoOutlook'
 import ProtectedRoute from './ProtectedRoute'
 
-/** Envolve a rota interna na guarda de sessao. */
-function Interna({ children }) {
-  return <ProtectedRoute>{children}</ProtectedRoute>
+/**
+ * Envolve a rota interna na guarda de sessao — e, quando a tela pede,
+ * tambem na de permissao do cargo.
+ */
+function Interna({ children, ...guarda }) {
+  return <ProtectedRoute {...guarda}>{children}</ProtectedRoute>
 }
 
 export default function AppRoutes() {
@@ -22,15 +26,74 @@ export default function AppRoutes() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
       <Route path="/politica-de-privacidade" element={<Privacy />} />
+      {/* para onde a Microsoft devolve a janelinha do login com Outlook */}
+      <Route path="/outlook" element={<RetornoOutlook />} />
 
-      <Route path="/app" element={<Interna><Home /></Interna>} />
-      <Route path="/app/obras" element={<Interna><Obras /></Interna>} />
-      <Route path="/app/obras/:id" element={<Interna><ObraDetalhe /></Interna>} />
-      <Route path="/app/clientes" element={<Interna><Clientes /></Interna>} />
-      <Route path="/app/concluidas" element={<Interna><Concluidas /></Interna>} />
-      <Route path="/app/avaliacoes" element={<Interna><Avaliacoes /></Interna>} />
-      <Route path="/app/usuarios" element={<Interna><Usuarios /></Interna>} />
-      <Route path="/app/configuracoes" element={<Interna><Configuracoes /></Interna>} />
+      <Route
+        path="/app"
+        element={
+          <Interna permissao="ver_inicio">
+            <Home />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/obras"
+        element={
+          <Interna permissao="ver_obras">
+            <Obras />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/obras/:id"
+        element={
+          <Interna permissao="ver_obras">
+            <ObraDetalhe />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/clientes"
+        element={
+          <Interna permissao="ver_clientes">
+            <Clientes />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/concluidas"
+        element={
+          <Interna permissao="ver_concluidas">
+            <Concluidas />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/avaliacoes"
+        element={
+          <Interna permissao="ver_avaliacoes">
+            <Avaliacoes />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/usuarios"
+        element={
+          <Interna permissoes={['editar_usuario', 'editar_cargo']}>
+            <Usuarios />
+          </Interna>
+        }
+      />
+      {/* Configuracoes nao tem trava: e onde todo mundo cuida da propria conta */}
+      <Route
+        path="/app/configuracoes"
+        element={
+          <Interna>
+            <Configuracoes />
+          </Interna>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

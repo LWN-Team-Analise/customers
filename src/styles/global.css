@@ -15,21 +15,77 @@ body,
 
 body {
   margin: 0;
-  /* a malha e fixa: rola o conteudo, nao o fundo */
-  background-attachment: fixed;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* fundo liso: branco no claro, preto no escuro. A malha azul saiu. */
   background-color: var(--page-bg);
-  background-image:
-    radial-gradient(70% 55% at 8% 92%, var(--mesh-a) 0%, transparent 70%),
-    radial-gradient(65% 50% at 96% 78%, var(--mesh-b) 0%, transparent 72%),
-    radial-gradient(90% 40% at 50% 108%, var(--mesh-c) 0%, transparent 75%),
-    radial-gradient(120% 70% at 50% -10%, var(--mesh-topo) 0%, transparent 60%);
   color: var(--text-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   transition: background var(--dur-base) var(--ease-out),
     color var(--dur-base) var(--ease-out);
+}
+
+/* ============================================================
+   Fundo com um leve ar de VHS
+
+   Tres camadas, todas bem fracas de proposito — o fundo tem que
+   dar textura, nao chamar atencao:
+
+     1. a franja colorida das linhas verticais (o "sangramento"
+        de cor da fita);
+     2. as scanlines horizontais, que descem devagar;
+     3. uma lavagem diagonal de cor, quase imperceptivel.
+
+   Fica ATRAS de tudo (o #root sobe para o z-index 1), entao ele
+   aparece justamente por baixo do vidro do menu, do header e
+   dos cards — que e onde o efeito faz sentido.
+   ============================================================ */
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 0, 92, var(--vhs-cor)) 0 2px,
+      rgba(0, 224, 200, var(--vhs-cor)) 2px 4px,
+      rgba(70, 120, 255, var(--vhs-cor)) 4px 6px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, var(--vhs-linha)) 0 1px,
+      rgba(0, 0, 0, 0) 1px 4px
+    ),
+    linear-gradient(
+      118deg,
+      rgba(255, 0, 128, var(--vhs-lavagem)) 0%,
+      rgba(0, 190, 255, var(--vhs-lavagem)) 45%,
+      rgba(168, 60, 255, var(--vhs-lavagem)) 100%
+    );
+  background-size: 6px 100%, 100% 4px, 100% 100%;
+  animation: vhs-desce 9s linear infinite;
+}
+
+/* so as scanlines andam; as outras duas camadas ficam paradas */
+@keyframes vhs-desce {
+  to {
+    background-position: 0 0, 0 4px, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+  }
 }
 
 img {

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
+import { useDados } from '@/context/DadosContext'
 import Avatar from '@/components/Avatar/Avatar'
 import { primeiroNome, saudacao } from '@/utils/pessoa'
+import { dataHora } from '@/utils/formato'
 /* O nome do arquivo diz para QUAL FUNDO a logo foi feita:
    ...White = para fundo branco (modo claro)
    ...Black = para fundo preto  (modo escuro) */
@@ -41,8 +43,8 @@ const Icone = {
   ),
   concluidas: () => (
     <svg viewBox="0 0 24 24" width="21" height="21" {...traco}>
-      <path d="m12 3 2.2 1.6 2.7-.2.9 2.6 2.3 1.5-.9 2.6.9 2.6-2.3 1.5-.9 2.6-2.7-.2L12 21l-2.2-1.6-2.7.2-.9-2.6L3.9 15.5l.9-2.6-.9-2.6L6.2 8.8l.9-2.6 2.7.2z" />
-      <path d="m9 12.2 2 2 4-4.2" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12.2 2.8 2.8L16 9.6" />
     </svg>
   ),
   avaliacoes: () => (
@@ -75,31 +77,49 @@ const Icone = {
       <path d="M10 20a2 2 0 0 0 4 0" />
     </svg>
   ),
-  sol: () => (
-    <svg viewBox="0 0 24 24" width="15" height="15" {...traco}>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2.5v2M12 19.5v2M4.5 12h-2M21.5 12h-2M6.4 6.4 5 5M19 19l-1.4-1.4M17.6 6.4 19 5M5 19l1.4-1.4" />
-    </svg>
-  ),
-  lua: () => (
-    <svg viewBox="0 0 24 24" width="15" height="15">
-      <path
-        fill="currentColor"
-        d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6a.8.8 0 0 0-1.1-.9A9.9 9.9 0 1 0 21.3 15.7a.8.8 0 0 0-.9-1.1Z"
-      />
-    </svg>
-  ),
 }
 
-/* Barra lateral: icone + descricao embaixo, como na referencia. */
+/**
+ * Barra lateral: icone + descricao embaixo.
+ *
+ * `permissao` e a chave que o cargo precisa ter para o item aparecer.
+ * Usuarios nao tem permissao de VISUALIZACAO propria: quem entra la e
+ * quem pode mexer em usuario ou em cargo.
+ */
 const MENU = [
-  { id: 'inicio', rotulo: 'Página inicial', rota: '/app', exato: true },
-  { id: 'obras', rotulo: 'Obras', rota: '/app/obras' },
-  { id: 'clientes', rotulo: 'Clientes', rota: '/app/clientes' },
-  { id: 'concluidas', rotulo: 'Concluídas', rota: '/app/concluidas' },
-  { id: 'avaliacoes', rotulo: 'Avaliações', rota: '/app/avaliacoes' },
-  { id: 'usuarios', rotulo: 'Usuários', rota: '/app/usuarios' },
+  { id: 'inicio', rotulo: 'Página inicial', rota: '/app', exato: true, permissao: 'ver_inicio' },
+  { id: 'obras', rotulo: 'Obras', rota: '/app/obras', permissao: 'ver_obras' },
+  { id: 'clientes', rotulo: 'Clientes', rota: '/app/clientes', permissao: 'ver_clientes' },
+  { id: 'concluidas', rotulo: 'Concluídas', rota: '/app/concluidas', permissao: 'ver_concluidas' },
+  { id: 'avaliacoes', rotulo: 'Avaliações', rota: '/app/avaliacoes', permissao: 'ver_avaliacoes' },
+  {
+    id: 'usuarios',
+    rotulo: 'Usuários',
+    rota: '/app/usuarios',
+    permissoes: ['editar_usuario', 'editar_cargo'],
+  },
 ]
+
+/* ------------------------------------------------------------
+   O orbe que gira no campo de busca
+
+   Cada tela monta o seu proprio <AppShell>, entao trocar de aba
+   remonta o header — e uma animacao CSS recomeca do zero quando o
+   elemento nasce. Era isso que fazia o orbe "resetar".
+
+   A correcao e simples: guardamos a hora em que a pagina abriu e
+   entramos na animacao com um atraso NEGATIVO do tanto que ja se
+   passou. O elemento nasce no meio da volta, exatamente onde o
+   anterior tinha parado.
+   ------------------------------------------------------------ */
+
+const ABERTURA = Date.now()
+const VOLTA = 9 // segundos, igual ao @keyframes orb-gira
+
+function atrasoDoOrbe() {
+  const decorrido = (Date.now() - ABERTURA) / 1000
+  return `${-(decorrido % VOLTA)}s`
+}
 
 /** Avatar do rodape: abre o menu de Configuracoes / Sair. */
 function MenuUsuario() {
@@ -139,7 +159,7 @@ function MenuUsuario() {
         <div className="euzinho__menu" role="menu">
           <p className="euzinho__quem">
             <strong>{user?.name ?? 'Usuário'}</strong>
-            <span>{user?.cargo ?? user?.email ?? ''}</span>
+            <span>{user?.cargoNome ?? user?.email ?? ''}</span>
           </p>
           <button
             type="button"
@@ -180,9 +200,125 @@ function MenuUsuario() {
   )
 }
 
+/**
+ * Sininho das notificacoes.
+ *
+ * O selo vermelho conta os avisos que chegaram para o CARGO de quem
+ * esta logado e que ainda nao foram abertos. Abrir o painel marca
+ * todos como lidos — que e o gesto que a pessoa espera.
+ */
+function Notificacoes() {
+  const navigate = useNavigate()
+  const { minhasNotificacoes, naoLidas, marcarNotificacoesLidas, clientePorId, cargoPorChave } =
+    useDados()
+
+  const [aberto, setAberto] = useState(false)
+  const caixa = useRef(null)
+
+  useEffect(() => {
+    if (!aberto) return undefined
+
+    const fora = (evento) => {
+      if (!caixa.current?.contains(evento.target)) setAberto(false)
+    }
+    const tecla = (evento) => {
+      if (evento.key === 'Escape') setAberto(false)
+    }
+
+    document.addEventListener('mousedown', fora)
+    document.addEventListener('keydown', tecla)
+    return () => {
+      document.removeEventListener('mousedown', fora)
+      document.removeEventListener('keydown', tecla)
+    }
+  }, [aberto])
+
+  const abrir = () => {
+    const proximo = !aberto
+    setAberto(proximo)
+    if (proximo && naoLidas > 0) marcarNotificacoesLidas()
+  }
+
+  const lista = minhasNotificacoes.slice(0, 20)
+
+  return (
+    <div className="sininho" ref={caixa}>
+      <button
+        type="button"
+        className={`topbar__sino ${aberto ? 'is-aberto' : ''}`.trim()}
+        onClick={abrir}
+        aria-haspopup="menu"
+        aria-expanded={aberto}
+        aria-label={
+          naoLidas > 0 ? `Notificações — ${naoLidas} não lidas` : 'Notificações'
+        }
+        title="Notificações"
+      >
+        <Icone.sino />
+        {naoLidas > 0 && (
+          <span className="sininho__selo" aria-hidden="true">
+            {naoLidas > 99 ? '99+' : naoLidas}
+          </span>
+        )}
+      </button>
+
+      {aberto && (
+        <div className="sininho__painel" role="menu">
+          <header className="sininho__topo">
+            <h2>Notificações</h2>
+            <span>{minhasNotificacoes.length}</span>
+          </header>
+
+          {lista.length === 0 ? (
+            <p className="sininho__vazio">
+              Nada por aqui. Quando alguém avisar o seu setor sobre uma obra, o recado aparece
+              nesta lista.
+            </p>
+          ) : (
+            <ul className="sininho__lista">
+              {lista.map((aviso) => {
+                const cliente = clientePorId(aviso.clienteId)
+                const setores = aviso.setores
+                  .map((s) => cargoPorChave(s)?.nome ?? s)
+                  .join(', ')
+                return (
+                  <li key={aviso.id}>
+                    <button
+                      type="button"
+                      className={`sininho__item ${aviso.lido ? '' : 'is-nova'}`.trim()}
+                      onClick={() => {
+                        setAberto(false)
+                        navigate(`/app/obras/${aviso.obraId}`)
+                      }}
+                    >
+                      <span className="sininho__marca" data-tipo={aviso.obraTipo} aria-hidden="true" />
+                      <span className="sininho__corpo">
+                        <strong>{cliente?.nome ?? 'Obra'}</strong>
+                        <span className="sininho__texto">
+                          {aviso.mensagem || `Pendência na ${aviso.etapa}ª etapa.`}
+                        </span>
+                        <span className="sininho__meta">
+                          {setores && <em>para {setores}</em>}
+                          {aviso.enviadoPorNome && <em>por {aviso.enviadoPorNome}</em>}
+                          <em>{dataHora(aviso.enviadoEm)}</em>
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AppShell({ children, busca, aoBuscar, placeholderBusca }) {
   const { user } = useAuth()
-  const { theme, selectTheme, isDark } = useTheme()
+  const { isDark } = useTheme()
+  const { erro, limparErro, pode } = useDados()
   const [buscaLocal, setBuscaLocal] = useState('')
 
   /* a tela pode assumir o campo de busca; se nao assumir, ele fica local */
@@ -190,16 +326,25 @@ export default function AppShell({ children, busca, aoBuscar, placeholderBusca }
   const valorBusca = controlada ? busca : buscaLocal
   const mudarBusca = controlada ? aoBuscar : setBuscaLocal
 
+  /* cada cargo enxerga so as abas que a permissao dele abre */
+  const abas = useMemo(
+    () =>
+      MENU.filter((item) =>
+        item.permissoes ? item.permissoes.some((p) => pode(p)) : pode(item.permissao),
+      ),
+    [pode],
+  )
+
   return (
     <div className="shell">
-      {/* logo e avatar vivem fora da bolha: um no topo, outro no rodape */}
+      {/* logo e avatar vivem fora da bolha, mas alinhados ao centro dela */}
       <Link to="/app" className="marca" aria-label="Página inicial">
         <img src={isDark ? logoModoEscuro : logoModoClaro} alt="LWN" />
       </Link>
 
-      <nav className="rail" aria-label="Navegação principal">
+      <nav className="rail vidro" aria-label="Navegação principal">
         <ul className="rail__lista">
-          {MENU.map((item) => {
+          {abas.map((item) => {
             const Glifo = Icone[item.id]
             return (
               <li key={item.id}>
@@ -223,54 +368,43 @@ export default function AppShell({ children, busca, aoBuscar, placeholderBusca }
       <MenuUsuario />
 
       <div className="shell__coluna">
-        <header className="topbar">
+        <header className="topbar vidro">
           <p className="topbar__saudacao">
-            {saudacao()}, <strong>{primeiroNome(user?.name)}</strong>
+            {saudacao()}, <strong>{primeiroNome(user?.name)}</strong>!
           </p>
 
           <form className="omni" onSubmit={(evento) => evento.preventDefault()} role="search">
-            <span className="omni__orb" aria-hidden="true" />
+            {/* o atraso negativo entra na volta ja em andamento: trocar de
+                aba nao faz o orbe voltar para o comeco */}
+            <span
+              className="omni__orb"
+              style={{ animationDelay: atrasoDoOrbe() }}
+              aria-hidden="true"
+            />
             <input
               className="omni__campo"
               value={valorBusca}
               onChange={(evento) => mudarBusca?.(evento.target.value)}
-              placeholder={placeholderBusca ?? 'Buscar cliente, obra ou ordem de serviço...'}
+              placeholder={placeholderBusca ?? 'Buscar cliente, obra ou configurações'}
               aria-label="Buscar"
             />
           </form>
 
+          {/* a escolha de tema mora so em Configuracoes > Aparencia */}
           <div className="topbar__acoes">
-            <div className="tema" role="group" aria-label="Tema">
-              <button
-                type="button"
-                className={`tema__opcao ${theme === 'light' ? 'is-atual' : ''}`.trim()}
-                onClick={() => selectTheme('light')}
-                aria-pressed={theme === 'light'}
-              >
-                <Icone.sol />
-                Claro
-              </button>
-              <button
-                type="button"
-                className={`tema__opcao ${theme === 'dark' ? 'is-atual' : ''}`.trim()}
-                onClick={() => selectTheme('dark')}
-                aria-pressed={theme === 'dark'}
-              >
-                <Icone.lua />
-                Escuro
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className="topbar__sino"
-              aria-label="Notificações"
-              title="Notificações (em breve)"
-            >
-              <Icone.sino />
-            </button>
+            <Notificacoes />
           </div>
         </header>
+
+        {/* falha de gravacao aparece aqui, em cima de qualquer tela */}
+        {erro && (
+          <p className="shell__erro" role="alert">
+            {erro}
+            <button type="button" onClick={limparErro} aria-label="Fechar aviso">
+              ×
+            </button>
+          </p>
+        )}
 
         <main className="shell__conteudo">{children}</main>
       </div>

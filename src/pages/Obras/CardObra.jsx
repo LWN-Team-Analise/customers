@@ -1,6 +1,7 @@
 import Avatar, { PilhaAvatares } from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
-import { ETAPAS, etapaAtual, setoresPendentes } from '@/domain/obras'
+import { useTheme } from '@/context/ThemeContext'
+import { textoSobre } from '@/utils/cor'
 import { dataBR } from '@/utils/formato'
 import './CardObra.css'
 
@@ -13,16 +14,23 @@ const ROTULO_PRIORIDADE = { alta: 'alta', media: 'média', baixa: 'baixa' }
  *
  *   foto da empresa · nome · etapa atual        [téc] [gq]
  *   descricao
- *   prioridade + data prevista            fotos de quem mexeu
+ *   prioridade + data de conclusao        fotos de quem mexeu
  *
  * Com `aoAbrir` o card inteiro vira botao — e assim que a coluna de
  * avisos dispara o aviso clicando em qualquer lugar.
  */
 export default function CardObra({ obra, cliente, pessoas = [], tom, aoAbrir, rotuloAcao, children }) {
-  const { cargoPorChave } = useDados()
-  const numeroEtapa = etapaAtual(obra)
-  const etapa = ETAPAS.find((e) => e.numero === numeroEtapa)
-  const pendentes = setoresPendentes(obra, numeroEtapa)
+  const { cargoPorChave, roteiroDaObra, etapaDaObra, pendentesDaObra, concluida, etiquetasDaObra } =
+    useDados()
+  const { isDark } = useTheme()
+
+  const numeroEtapa = etapaDaObra(obra)
+  /* o roteiro desta obra, nao o de agora: obra antiga desenha a etapa
+     que ela realmente tem */
+  const etapa = roteiroDaObra(obra).find((e) => e.numero === numeroEtapa)
+  const marcas = etiquetasDaObra(obra)
+  const pendentes = pendentesDaObra(obra, numeroEtapa)
+  const fechada = concluida(obra)
   const cor = tom ?? obra.tipo
 
   const Elemento = aoAbrir ? 'button' : 'div'
@@ -40,7 +48,8 @@ export default function CardObra({ obra, cliente, pessoas = [], tom, aoAbrir, ro
         <span className="obracard__quem">
           <strong className="obracard__empresa">{cliente?.nome ?? 'Cliente removido'}</strong>
           <span className="obracard__etapa">
-            Etapa atual: {etapa ? `${etapa.numero}ª — ${etapa.nome.toLowerCase()}` : 'concluída'}
+            Etapa atual:{' '}
+            {fechada || !etapa ? 'concluída' : `${etapa.numero}ª — ${etapa.nome.toLowerCase()}`}
           </span>
         </span>
 
@@ -64,11 +73,25 @@ export default function CardObra({ obra, cliente, pessoas = [], tom, aoAbrir, ro
 
       <p className="obracard__desc">{obra.descricao}</p>
 
+      {marcas.length > 0 && (
+        <span className="obracard__etiquetas">
+          {marcas.map((e) => (
+            <span
+              key={e.id}
+              className="obracard__etiqueta"
+              style={{ background: e.cor, color: textoSobre(e.cor, isDark) }}
+            >
+              {e.nome}
+            </span>
+          ))}
+        </span>
+      )}
+
       <footer className="obracard__base">
         <span className="obracard__meta">
           <span className="obracard__pri">prioridade: {ROTULO_PRIORIDADE[obra.prioridade]}</span>
-          {obra.dataPrevista && (
-            <span className="obracard__data">data prev: {dataBR(obra.dataPrevista)}</span>
+          {obra.dataConclusao && (
+            <span className="obracard__data">conclusão: {dataBR(obra.dataConclusao)}</span>
           )}
         </span>
         {pessoas.length > 0 && <PilhaAvatares pessoas={pessoas} tamanho={24} limite={3} />}

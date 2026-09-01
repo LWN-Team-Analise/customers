@@ -51,31 +51,11 @@
   font-family: inherit;
 }
 
-.campo__envelope {
-  position: relative;
-  display: flex;
-}
+/* A escolha de um item e o componente Seletor
+   (src/components/Seletor), e nao o <select> do navegador: dentro do
+   campo ele ja vem com a largura inteira. */
 
-.campo__select {
-  appearance: none;
-  padding-right: 34px;
-  cursor: pointer;
-}
-
-/* o menu nativo herda a cor do sistema; forcamos a do tema */
-.campo__select option {
-  background: var(--surface);
-  color: var(--text-strong);
-}
-
-.campo__seta {
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  pointer-events: none;
-}
+/* ---------------- Dica e erro ---------------- */
 
 .campo__nota {
   font-size: 0.74rem;
@@ -89,6 +69,11 @@
 .has-erro .campo__controle {
   border-color: var(--danger-border);
   background: var(--danger-bg);
+}
+
+/* campo em erro que e um Seletor: a borda vermelha vai no botao dele */
+.has-erro .sel__botao {
+  border-color: var(--danger-border);
 }
 
 /* ---------------- Pastilhas ---------------- */

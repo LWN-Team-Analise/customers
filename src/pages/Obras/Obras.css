@@ -19,11 +19,6 @@
   flex-wrap: wrap;
   padding: 15px 18px;
   border-radius: var(--radius-lg);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow), var(--glass-inner);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
 }
 
 .painel__filtros {
@@ -61,18 +56,34 @@
 }
 
 .filtro__data {
-  padding: 6px 11px;
-  border: 1px solid var(--control-border);
+  padding: 8px 13px;
+  border: 1px solid var(--vidro-borda);
   border-radius: var(--radius-pill);
-  background: var(--control-bg);
+  background: var(--vidro-fundo);
+  box-shadow: var(--vidro-realce);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
   color: var(--text-strong);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.filtro__data:hover {
+  background: var(--vidro-fundo-forte);
 }
 
 .filtro__data:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: var(--vidro-realce), 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* o iconezinho do calendario, que nasce preto e some no tema escuro */
+:root[data-theme='dark'] .filtro__data::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.7;
 }
 
 .filtro__dataleg {
@@ -86,25 +97,11 @@
   font-weight: 700;
 }
 
-.filtro__cliente {
-  max-width: 190px;
-  padding: 6px 11px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-bg);
-  color: var(--text-strong);
-  font-size: 0.76rem;
-  cursor: pointer;
-}
-
-.filtro__cliente:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.filtro__cliente option {
-  background: var(--surface);
-  color: var(--text-strong);
+/* a lista de clientes e o componente Seletor (src/components/Seletor);
+   aqui so a largura que ela ocupa dentro do filtro */
+.filtro__linha .sel {
+  min-width: 178px;
+  max-width: 210px;
 }
 
 /* ---- membros, agora na mesma linha dos filtros ---- */
@@ -358,5 +355,174 @@
 
   .filtro--membros {
     width: 100%;
+  }
+}
+
+/* ============================================================
+   Quadro + observacoes, lado a lado
+
+   As tres colunas ficam a esquerda e as observacoes a direita —
+   o mesmo desenho da tela de dentro da obra. O painel acompanha
+   a rolagem, entao o recado da equipe fica sempre a vista.
+   ============================================================ */
+
+.areaquadro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 288px;
+  gap: 14px;
+  align-items: start;
+}
+
+.quadroobs {
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100dvh - 108px);
+  padding: 13px;
+  border: 1px solid var(--coluna-borda);
+  border-radius: var(--radius-lg);
+  background: var(--coluna-bg);
+}
+
+.quadroobs__topo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.quadroobs__titulo {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.quadroobs__contagem {
+  margin-right: auto;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-base);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.quadroobs__mais {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--text-base);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.quadroobs__mais:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.quadroobs__mais:active {
+  transform: scale(0.9);
+}
+
+.quadroobs__vazio {
+  margin: 0;
+  padding: 16px 4px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.quadroobs__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.quadroobs__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--coluna-borda);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.quadroobs__item > div {
+  min-width: 0;
+}
+
+.quadroobs__quem {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 0 0 2px;
+}
+
+.quadroobs__quem strong {
+  font-size: 0.79rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.quadroobs__quem span {
+  font-size: 0.67rem;
+  color: var(--text-faint);
+}
+
+.quadroobs__texto {
+  margin: 0;
+  font-size: 0.81rem;
+  line-height: 1.45;
+  color: var(--text-base);
+  /* ate tres linhas; o resto abre no pop-up */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.quadroobs__ver {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px dashed var(--control-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.quadroobs__ver:hover {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+/* em tela estreita as observacoes voltam para baixo do quadro */
+@media (max-width: 1180px) {
+  .areaquadro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quadroobs {
+    position: static;
+    max-height: none;
   }
 }

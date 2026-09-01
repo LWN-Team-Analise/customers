@@ -19,28 +19,21 @@
   flex-wrap: wrap;
 }
 
-.usuarios__nota {
-  margin: 0;
-  padding: 11px 15px;
-  border: 1px dashed var(--control-border);
-  border-radius: var(--radius-md);
-  background: var(--pri-media-suave);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--text-base);
-}
-
-.usuarios__nota code {
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: var(--control-bg-hover);
-  font-size: 0.94em;
-}
-
+/* Busca por nome a esquerda, cargos a direita. Os dois filtros se
+   somam, e da para marcar mais de um cargo ao mesmo tempo. */
 .usuarios__filtro {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.usuarios__cargos {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .usuarios__grade {

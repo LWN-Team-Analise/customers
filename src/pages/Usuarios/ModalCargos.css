@@ -1,148 +1,148 @@
+/* ============================================================
+   Cargos
+
+   A lista e uma linha so de etiquetas — ADM | GQ | EXCELENCIA —
+   que quebra quando chega no fim do pop-up. Clicar em uma delas
+   abre a edicao em outro pop-up (ModalCargo), por cima deste.
+   ============================================================ */
+
 .cargos {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.cargos__lista {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: 250px;
-  overflow-y: auto;
-}
-
-.cargos__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-.cargos__item.is-editando {
-  border-color: var(--accent);
-  background: var(--control-bg);
-}
-
-.cargos__bolha {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-}
-
-.cargos__quem {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-
-.cargos__quem strong {
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: var(--text-strong);
-}
-
-.cargos__quem span {
-  font-size: 0.7rem;
-  color: var(--text-faint);
-}
-
-.cargos__fixo {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  padding: 2px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--control-bg);
-  color: var(--text-faint);
-  font-size: 0.64rem;
-  font-weight: 600;
-}
-
-.cargos__botoes {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.cargos__botoes button {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--control-border);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-
-.cargos__botoes button:hover:not(:disabled) {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.cargos__botoes button:last-child:hover:not(:disabled) {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-
-.cargos__botoes button:disabled {
-  opacity: 0.32;
-  cursor: not-allowed;
-}
-
-/* ---------------- Formulario ---------------- */
-
-.cargos__form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
-.cargos__titulo {
-  margin: 0;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  gap: 14px;
 }
 
 .cargos__linha {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------------- Etiqueta de um cargo ---------------- */
+
+/* A etiqueta nao e mais um bloco chapado da cor do cargo com letra
+   branca: o fundo e a MESMA cor, so que translucida, e a letra segue
+   a cor do texto do site. Assim ela se le no claro e no escuro, e a
+   cor do cargo continua sendo o que identifica. */
+.cargos__etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--cargo-cor) 55%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--cargo-cor) 22%, transparent);
+  color: var(--text-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.cargos__etiqueta:hover {
+  background: color-mix(in srgb, var(--cargo-cor) 34%, transparent);
+  transform: translateY(-1px);
+}
+
+.cargos__etiqueta:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* quantas pessoas estao nesse cargo */
+.cargos__quantos {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--cargo-cor) 45%, transparent);
+  color: var(--text-strong);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+/* a mesma etiqueta, na previa do formulario: nao clica */
+.cargos__etiqueta.is-previa {
+  cursor: default;
+  box-shadow: none;
+}
+
+.cargos__etiqueta.is-previa:hover {
+  background: color-mix(in srgb, var(--cargo-cor) 22%, transparent);
+  transform: none;
+}
+
+/* ---------------- Novo cargo ---------------- */
+
+.cargos__novo {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1.5px dashed var(--control-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.cargos__novo:hover {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+
+.cargos__legenda {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.77rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* ============================================================
+   Formulario de um cargo (ModalCargo)
+   ============================================================ */
+
+.cargos__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cargos__linhacampos {
+  display: flex;
+  gap: 10px;
 }
 
 .cargos__campo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .cargos__campo span {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--text-muted);
 }
 
 .cargos__campo input {
-  padding: 9px 12px;
+  padding: 10px 13px;
   border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
   background: var(--control-bg);
@@ -153,39 +153,32 @@
 .cargos__campo input:focus {
   outline: none;
   border-color: var(--accent);
-  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .cargos__campo--nome {
   flex: 1;
-  min-width: 160px;
 }
 
-.cargos__campo--sigla input {
-  width: 82px;
-  text-align: center;
+.cargos__campo--sigla {
+  width: 92px;
+  flex-shrink: 0;
 }
 
-.cargos__campo--cor input {
-  width: 52px;
-  height: 38px;
-  padding: 3px;
-  cursor: pointer;
-}
+/* ---------------- Paleta ---------------- */
 
 .cargos__paleta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
 }
 
 .cargos__cor {
-  width: 24px;
-  height: 24px;
-  border: 0;
+  width: 26px;
+  height: 26px;
+  border: 2px solid transparent;
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
   transition: transform var(--dur-fast) var(--ease-out);
 }
 
@@ -194,23 +187,52 @@
 }
 
 .cargos__cor.is-atual {
-  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text-strong);
+  border-color: var(--text-strong);
+  box-shadow: 0 0 0 2px var(--modal-bg) inset;
 }
+
+/* ---------------- Acesso total ---------------- */
 
 .cargos__total {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 0.82rem;
+  font-size: 0.83rem;
+  line-height: 1.4;
   color: var(--text-base);
   cursor: pointer;
 }
 
 .cargos__total input {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+/* Uma amostra so.
+   As duas previas de antes ("neste tema" / "no outro tema") sairam:
+   a etiqueta agora e translucida e usa a cor do texto do site, entao
+   ela se comporta igual nos dois temas e nao ha o que comparar. */
+.cargos__previa {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+}
+
+.cargos__previanome {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 .cargos__erro {
@@ -219,8 +241,165 @@
   color: var(--danger);
 }
 
-.cargos__acoes {
+/* ============================================================
+   Permissoes do cargo
+
+   Duas colunas: o que ele VE e o que ele ALTERA. A segunda
+   depende da primeira — linha travada fica apagada e com o
+   motivo escrito ao lado.
+   ============================================================ */
+
+.perm {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 15px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+}
+
+.perm__topo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.perm__topo h3 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.perm__contagem {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-base);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.perm__atalhos {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.perm__atalhos button {
+  padding: 5px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.perm__atalhos button:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.perm__nota {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.perm__nota--total {
+  padding: 9px 12px;
+  border: 1px solid var(--pri-media);
+  border-radius: var(--radius-sm);
+  background: var(--pri-media-suave);
+  color: var(--text-base);
+  font-size: 0.76rem;
+}
+
+.perm__nota--total strong {
+  color: var(--text-strong);
+}
+
+.perm__grupos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 16px;
+}
+
+.perm__grupo h4 {
+  margin: 0 0 3px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.perm__grupo ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perm__item {
+  display: flex;
+  align-items: flex-start;
   gap: 9px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 0.81rem;
+  line-height: 1.4;
+  color: var(--text-base);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.perm__item:hover:not(.is-travada) {
+  background: var(--control-bg-hover);
+}
+
+.perm__item input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.perm__item span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* alteracao sem a visualizacao dela: nao clica, e diz por que */
+.perm__item.is-travada {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.perm__item.is-travada input {
+  cursor: not-allowed;
+}
+
+.perm__trava,
+.perm__dica {
+  font-style: normal;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+.perm__trava {
+  color: var(--pri-media);
 }

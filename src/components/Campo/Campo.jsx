@@ -1,5 +1,7 @@
-import { useId, useRef } from 'react'
+import { useId, useRef, useState } from 'react'
 import Avatar from '@/components/Avatar/Avatar'
+import Seletor from '@/components/Seletor/Seletor'
+import { prepararImagem } from '@/utils/imagem'
 import './Campo.css'
 
 /** Moldura comum: rotulo em cima, controle embaixo, erro por ultimo. */
@@ -42,7 +44,14 @@ export function CampoArea({ rotulo, dica, erro, largo, linhas = 3, ...rest }) {
   )
 }
 
-/** opcoes: lista de { valor, rotulo } */
+/**
+ * Escolha de um item. opcoes: lista de { valor, rotulo, cor? }
+ *
+ * Por dentro e o <Seletor>, nao o <select> do navegador — a lista aberta
+ * do nativo nao aceita estilo e saia quadrada, com a fonte do sistema.
+ * Quem chama continua recebendo `onChange` com evento, entao os
+ * formularios antigos nao precisaram mudar.
+ */
 export function CampoSelecao({
   rotulo,
   dica,
@@ -50,40 +59,24 @@ export function CampoSelecao({
   largo,
   opcoes = [],
   vazio = 'Selecione...',
-  ...rest
+  value,
+  onChange,
+  disabled,
+  'aria-label': rotuloAria,
 }) {
   const id = useId()
   return (
     <Moldura id={id} rotulo={rotulo} dica={dica} erro={erro} largo={largo}>
-      <div className="campo__envelope">
-        <select
-          id={id}
-          className="campo__controle campo__select"
-          aria-invalid={Boolean(erro)}
-          {...rest}
-        >
-          <option value="">{vazio}</option>
-          {opcoes.map((o) => (
-            <option key={o.valor} value={o.valor}>
-              {o.rotulo}
-            </option>
-          ))}
-        </select>
-        <svg
-          className="campo__seta"
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </div>
+      <Seletor
+        id={id}
+        largo
+        valor={value}
+        aoMudar={(novo) => onChange?.({ target: { value: novo } })}
+        opcoes={opcoes}
+        vazio={vazio}
+        desabilitado={disabled}
+        aria-label={rotuloAria ?? rotulo}
+      />
     </Moldura>
   )
 }
@@ -117,17 +110,22 @@ export function CampoPastilhas({ rotulo, dica, erro, valor, aoMudar, opcoes = []
  */
 export function CampoFoto({ rotulo, nome, valor, aoMudar, dica }) {
   const entrada = useRef(null)
+  const [erro, setErro] = useState('')
 
-  const escolher = (evento) => {
+  const escolher = async (evento) => {
     const arquivo = evento.target.files?.[0]
+    evento.target.value = ''
     if (!arquivo) return
-    const leitor = new FileReader()
-    leitor.onload = () => aoMudar(String(leitor.result))
-    leitor.readAsDataURL(arquivo)
+    try {
+      aoMudar(await prepararImagem(arquivo))
+      setErro('')
+    } catch (e) {
+      setErro(e.message)
+    }
   }
 
   return (
-    <Moldura rotulo={rotulo} dica={dica}>
+    <Moldura rotulo={rotulo} dica={dica} erro={erro}>
       <div className="foto">
         <Avatar nome={nome || '?'} foto={valor} tamanho={62} quadrado titulo={nome} />
         <div className="foto__acoes">

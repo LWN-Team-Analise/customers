@@ -1,7 +1,7 @@
 import Modal from '@/components/Modal/Modal'
 import Avatar from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
-import { ETAPAS, etapaAtual, setorConcluido } from '@/domain/obras'
+import { cardConcluido } from '@/domain/obras'
 import './ModalMembros.css'
 
 /**
@@ -10,7 +10,7 @@ import './ModalMembros.css'
  * de cada uma e se o setor dela ja fechou aquela etapa.
  */
 export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
-  const { obrasDaPessoa, cargoPorChave } = useDados()
+  const { obrasDaPessoa, cargoPorChave, roteiroDaObra, etapaDaObra } = useDados()
 
   return (
     <Modal
@@ -52,12 +52,18 @@ export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
               ) : (
                 <ul className="membros__obras">
                   {participacoes.map(({ obra, cliente }) => {
-                    const numero = etapaAtual(obra)
-                    const modelo = ETAPAS.find((e) => e.numero === numero)
-                    const etapaObra = obra.etapas.find((e) => e.numero === numero)
-                    // o setor dele ja fechou esta etapa?
-                    const meuSetor = etapaObra?.setores?.[pessoa.cargo]
-                    const fechou = meuSetor ? setorConcluido(etapaObra, pessoa.cargo) : null
+                    const numero = etapaDaObra(obra)
+                    /* cada obra le o roteiro que ela mesma tem */
+                    const modelo = roteiroDaObra(obra).find((e) => e.numero === numero)
+                    /* os cards desta etapa que sao do cargo dele; sem
+                       nenhum, a etapa nao cobra nada desta pessoa */
+                    const meusCards = (modelo?.cards ?? []).filter((c) =>
+                      c.cargos.includes(pessoa.cargo),
+                    )
+                    const fechou =
+                      meusCards.length === 0
+                        ? null
+                        : meusCards.every((c) => cardConcluido(c, obra.checks))
 
                     return (
                       <li key={obra.id} className="membros__obra">
@@ -67,7 +73,7 @@ export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
                           <em>{obra.descricao}</em>
                         </span>
                         <span className="membros__etapa">
-                          {numero}ª — {modelo?.nome.toLowerCase()}
+                          {numero}ª — {modelo?.nome?.toLowerCase()}
                         </span>
                         {fechou !== null && (
                           <span

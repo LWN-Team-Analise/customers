@@ -319,6 +319,7 @@
 
 .panel__form > .field,
 .panel__form > .panel__error,
+.panel__form > .panel__aviso,
 .panel__form > .btn {
   grid-column: 1 / -1;
 }
@@ -335,13 +336,21 @@
   margin: 2px 0 18px;
 }
 
+/* "Esqueci minha senha" virou botao (abre o pop-up), entao precisa
+   perder a cara de botao e ficar com a de link */
 .panel__link {
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-size: 0.8rem;
   color: var(--link);
+  text-align: right;
+  cursor: pointer;
 }
 
 .panel__link:hover {
   color: var(--link-hover);
+  text-decoration: underline;
 }
 
 .panel__error {
@@ -606,4 +615,17 @@
     padding-left: 18px;
     padding-right: 18px;
   }
+}
+
+/* A sessao caiu por tempo: nao e erro do usuario, entao o recado e
+   neutro — nada de vermelho de alarme. */
+.panel__aviso {
+  margin: 0 0 14px;
+  padding: 9px 13px;
+  border-radius: var(--radius-sm);
+  background: var(--pri-media-suave);
+  border: 1px solid var(--pri-media);
+  color: var(--text-base);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }

@@ -12,6 +12,9 @@
 /* ---------------- Faixa do topo ---------------- */
 
 .capa {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   display: flex;
   align-items: flex-start;
   gap: 16px;
@@ -21,6 +24,32 @@
   color: var(--tom-fg);
   border: 1px solid var(--tom-borda);
   box-shadow: 0 20px 44px -30px rgba(0, 0, 0, 0.8);
+}
+
+.capa > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---- foto do cliente ao fundo ----
+   Ela ESTICA para ocupar a faixa inteira (100% 100%, nao "cover"):
+   antes o cover cortava as bordas e so o miolo da foto aparecia.
+
+   A opacidade caminha da esquerda para a direita: 0% na esquerda,
+   onde fica o nome, ate 15% na ponta direita. Quem faz isso e a
+   mascara — a camada tem opacidade 0.15 e a mascara a apaga
+   progressivamente ate zero indo para a esquerda. */
+.capa__marca {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  opacity: 0.15;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 100%);
+  pointer-events: none;
 }
 
 .capa[data-tom='padrao'] {
@@ -35,24 +64,22 @@
   --tom-borda: var(--obra-emerg-borda);
 }
 
+/* fica na propria linha, ACIMA da trilha e do nome:
+       <-
+       Obras/Empresa
+       Empresa                                              */
+/* so a setinha, sem o circulo em volta e sem reacao ao mouse:
+   ela nao muda de cor nem escorrega quando o cursor passa */
 .capa__voltar {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  border: 1px solid currentColor;
-  border-radius: 50%;
+  display: block;
+  width: fit-content;
+  margin-bottom: 6px;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: inherit;
   opacity: 0.85;
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
-}
-
-.capa__voltar:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.22);
 }
 
 .capa__texto {
@@ -119,11 +146,6 @@
   gap: 12px 30px;
   padding: 14px 20px;
   border-radius: var(--radius-lg);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow), var(--glass-inner);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
 }
 
 .info {
@@ -247,9 +269,7 @@
   gap: 8px;
   min-width: 0;
   padding: 13px;
-  border: 1px solid var(--coluna-borda);
   border-radius: var(--radius-lg);
-  background: var(--coluna-bg);
   scroll-snap-align: start;
 }
 
@@ -309,18 +329,30 @@
 
 /* ---------------- Card de setor ---------------- */
 
+/* --setor-cor pode ser uma cor so ou um gradiente: card de mais de um
+   cargo recebe as cores de todos eles (ver fundoDoCard). */
 .setorcard {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   padding: 11px 12px;
+  border: 0;
   border-radius: var(--radius-md);
   background: var(--setor-cor);
   color: #fff;
-  box-shadow: 0 10px 20px -16px rgba(0, 0, 0, 0.8);
-  --avatar-anel: var(--setor-cor);
+  box-shadow: none;
+  /* o anel do avatar precisa de cor chapada, nao de gradiente */
+  --avatar-anel: var(--setor-cor-solida, #6b7280);
+}
+
+.setorcard > * {
+  position: relative;
+  z-index: 1;
 }
 
 
 .setorcard.is-pronto {
-  box-shadow: 0 0 0 2px var(--etapa-ok), 0 10px 20px -16px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 0 2px var(--etapa-ok);
 }
 
 /* etapa aberta, mas de outro cargo: da para ler, nao para marcar */
@@ -642,5 +674,445 @@
 
   .trilho {
     grid-auto-columns: minmax(248px, 86%);
+  }
+}
+
+/* ============================================================
+   Edicao do roteiro pela propria tela da obra
+
+   Os botoes de + e de lapis so aparecem para quem pode mexer no
+   roteiro; ficam discretos e ganham contraste no hover, para nao
+   competirem com os checks, que sao a acao principal daqui.
+   ============================================================ */
+
+/* Novo card e editar etapa, lado a lado no topo. Aparecem quando o
+   mouse entra na etapa, para nao competirem com os checks. */
+.etapa__ferramentas {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.etapa:hover .etapa__ferramentas,
+.etapa__ferramentas:focus-within {
+  opacity: 1;
+}
+
+.etapa__botao {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.etapa__botao:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.etapa__botao:active {
+  transform: scale(0.9);
+}
+
+/* ---- ferramentas dentro do card de setor ---- */
+
+.setorcard__ferramentas {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.setorcard:hover .setorcard__ferramentas,
+.setorcard__ferramentas:focus-within {
+  opacity: 1;
+}
+
+.setorcard__ferramentas button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.setorcard__ferramentas button:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* ---- lapis de cada check ---- */
+
+.setorcard__tarefas li {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.setorcard__tarefas .tarefa {
+  flex: 1;
+  min-width: 0;
+}
+
+.tarefa__editar {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.setorcard__tarefas li:hover .tarefa__editar,
+.tarefa__editar:focus-visible {
+  opacity: 0.85;
+}
+
+.tarefa__editar:hover {
+  background: rgba(255, 255, 255, 0.28);
+  opacity: 1;
+}
+
+/* Check com dono diferente do card: a sigla do cargo dele aparece no
+   fim da linha. Sem isso, dois checks vizinhos com donos diferentes
+   ficariam iguais na tela. */
+.tarefa__dono {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.28);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.6;
+}
+
+/* check de outro cargo dentro de um card que e seu */
+.tarefa.is-deoutro {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.setorcard__semcheck {
+  padding: 6px 4px;
+  font-size: 0.76rem;
+  font-style: italic;
+  opacity: 0.72;
+}
+
+/* ---- recados de estado ---- */
+
+.trilho__vazio,
+.detalhe__carregando {
+  margin: 0;
+  padding: 40px 20px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* "emergência é sempre alta", ao lado da prioridade travada */
+.info__fixa {
+  margin-left: 7px;
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  opacity: 0.75;
+}
+
+/* ============================================================
+   Botao flutuante (canto inferior direito)
+   ============================================================ */
+
+.flutua {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.flutua__botao {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 12px 26px -12px rgba(9, 30, 74, 0.7);
+  /* giro curto e macio: o de 135deg dava um tranco a cada clique */
+  transition: transform 260ms cubic-bezier(0.34, 1.3, 0.5, 1),
+    box-shadow var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
+}
+
+.flutua__botao:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 16px 30px -12px rgba(9, 30, 74, 0.8);
+}
+
+.flutua__botao:active {
+  transform: scale(0.94);
+}
+
+/* aberto, o + vira x — meia volta e o bastante */
+.flutua__botao.is-aberto {
+  transform: rotate(45deg);
+}
+
+.flutua__botao.is-aberto:active {
+  transform: rotate(45deg) scale(0.94);
+}
+
+.flutua__menu {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 224px;
+  padding: 7px;
+  border-radius: var(--radius-md);
+  background: var(--vidro-menu);
+  border: 1px solid var(--vidro-borda);
+  box-shadow: var(--glass-shadow), var(--vidro-realce);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
+  animation: menu-sobe var(--dur-fast) var(--ease-out);
+}
+
+.flutua__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-base);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.flutua__item:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+/* no celular o botao sobe: a faixa de navegacao ocupa o rodape */
+@media (max-width: 860px) {
+  .flutua {
+    right: 16px;
+    bottom: 88px;
+  }
+}
+
+/* o texto do check ocupa o espaco e empurra a etiqueta do dono
+   para a direita da linha */
+.tarefa {
+  width: 100%;
+}
+
+/* ============================================================
+   Etiquetas na faixa da obra
+   ============================================================ */
+
+.capa__etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.capa__etiqueta {
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* ---- etiqueta / anexo / editar, no canto direito da faixa ---- */
+
+.capa__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* sobre a faixa colorida o botao e translucido: a cor da obra
+   continua sendo quem manda ali */
+.capa__acao {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.capa__acao:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.capa__acao em {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.28);
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+/* ============================================================
+   "Abrir chat", logo a direita dos Membros
+
+   Os dois vivem no mesmo bloco (.infos__fim) e ele e que vai
+   para a direita da faixa: assim o botao nunca cai sozinho
+   para a linha de baixo quando a faixa fica apertada.
+   ============================================================ */
+
+.infos__fim {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.abrirchat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 10px 22px -14px var(--accent);
+  transition: filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.abrirchat:hover {
+  filter: brightness(1.08);
+}
+
+.abrirchat:active {
+  transform: scale(0.97);
+}
+
+
+/* ============================================================
+   Carimbo: quem criou, quando, e quem mexeu por ultimo
+   ============================================================ */
+
+.carimbo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 32px;
+  padding: 11px 20px;
+  border-radius: var(--radius-lg);
+}
+
+.carimbo__item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  min-width: 0;
+}
+
+.carimbo__nome {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.carimbo__valor {
+  font-size: 0.8rem;
+  color: var(--text-base);
+}
+
+/* "sem data" na conclusao ainda em aberto */
+.info__vazio {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+
+/* ============================================================
+   Observacao: lapis + lixeira, e a marca de editada
+   ============================================================ */
+
+.nota__ferramentas {
+  display: flex;
+  gap: 2px;
+}
+
+.nota__editada {
+  margin-left: 7px;
+  font-style: normal;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+}
+
+.nota__editada::before {
+  content: '· ';
+}
+
+@media (max-width: 720px) {
+  .infos__fim {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .capa__acoes {
+    justify-content: flex-start;
   }
 }

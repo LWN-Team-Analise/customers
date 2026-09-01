@@ -4,7 +4,6 @@ import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
 import useCorDaLogo from '@/hooks/useCorDaLogo'
-import { obraConcluida } from '@/domain/obras'
 import Confirma from '@/components/Confirma/Confirma'
 import ModalCliente from './ModalCliente'
 import './Clientes.css'
@@ -34,9 +33,20 @@ const Icone = {
 }
 
 export default function Clientes() {
-  const { clientes, obras, adicionarCliente, atualizarCliente, removerCliente, removerObra } =
-    useDados()
+  const {
+    clientes,
+    obras,
+    adicionarCliente,
+    atualizarCliente,
+    removerCliente,
+    concluida,
+    pode,
+  } = useDados()
   const navigate = useNavigate()
+
+  /* sem a permissao a lista continua a mesma; o que some sao os
+     botoes de cadastrar, editar e apagar */
+  const podeMexer = pode('editar_clientes')
 
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState(null)
@@ -59,11 +69,11 @@ export default function Clientes() {
     obras.forEach((o) => {
       const atual = mapa[o.clienteId] ?? { total: 0, abertas: 0 }
       atual.total += 1
-      if (!obraConcluida(o)) atual.abertas += 1
+      if (!concluida(o)) atual.abertas += 1
       mapa[o.clienteId] = atual
     })
     return mapa
-  }, [obras])
+  }, [obras, concluida])
 
   const abrirNovo = () => {
     setEditando(null)
@@ -75,15 +85,10 @@ export default function Clientes() {
     setModal(true)
   }
 
-  /* Antes o botao so avisava e travava quando o cliente tinha obra.
-     Agora ele abre a confirmacao e, se o usuario mandar, apaga o
-     cliente junto com as obras dele. */
+  /* O banco apaga as obras do cliente junto (server/routes/dados.js);
+     a confirmacao avisa quantas sao antes de mandar. */
   const confirmarExclusao = () => {
-    if (!apagando) return
-    obras
-      .filter((o) => o.clienteId === apagando.id)
-      .forEach((o) => removerObra(o.id))
-    removerCliente(apagando.id)
+    if (apagando) removerCliente(apagando.id)
   }
 
   const salvar = (campos) => {
@@ -111,17 +116,17 @@ export default function Clientes() {
             />
           </label>
 
-          <button type="button" className="acao acao--padrao" onClick={abrirNovo}>
-            <Icone.mais />
-            Novo cliente
-          </button>
+          {podeMexer && (
+            <button type="button" className="acao acao--padrao" onClick={abrirNovo}>
+              <Icone.mais />
+              Novo cliente
+            </button>
+          )}
         </header>
 
         {lista.length === 0 ? (
           <p className="clientes__vazio">
-            {busca
-              ? 'Nenhum cliente encontrado com esse termo.'
-              : 'Nenhum cliente cadastrado ainda. Comece pelo botão “Novo cliente”.'}
+            {busca ? 'Nenhum cliente encontrado com esse termo.' : 'Nenhum cliente cadastrado.'}
           </p>
         ) : (
           <ul className="clientes__grade">
@@ -130,6 +135,7 @@ export default function Clientes() {
                 key={cliente.id}
                 cliente={cliente}
                 numeros={contagem[cliente.id] ?? { total: 0, abertas: 0 }}
+                podeMexer={podeMexer}
                 aoEditar={() => abrirEdicao(cliente)}
                 aoApagar={() => setApagando(cliente)}
                 aoVer={() => navigate('/app/obras')}
@@ -163,57 +169,81 @@ export default function Clientes() {
   )
 }
 
-/** Card do cliente. A borda esquerda usa a cor predominante da logo. */
-function CardCliente({ cliente, numeros, aoEditar, aoApagar, aoVer }) {
+/**
+ * Card do cliente. A borda esquerda usa a cor predominante da logo.
+ *
+ * Fechado, mostra so a logo e o nome da empresa — com muitos clientes a
+ * lista fica curta e da para achar de bater o olho. O endereco, o CEP e
+ * a contagem de obras abrem ao clicar no card.
+ */
+function CardCliente({ cliente, numeros, podeMexer, aoEditar, aoApagar, aoVer }) {
   const cor = useCorDaLogo(cliente.logo, cliente.nome)
+  const [aberto, setAberto] = useState(false)
 
   return (
-    <li className="cliente" style={{ '--cor-logo': cor }}>
-      <header className="cliente__topo">
-        <Avatar nome={cliente.nome} foto={cliente.logo} tamanho={46} quadrado titulo={cliente.nome} />
-        <div className="cliente__quem">
-          <h2 className="cliente__nome">{cliente.nome}</h2>
+    <li className={`cliente ${aberto ? 'is-aberto' : ''}`.trim()} style={{ '--cor-logo': cor }}>
+      <button
+        type="button"
+        className="cliente__topo"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        title={aberto ? 'Fechar' : 'Ver endereço e obras'}
+      >
+        <Avatar nome={cliente.nome} foto={cliente.logo} tamanho={40} quadrado titulo={cliente.nome} />
+        <h2 className="cliente__nome">{cliente.nome}</h2>
+        <span className="cliente__seta" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </span>
+      </button>
+
+      {aberto && (
+        <div className="cliente__corpo">
           <p className="cliente__local">
             <Icone.pino />
             {cliente.cidade}
             {cliente.estado ? `/${cliente.estado}` : ''}
           </p>
-        </div>
 
-        <div className="cliente__botoes">
-          <button type="button" onClick={aoEditar} aria-label={`Editar ${cliente.nome}`} title="Editar">
-            <Icone.lapis />
-          </button>
-          <button type="button" onClick={aoApagar} aria-label={`Apagar ${cliente.nome}`} title="Apagar">
-            <Icone.lixo />
-          </button>
-        </div>
-      </header>
+          <dl className="cliente__dados">
+            <div>
+              <dt>Endereço</dt>
+              <dd>{cliente.endereco || '—'}</dd>
+            </div>
+            <div>
+              <dt>Bairro</dt>
+              <dd>{cliente.bairro || '—'}</dd>
+            </div>
+            <div>
+              <dt>CEP</dt>
+              <dd>{cliente.cep || '—'}</dd>
+            </div>
+          </dl>
 
-      <dl className="cliente__dados">
-        <div>
-          <dt>Endereço</dt>
-          <dd>{cliente.endereco || '—'}</dd>
-        </div>
-        <div>
-          <dt>Bairro</dt>
-          <dd>{cliente.bairro || '—'}</dd>
-        </div>
-        <div>
-          <dt>CEP</dt>
-          <dd>{cliente.cep || '—'}</dd>
-        </div>
-      </dl>
+          <footer className="cliente__base">
+            <span className="cliente__obras">
+              <strong>{numeros.total}</strong> obra{numeros.total === 1 ? '' : 's'}
+              {numeros.abertas > 0 && <em>{numeros.abertas} em andamento</em>}
+            </span>
 
-      <footer className="cliente__base">
-        <span className="cliente__obras">
-          <strong>{numeros.total}</strong> obra{numeros.total === 1 ? '' : 's'}
-          {numeros.abertas > 0 && <em>{numeros.abertas} em andamento</em>}
-        </span>
-        <button type="button" className="cliente__ver" onClick={aoVer}>
-          Ver no quadro
-        </button>
-      </footer>
+            {podeMexer && (
+              <span className="cliente__botoes">
+                <button type="button" onClick={aoEditar} aria-label={`Editar ${cliente.nome}`} title="Editar">
+                  <Icone.lapis />
+                </button>
+                <button type="button" onClick={aoApagar} aria-label={`Apagar ${cliente.nome}`} title="Apagar">
+                  <Icone.lixo />
+                </button>
+              </span>
+            )}
+
+            <button type="button" className="cliente__ver" onClick={aoVer}>
+              Ver no quadro
+            </button>
+          </footer>
+        </div>
+      )}
     </li>
   )
 }

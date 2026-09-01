@@ -4,7 +4,7 @@
     {
       "name": "customers-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--no-open"],
+      "runtimeArgs": ["run", "dev:all", "--", "--no-open"],
       "port": 5173
     }
   ]

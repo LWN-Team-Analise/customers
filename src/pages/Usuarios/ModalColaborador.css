@@ -79,3 +79,15 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* recado de erro que veio do servidor (CPF/e-mail repetido, por exemplo) */
+.formcolab__erro {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
