@@ -1,0 +1,61 @@
+/* ============================================================
+   Formularios do roteiro (etapa, card e check).
+   Os tres pop-ups sao parecidos, entao dividem o mesmo estilo.
+   ============================================================ */
+
+.formrot {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.formrot__rotulo {
+  margin-bottom: -8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+}
+
+.formrot__dica {
+  margin: -6px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+.formrot__erro {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+
+/* ---------------- Previa do card ---------------- */
+
+.formrot__previa {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-md);
+}
+
+.formrot__previanome {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* a amostra usa o mesmo fundo do card de verdade: e o gradiente que
+   o usuario vai ver na etapa depois de salvar */
+.formrot__amostra {
+  padding: 10px 15px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}

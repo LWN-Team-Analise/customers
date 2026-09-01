@@ -49,3 +49,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* prioridade da emergencia: mostra o valor, mas nao aceita clique */
+.pastilha.is-travada {
+  cursor: default;
+  opacity: 0.92;
+}
+
+.formobra__erro {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* As duas datas dividem a linha: inicio a esquerda, conclusao a
+   direita. No celular elas empilham. */
+.formobra__datas {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 15px;
+}

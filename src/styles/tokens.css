@@ -100,6 +100,14 @@
   --danger-bg: rgba(179, 38, 30, 0.08);
   --danger-border: rgba(179, 38, 30, 0.28);
   --success: #1f6f4a;
+
+  /* ---- Fundo VHS (global.css) ----
+     No branco qualquer cor pesa mais, entao aqui e ainda mais fraco
+     que no escuro. Se quiser o efeito mais visivel, e so subir estes
+     tres numeros — nada mais depende deles. */
+  --vhs-cor: 0.022;
+  --vhs-linha: 0.028;
+  --vhs-lavagem: 0.03;
 }
 
 /* =========================================================
@@ -137,12 +145,10 @@
   --btn-shadow-hover: 0 18px 36px -18px rgba(150, 195, 255, 0.5);
   --btn-glow: rgba(255, 255, 255, 0.14);
 
-  /* cartao escuro: superficie solida e limpa, sem aspecto leitoso */
-  --glass-bg: linear-gradient(
-    160deg,
-    rgba(22, 26, 38, 0.78) 0%,
-    rgba(12, 15, 24, 0.82) 100%
-  );
+  /* Cartao escuro: uma cor so, CHAPADA.
+     Era um gradiente que ia clareando de um canto ao outro e deixava
+     todo card do modo escuro com aquela mancha diagonal. */
+  --glass-bg: rgba(18, 21, 31, 0.8);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 34px 70px -34px rgba(0, 0, 0, 1),
     0 4px 18px -10px rgba(0, 0, 0, 0.85);
@@ -175,6 +181,11 @@
   --danger-bg: rgba(255, 138, 156, 0.12);
   --danger-border: rgba(255, 138, 156, 0.3);
   --success: #6fe3b4;
+
+  /* no preto a cor some facil; um tiquinho a mais para o efeito existir */
+  --vhs-cor: 0.045;
+  --vhs-linha: 0.16;
+  --vhs-lavagem: 0.05;
 }
 
 /* =========================================================
@@ -203,17 +214,19 @@
   --setor-gq: #2a4fd6;
   --setor-excelencia: #8244c9;
 
-  /* tipos de obra: fundo do card no quadro */
-  /* o card da obra padrao usa a mesma cor da etiqueta "Obras padrao" */
-  --obra-padrao: var(--accent);
+  /* tipos de obra: fundo do card no quadro.
+     Cor CHAPADA, sem gradiente e sem reflexo — o card do quadro nao
+     leva efeito nenhum. O -grad continua existindo so para a faixa
+     do topo da tela da obra. */
+  --obra-padrao: #12315c;          /* azul marinho */
   --obra-padrao-fg: #ffffff;
-  --obra-padrao-borda: rgba(255, 255, 255, 0.18);
-  --obra-padrao-grad: linear-gradient(150deg, #1a4f9c 0%, #0e2f61 100%);
+  --obra-padrao-borda: rgba(255, 255, 255, 0.14);
+  --obra-padrao-grad: linear-gradient(150deg, #1b4478 0%, #0c2246 100%);
 
-  --obra-emerg: #ef6b2c;
+  --obra-emerg: #d9542a;
   --obra-emerg-fg: #ffffff;
-  --obra-emerg-borda: rgba(120, 34, 0, 0.22);
-  --obra-emerg-grad: linear-gradient(150deg, #f79331 0%, #e2432c 100%);
+  --obra-emerg-borda: rgba(120, 34, 0, 0.2);
+  --obra-emerg-grad: linear-gradient(150deg, #f0812d 0%, #d33a26 100%);
 
   --obra-aviso: #f5c518;
   --obra-aviso-fg: #3a2c00;
@@ -252,15 +265,15 @@
   --setor-gq: #3a63e8;
   --setor-excelencia: #9a5ce0;
 
-  --obra-padrao: var(--accent);
+  --obra-padrao: #17406f;          /* azul marinho, um tom acima no preto */
   --obra-padrao-fg: #ffffff;
-  --obra-padrao-borda: rgba(255, 255, 255, 0.2);
-  --obra-padrao-grad: linear-gradient(150deg, #3b74d4 0%, #1c4a95 100%);
+  --obra-padrao-borda: rgba(255, 255, 255, 0.16);
+  --obra-padrao-grad: linear-gradient(150deg, #24559c 0%, #102c55 100%);
 
-  --obra-emerg: #f4732f;
+  --obra-emerg: #e0602c;
   --obra-emerg-fg: #ffffff;
-  --obra-emerg-borda: rgba(255, 255, 255, 0.22);
-  --obra-emerg-grad: linear-gradient(150deg, #fb9a37 0%, #e63f2b 100%);
+  --obra-emerg-borda: rgba(255, 255, 255, 0.16);
+  --obra-emerg-grad: linear-gradient(150deg, #f4882f 0%, #d8452b 100%);
 
   --obra-aviso: #ffd93d;
   --obra-aviso-fg: #33260a;
@@ -309,4 +322,103 @@
   --modal-borda: rgba(255, 255, 255, 0.12);
   --modal-sombra: 0 34px 74px -30px rgba(0, 0, 0, 1),
     0 6px 20px -10px rgba(0, 0, 0, 0.7);
+}
+
+
+/* =========================================================
+   LIQUID GLASS
+   O vidro que veste o site inteiro — header, menu, botoes,
+   filtros, cards. Pop-up NAO usa: la a superficie e opaca,
+   senao o texto do formulario briga com o que passa por tras.
+
+   Sao quatro camadas, e e a soma delas que da o efeito:
+     1. --vidro-fundo   translucido, para o fundo aparecer
+     2. backdrop-filter  desfoque + saturacao do que esta atras
+     3. --vidro-realce   luz na borda de cima, sombra na de baixo
+     4. --vidro-brilho   o reflexo diagonal, por cima de tudo
+   ========================================================= */
+
+:root {
+  /* Cor CHAPADA e translucida: o efeito de vidro vem do desfoque do
+     que passa por tras (backdrop-filter), nao de um degrade pintado
+     por cima. Era o degrade que deixava a mancha diagonal nos cards. */
+  --vidro-fundo: rgba(255, 255, 255, 0.5);
+  --vidro-fundo-forte: rgba(255, 255, 255, 0.72);
+  --vidro-menu: rgba(255, 255, 255, 0.88);
+  --vidro-borda: rgba(255, 255, 255, 0.55);
+  --vidro-borda-forte: rgba(13, 13, 13, 0.12);
+
+  /* a luz de cima e a sombra de baixo, que dao a espessura do vidro */
+  --vidro-realce: inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 0 rgba(13, 13, 13, 0.05),
+    0 1px 2px -1px rgba(13, 13, 13, 0.1);
+
+  --vidro-sombra: 0 18px 40px -24px rgba(9, 22, 52, 0.42),
+    0 3px 12px -8px rgba(9, 22, 52, 0.18);
+
+  /* O reflexo diagonal SAIU do vidro.
+     Era ele o "gradiente que comeca branco no canto de cima a esquerda"
+     — no menu, no header e em quase todo card do modo escuro. O que
+     ficou e o desfoque do que passa por tras, que e o efeito de fato. */
+
+  /* o reflexo continua existindo so para os botoes coloridos */
+  --vidro-brilho-cor: linear-gradient(
+    138deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.12) 38%,
+    rgba(255, 255, 255, 0) 58%,
+    rgba(255, 255, 255, 0.16) 100%
+  );
+  --vidro-borda-cor: rgba(255, 255, 255, 0.34);
+}
+
+:root[data-theme='dark'] {
+  --vidro-fundo: rgba(255, 255, 255, 0.08);
+  --vidro-fundo-forte: rgba(255, 255, 255, 0.14);
+  --vidro-menu: rgba(22, 25, 34, 0.92);
+  --vidro-borda: rgba(255, 255, 255, 0.16);
+  --vidro-borda-forte: rgba(255, 255, 255, 0.24);
+
+  --vidro-realce: inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.35),
+    0 1px 2px -1px rgba(0, 0, 0, 0.6);
+
+  --vidro-sombra: 0 20px 44px -24px rgba(0, 0, 0, 0.9),
+    0 3px 12px -8px rgba(0, 0, 0, 0.7);
+
+  --vidro-brilho-cor: linear-gradient(
+    138deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.08) 38%,
+    rgba(255, 255, 255, 0) 58%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  --vidro-borda-cor: rgba(255, 255, 255, 0.28);
+}
+
+
+/* =========================================================
+   CARD DE AVISO — gradiente que sai da cor da obra e chega
+   no amarelo dos avisos.
+
+   Obra padrao   -> azul (canto superior esquerdo) ate amarelo
+   Obra emergencia -> laranja/vermelho ate o mesmo amarelo
+
+   135deg e exatamente a diagonal: comeca no canto de cima a
+   esquerda e termina no de baixo a direita.
+   ========================================================= */
+
+:root {
+  /* a cor da obra ocupa a maior parte do card; o amarelo dos avisos
+     entra so no ultimo terco, fechando o canto de baixo a direita */
+  --aviso-de-padrao: linear-gradient(135deg, #12315c 0%, #12315c 46%, #2c5f9e 68%, #f0b90b 100%);
+  --aviso-de-emerg: linear-gradient(135deg, #d9542a 0%, #d9542a 46%, #ef8322 70%, #f5c518 100%);
+  /* escurece so a ponta amarela: sem isso o texto branco some la */
+  --aviso-veu: linear-gradient(135deg, rgba(0, 0, 0, 0) 62%, rgba(52, 38, 0, 0.4) 100%);
+}
+
+:root[data-theme='dark'] {
+  --aviso-de-padrao: linear-gradient(135deg, #17406f 0%, #17406f 46%, #33689f 68%, #f5bb12 100%);
+  --aviso-de-emerg: linear-gradient(135deg, #e0602c 0%, #e0602c 46%, #f2892a 70%, #ffd93d 100%);
+  --aviso-veu: linear-gradient(135deg, rgba(0, 0, 0, 0) 62%, rgba(40, 28, 0, 0.44) 100%);
 }

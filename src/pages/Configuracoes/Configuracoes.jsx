@@ -6,22 +6,50 @@ import { CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
 import { useAuth } from '@/context/AuthContext'
 import { useDados } from '@/context/DadosContext'
 import { useTheme } from '@/context/ThemeContext'
-import { editarUsuario } from '@/services/equipeService'
-import { validateEmail } from '@/services/authService'
+import useOutlook from '@/hooks/useOutlook'
+import { podeEditarCpf } from '@/domain/obras'
+import { editarUsuario, trocarSenha } from '@/services/equipeService'
+import { validateCPF, vincularOutlook } from '@/services/authService'
+import { tokenAtual } from '@/services/api'
 import { formatarCPF, formatarTelefone, soDigitos } from '@/utils/formato'
+import { prepararImagem } from '@/utils/imagem'
+import outlookLogo from '@/assets/outlook.png'
 import './Configuracoes.css'
 
+const Sol = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2.5v2M12 19.5v2M4.5 12h-2M21.5 12h-2M6.4 6.4 5 5M19 19l-1.4-1.4M17.6 6.4 19 5M5 19l1.4-1.4" />
+  </svg>
+)
+
+const Lua = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15">
+    <path
+      fill="currentColor"
+      d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6a.8.8 0 0 0-1.1-.9A9.9 9.9 0 1 0 21.3 15.7a.8.8 0 0 0-.9-1.1Z"
+    />
+  </svg>
+)
+
 /**
- * Conta do usuario logado. Da para trocar foto, nome, e-mail, telefone,
- * nascimento e cargo.
+ * Conta do usuario logado: foto, nome, telefone, nascimento e cargo.
+ * Tudo grava no banco na hora do Salvar.
  *
- * O CPF fica travado: uma vez cadastrado, so muda apagando o usuario e
- * cadastrando de novo — a API recusa a alteracao, entao nao adianta
- * mexer so na tela.
+ * Dois campos NAO se alteram por aqui:
+ *
+ *   E-MAIL — e a porta de entrada e o vinculo com o Outlook. Trocar
+ *            ele sozinho quebraria os dois; quem muda e a diretoria,
+ *            pela tela de Usuarios.
+ *   CPF    — trava de cargo, nao permissao: so a diretoria mexe. A API
+ *            recusa igual.
+ *
+ * O tema tambem mora aqui, e agora na propria linha do nome, sem card
+ * separado.
  */
 export default function Configuracoes() {
   const { user, atualizarPerfil } = useAuth()
-  const { cargos, atualizarPessoa, equipe } = useDados()
+  const { cargos, recarregar } = useDados()
   const { theme, selectTheme } = useTheme()
   const entradaFoto = useRef(null)
 
@@ -30,39 +58,50 @@ export default function Configuracoes() {
   const [recado, setRecado] = useState('')
   const [salvando, setSalvando] = useState(false)
 
+  const cpfLiberado = podeEditarCpf(user)
+
   /* carrega o formulario com o que a sessao tem hoje */
   useEffect(() => {
     if (!user) return
-    const naEquipe = equipe.find((p) => String(p.id) === String(user.id))
     setForm({
       nome: user.name ?? '',
       email: user.email ?? '',
-      telefone: formatarTelefone(user.telefone ?? naEquipe?.telefone ?? ''),
-      nascimento: user.dataNascimento ?? naEquipe?.nascimento ?? '',
-      cargo: user.cargoChave ?? naEquipe?.cargo ?? '',
-      foto: user.foto ?? naEquipe?.foto ?? null,
+      telefone: formatarTelefone(user.telefone ?? ''),
+      nascimento: user.dataNascimento ?? '',
+      cargo: user.cargoChave ?? '',
+      cpf: formatarCPF(user.cpf ?? ''),
+      foto: user.foto ?? null,
     })
-  }, [user, equipe])
+  }, [user])
 
   if (!form) return null
 
   const mudar = (campo) => (evento) => {
     const bruto = evento?.target ? evento.target.value : evento
-    const valor = campo === 'telefone' ? formatarTelefone(bruto) : bruto
+    const valor =
+      campo === 'telefone'
+        ? formatarTelefone(bruto)
+        : campo === 'cpf'
+          ? formatarCPF(bruto)
+          : bruto
     setForm((atual) => ({ ...atual, [campo]: valor }))
     setErros((atual) => ({ ...atual, [campo]: undefined }))
     setRecado('')
   }
 
-  const escolherFoto = (evento) => {
+  /* a imagem e reduzida aqui, no navegador: foto de celular crua nao
+     cabe no limite do servidor nem no localStorage da sessao */
+  const escolherFoto = async (evento) => {
     const arquivo = evento.target.files?.[0]
+    evento.target.value = ''
     if (!arquivo) return
-    const leitor = new FileReader()
-    leitor.onload = () => {
-      setForm((atual) => ({ ...atual, foto: String(leitor.result) }))
+    try {
+      const foto = await prepararImagem(arquivo)
+      setForm((atual) => ({ ...atual, foto }))
       setRecado('')
+    } catch (e) {
+      setRecado(e.message)
     }
-    leitor.readAsDataURL(arquivo)
   }
 
   const salvar = async (evento) => {
@@ -70,44 +109,47 @@ export default function Configuracoes() {
 
     const novos = {}
     if (!form.nome.trim()) novos.nome = 'Informe o nome.'
-    if (!validateEmail(form.email)) novos.email = 'E-mail inválido.'
     if (form.telefone && soDigitos(form.telefone).length < 10) {
       novos.telefone = 'Informe o DDD e o número.'
     }
+    if (cpfLiberado && form.cpf && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
     if (Object.keys(novos).length > 0) {
       setErros(novos)
       return
     }
 
+    /* o e-mail NAO vai: quem edita o proprio cadastro nao troca o
+       endereco de acesso, e a API recusaria a gravacao inteira */
     const campos = {
       nome: form.nome.trim(),
-      email: form.email.trim(),
       telefone: soDigitos(form.telefone),
-      nascimento: form.nascimento || undefined,
+      nascimento: form.nascimento || null,
       cargo: form.cargo || undefined,
       foto: form.foto,
+    }
+    /* o CPF so vai quando pode mudar E mudou */
+    if (cpfLiberado && soDigitos(form.cpf) !== soDigitos(user.cpf)) {
+      campos.cpf = soDigitos(form.cpf)
     }
 
     setSalvando(true)
     try {
-      /* tenta o banco; sem ele, a mudanca vale para esta sessao */
-      const salvo = await editarUsuario(user.id, campos).catch(() => null)
+      const salvo = await editarUsuario(user.id, campos)
 
+      /* a sessao guarda uma copia do usuario: atualiza para a foto e o
+         nome novos aparecerem no menu sem precisar entrar de novo */
       atualizarPerfil({
-        name: campos.nome,
-        email: campos.email,
-        telefone: campos.telefone,
+        name: salvo?.nome ?? campos.nome,
+        telefone: salvo?.telefone ?? campos.telefone,
+        cpf: salvo?.cpf ?? user.cpf,
+        dataNascimento: salvo?.nascimento ?? campos.nascimento,
         foto: campos.foto,
         cargoChave: campos.cargo ?? user.cargoChave,
         cargoNome: cargos.find((c) => c.chave === campos.cargo)?.nome ?? user.cargoNome,
       })
-      atualizarPessoa(user.id, { ...campos, nome: campos.nome })
+      await recarregar()
 
-      setRecado(
-        salvo
-          ? 'Dados salvos no banco.'
-          : 'Dados salvos nesta sessão. Rode db/sistema.sql.txt para gravar no banco.',
-      )
+      setRecado('Dados salvos no banco.')
     } catch (erro) {
       setRecado(erro.message)
     } finally {
@@ -122,7 +164,11 @@ export default function Configuracoes() {
           <h1 className="tela__titulo">Configurações</h1>
         </header>
 
-        <form className="config__bloco" onSubmit={salvar} noValidate>
+        {/* o aviso do Outlook fica no topo: e a primeira coisa que
+            quem ainda nao vinculou precisa ver ao entrar */}
+        <BlocoOutlook />
+
+        <form className="config__bloco config__bloco--conta vidro" onSubmit={salvar} noValidate>
           <h2 className="config__titulo">Sua conta</h2>
 
           <div className="config__cabeca">
@@ -151,6 +197,32 @@ export default function Configuracoes() {
                 onChange={mudar('nome')}
                 erro={erros.nome}
               />
+
+              {/* o tema mora aqui, na linha do nome: os dois botoes
+                  dividem a largura inteira, sem card separado */}
+              <div className="config__temas" role="radiogroup" aria-label="Tema do sistema">
+                <button
+                  type="button"
+                  role="radio"
+                  className={`config__tema ${theme === 'light' ? 'is-atual' : ''}`.trim()}
+                  onClick={() => selectTheme('light')}
+                  aria-checked={theme === 'light'}
+                >
+                  <Sol />
+                  Modo claro
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  className={`config__tema ${theme === 'dark' ? 'is-atual' : ''}`.trim()}
+                  onClick={() => selectTheme('dark')}
+                  aria-checked={theme === 'dark'}
+                >
+                  <Lua />
+                  Modo escuro
+                </button>
+              </div>
+
               {form.foto && (
                 <button
                   type="button"
@@ -164,12 +236,14 @@ export default function Configuracoes() {
           </div>
 
           <div className="config__grade">
+            {/* travado para todos: o e-mail e o acesso e o vinculo do Outlook */}
             <CampoTexto
               rotulo="E-mail"
               type="email"
               value={form.email}
-              onChange={mudar('email')}
-              erro={erros.email}
+              readOnly
+              disabled
+              dica="O e-mail do acesso não muda por aqui. Fale com a diretoria."
             />
 
             <CampoTexto
@@ -188,13 +262,20 @@ export default function Configuracoes() {
               onChange={mudar('nascimento')}
             />
 
-            {/* travado: o CPF so muda apagando e cadastrando de novo */}
+            {/* travado para todos, menos para a diretoria */}
             <CampoTexto
               rotulo="CPF"
-              value={formatarCPF(user.cpf ?? '')}
-              disabled
-              readOnly
-              dica="Não pode ser alterado. Para trocar, apague o cadastro e faça um novo."
+              inputMode="numeric"
+              value={form.cpf}
+              onChange={mudar('cpf')}
+              erro={erros.cpf}
+              disabled={!cpfLiberado}
+              readOnly={!cpfLiberado}
+              dica={
+                cpfLiberado
+                  ? 'Você é da diretoria: pode corrigir o CPF.'
+                  : 'Somente a diretoria altera o CPF.'
+              }
             />
 
             <CampoSelecao
@@ -203,7 +284,7 @@ export default function Configuracoes() {
               value={form.cargo}
               onChange={mudar('cargo')}
               vazio="Sem cargo"
-              opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome }))}
+              opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
             />
           </div>
 
@@ -220,27 +301,235 @@ export default function Configuracoes() {
           </div>
         </form>
 
-        <article className="config__bloco">
-          <h2 className="config__titulo">Aparência</h2>
-          <p className="config__nota">A escolha fica guardada neste navegador.</p>
-          <div className="config__temas">
-            <button
-              type="button"
-              className={`chip ${theme === 'light' ? 'is-atual' : ''}`.trim()}
-              onClick={() => selectTheme('light')}
-            >
-              Modo claro
-            </button>
-            <button
-              type="button"
-              className={`chip ${theme === 'dark' ? 'is-atual' : ''}`.trim()}
-              onClick={() => selectTheme('dark')}
-            >
-              Modo escuro
-            </button>
-          </div>
-        </article>
+        <TrocarSenha />
       </section>
     </AppShell>
+  )
+}
+
+/**
+ * Conta Microsoft.
+ *
+ * Enquanto ela nao estiver vinculada, o aviso aparece TODA vez que a
+ * pessoa entra em Configuracoes — foi o pedido, e e o que faz o
+ * cadastro acontecer.
+ *
+ * Depois de vincular, o sistema puxa a foto do Outlook e passa a
+ * cobrar que a senha do site vire a mesma do Outlook: duas senhas
+ * diferentes para a mesma pessoa e receita de confusao.
+ */
+function BlocoOutlook() {
+  const { user, atualizarPerfil } = useAuth()
+  const { recarregar } = useDados()
+  const outlook = useOutlook()
+
+  const [ocupado, setOcupado] = useState(false)
+  const [erro, setErro] = useState('')
+  const [recado, setRecado] = useState('')
+
+  const vinculado = Boolean(user?.outlook)
+
+  const vincular = async () => {
+    setErro('')
+    setRecado('')
+    setOcupado(true)
+    try {
+      const { codigo, redirecionar } = await outlook.abrir()
+      const resposta = await vincularOutlook(codigo, redirecionar, tokenAtual())
+      atualizarPerfil({
+        outlook: true,
+        outlookEmail: resposta.user?.outlookEmail ?? null,
+        foto: resposta.user?.foto ?? user?.foto,
+        senhaTemporaria: true,
+      })
+      await recarregar()
+      setRecado(resposta.recado ?? 'Outlook vinculado.')
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  return (
+    <article
+      className={`config__bloco config__bloco--outlook vidro ${
+        vinculado ? '' : 'is-pendente'
+      }`.trim()}
+    >
+      <h2 className="config__titulo">Conta Microsoft (Outlook)</h2>
+
+      {vinculado ? (
+        <p className="config__nota">
+          Vinculada a <strong>{user.outlookEmail ?? user.email}</strong>. Você pode entrar no
+          sistema pelo botão do Outlook, sem digitar a senha.
+        </p>
+      ) : (
+        <p className="config__alerta" role="alert">
+          Você ainda <strong>não cadastrou o Outlook</strong>. Vincule a sua conta da empresa
+          para entrar pelo botão do Outlook — e para o sistema puxar a sua foto de perfil
+          automaticamente.
+        </p>
+      )}
+
+      {!outlook.disponivel && !outlook.conferindo && (
+        <p className="config__nota">
+          O login com Outlook ainda não foi ligado no servidor. Peça para a diretoria preencher
+          <code> OUTLOOK_CLIENT_ID</code>, <code>OUTLOOK_CLIENT_SECRET</code> e
+          <code> OUTLOOK_TENANT</code> no <code>.env</code> da API.
+        </p>
+      )}
+
+      {erro && (
+        <p className="config__recado config__recado--erro" role="alert">
+          {erro}
+        </p>
+      )}
+      {recado && (
+        <p className="config__recado" role="status">
+          {recado}
+        </p>
+      )}
+
+      <div className="config__salvar">
+        <button
+          type="button"
+          className="botaooutlook"
+          onClick={vincular}
+          disabled={ocupado || outlook.conferindo || !outlook.disponivel}
+        >
+          <span
+            className="botaooutlook__logo"
+            style={{ '--logo': `url(${outlookLogo})` }}
+            aria-hidden="true"
+          />
+          {ocupado
+            ? 'Abrindo a Microsoft...'
+            : vinculado
+              ? 'Vincular outra conta'
+              : 'Entrar com o Outlook'}
+        </button>
+      </div>
+    </article>
+  )
+}
+
+/**
+ * Troca da propria senha.
+ *
+ * E por aqui que o colaborador novo sai da senha padrao 123456 — e,
+ * depois de vincular o Outlook, que ele iguala a senha do site a da
+ * conta Microsoft.
+ */
+function TrocarSenha() {
+  const { user, atualizarPerfil } = useAuth()
+
+  const [atual, setAtual] = useState('')
+  const [nova, setNova] = useState('')
+  const [repetida, setRepetida] = useState('')
+  const [erro, setErro] = useState('')
+  const [recado, setRecado] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  const enviar = async (evento) => {
+    evento.preventDefault()
+    setErro('')
+    setRecado('')
+
+    if (!atual) {
+      setErro('Informe a senha atual.')
+      return
+    }
+    if (nova.length < 6) {
+      setErro('A nova senha precisa de 6 caracteres ou mais.')
+      return
+    }
+    if (nova === atual) {
+      setErro('A nova senha precisa ser diferente da atual.')
+      return
+    }
+    if (nova !== repetida) {
+      setErro('A confirmação não bate com a nova senha.')
+      return
+    }
+
+    setSalvando(true)
+    try {
+      await trocarSenha(atual, nova)
+      atualizarPerfil({ senhaTemporaria: false })
+      setAtual('')
+      setNova('')
+      setRepetida('')
+      setRecado('Senha trocada.')
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <form className="config__bloco vidro" onSubmit={enviar} noValidate>
+      <h2 className="config__titulo">Senha</h2>
+
+      {user?.senhaTemporaria && (
+        <p className="config__alerta" role="alert">
+          {user?.outlook
+            ? 'Você acabou de vincular o Outlook. Troque a senha do site para a MESMA senha do Outlook — assim você não confunde as duas.'
+            : 'Você ainda está com a senha padrão do primeiro acesso. Troque agora.'}
+        </p>
+      )}
+
+      <div className="config__grade">
+        <CampoTexto
+          rotulo="Senha atual"
+          type="password"
+          autoComplete="current-password"
+          value={atual}
+          onChange={(e) => {
+            setAtual(e.target.value)
+            setErro('')
+          }}
+        />
+        <CampoTexto
+          rotulo="Nova senha"
+          type="password"
+          autoComplete="new-password"
+          value={nova}
+          onChange={(e) => {
+            setNova(e.target.value)
+            setErro('')
+          }}
+          dica="No mínimo 6 caracteres."
+        />
+        <CampoTexto
+          rotulo="Repita a nova senha"
+          type="password"
+          autoComplete="new-password"
+          value={repetida}
+          onChange={(e) => {
+            setRepetida(e.target.value)
+            setErro('')
+          }}
+        />
+      </div>
+
+      {erro && (
+        <p className="config__recado config__recado--erro" role="alert">
+          {erro}
+        </p>
+      )}
+      {recado && (
+        <p className="config__recado" role="status">
+          {recado}
+        </p>
+      )}
+
+      <div className="config__salvar">
+        <Button type="submit" loading={salvando} disabled={!atual || !nova || !repetida}>
+          Trocar senha
+        </Button>
+      </div>
+    </form>
   )
 }

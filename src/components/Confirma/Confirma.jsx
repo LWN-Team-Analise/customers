@@ -30,8 +30,15 @@ export default function Confirma({
           <button
             type="button"
             className="confirma__apagar"
-            onClick={() => {
-              aoConfirmar()
+            onClick={async () => {
+              /* a exclusao grava no banco e pode falhar; o motivo aparece
+                 na faixa do AppShell, entao aqui so nao deixamos a
+                 promessa estourar sem ninguem pegar */
+              try {
+                await aoConfirmar()
+              } catch {
+                /* ja mostrado ao usuario */
+              }
               aoFechar()
             }}
           >

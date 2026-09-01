@@ -3,35 +3,66 @@ import { createPortal } from 'react-dom'
 import './Modal.css'
 
 /**
- * Janela em vidro, centralizada, com fundo escurecido.
+ * Janela centralizada, com fundo escurecido. Superficie OPACA: e o unico
+ * lugar do sistema sem o vidro, para o formulario nao brigar com o que
+ * passa por tras.
+ *
  * Fecha no Esc, no clique fora e no X. Enquanto esta aberta, a rolagem
  * da pagina fica travada e o foco vai para dentro do dialogo.
+ *
+ * `nivel`: pop-up aberto por cima de outro (editar um cargo a partir da
+ * lista de cargos, por exemplo) usa nivel={1} para ficar na frente.
  */
-export default function Modal({ aberto, aoFechar, titulo, subtitulo, largura = 520, children }) {
+export default function Modal({
+  aberto,
+  aoFechar,
+  titulo,
+  subtitulo,
+  largura = 520,
+  nivel = 0,
+  children,
+}) {
   const caixa = useRef(null)
+
+  /* aoFechar quase sempre chega como funcao nova a cada render do pai
+     (`() => setAberto(false)`). Guardada na ref, ela nao entra nas
+     dependencias do efeito abaixo — se entrasse, o efeito rodaria a
+     cada tecla digitada e o foco voltaria para a caixa, tirando o
+     cursor do campo depois de UMA letra. */
+  const fechar = useRef(aoFechar)
+  useEffect(() => {
+    fechar.current = aoFechar
+  }, [aoFechar])
 
   useEffect(() => {
     if (!aberto) return undefined
 
     const aoTeclar = (evento) => {
-      if (evento.key === 'Escape') aoFechar?.()
+      if (evento.key === 'Escape') fechar.current?.()
     }
 
     const rolagem = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     document.addEventListener('keydown', aoTeclar)
+
+    /* leva o foco para o dialogo uma vez, na abertura: dai o leitor de
+       tela anuncia o titulo e o Tab anda dentro do formulario */
     caixa.current?.focus()
 
     return () => {
       document.body.style.overflow = rolagem
       document.removeEventListener('keydown', aoTeclar)
     }
-  }, [aberto, aoFechar])
+  }, [aberto])
 
   if (!aberto) return null
 
   return createPortal(
-    <div className="modal" onMouseDown={(e) => e.target === e.currentTarget && aoFechar?.()}>
+    <div
+      className="modal"
+      style={nivel > 0 ? { zIndex: 90 + nivel * 10 } : undefined}
+      onMouseDown={(e) => e.target === e.currentTarget && aoFechar?.()}
+    >
       <div
         className="modal__caixa"
         style={{ maxWidth: largura }}

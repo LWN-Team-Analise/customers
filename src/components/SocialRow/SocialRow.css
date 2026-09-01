@@ -46,21 +46,30 @@
     box-shadow var(--dur-fast) var(--ease-out);
 }
 
+/* A logo vira um recorte: o que se ve e a cor de dentro, e ela e a
+   mesma do botao Entrar. Trocar --btn-bg troca as duas de uma vez. */
 .social__logo {
+  display: block;
   width: 21px;
   height: 21px;
-  object-fit: contain;
-  /* logo em escala de cinza */
-  filter: grayscale(1);
+  background: var(--btn-bg);
+  -webkit-mask-image: var(--logo);
+  mask-image: var(--logo);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
-/* sobre o preto o cinza precisa de um empurrao para se ler */
-:root[data-theme='dark'] .social__logo {
-  filter: grayscale(1) brightness(1.7);
-}
-
-.social__btn:hover {
+.social__btn:hover:not(:disabled) {
   transform: translateY(-3px);
   color: var(--text-strong);
   background: var(--control-bg-hover);
+}
+
+.social__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }

@@ -22,21 +22,21 @@
 }
 
 .obracard[data-tom='padrao'] {
-  --tom-bg: var(--obra-padrao-grad);
+  --tom-bg: var(--obra-padrao);
   --tom-fg: var(--obra-padrao-fg);
   --tom-borda: var(--obra-padrao-borda);
   --tom-anel: var(--obra-padrao);
 }
 
 .obracard[data-tom='emergencia'] {
-  --tom-bg: var(--obra-emerg-grad);
+  --tom-bg: var(--obra-emerg);
   --tom-fg: var(--obra-emerg-fg);
   --tom-borda: var(--obra-emerg-borda);
   --tom-anel: var(--obra-emerg);
 }
 
 .obracard[data-tom='aviso'] {
-  --tom-bg: var(--obra-aviso-grad);
+  --tom-bg: var(--obra-aviso);
   --tom-fg: var(--obra-aviso-fg);
   --tom-borda: var(--obra-aviso-borda);
   --tom-anel: var(--obra-aviso);
@@ -143,4 +143,60 @@
 .obracard__data {
   font-weight: 600;
   opacity: 0.72;
+}
+
+/* ============================================================
+   O card do quadro NAO leva efeito: cor chapada, sem reflexo e
+   sem brilho. So a coluna de aviso tem gradiente, e de proposito.
+   ============================================================ */
+
+.obracard {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: none;
+}
+
+.obracard--clicavel:hover {
+  box-shadow: 0 10px 20px -14px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   Coluna "Enviar aviso"
+
+   Cor CHAPADA, a mesma da obra: azul se padrao, laranja se
+   emergencia. O degrade que ia da cor da obra ate o amarelo
+   saiu, e o veu que escurecia a ponta amarela junto com ele —
+   o card do aviso nao leva efeito nenhum.
+   ============================================================ */
+
+.obracard[data-tom='aviso-padrao'] {
+  --tom-bg: var(--obra-padrao);
+  --tom-fg: var(--obra-padrao-fg);
+  --tom-borda: var(--obra-padrao-borda);
+  --tom-anel: var(--obra-padrao);
+}
+
+.obracard[data-tom='aviso-emergencia'] {
+  --tom-bg: var(--obra-emerg);
+  --tom-fg: var(--obra-emerg-fg);
+  --tom-borda: var(--obra-emerg-borda);
+  --tom-anel: var(--obra-emerg);
+}
+
+/* ---- etiquetas da obra, logo abaixo da descricao ---- */
+
+.obracard__etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.obracard__etiqueta {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.6;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
 }

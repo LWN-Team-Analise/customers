@@ -1,264 +1,121 @@
 /**
- * Guarda-tudo das obras, clientes, equipe e avisos.
+ * Clientes, obras, checks, observacoes, avisos e avaliacoes — tudo
+ * direto no banco (server/routes/dados.js).
  *
- * Hoje os dados vivem no localStorage do navegador — o banco ainda so tem a
- * tabela "usuario". A tela nunca fala com o localStorage direto: fala com as
- * funcoes daqui. Quando as tabelas existirem, basta trocar o corpo destas
- * funcoes por chamadas de fetch('/api/...') que nenhuma tela muda.
+ * Nao ha mais copia no localStorage: o que a tela mostra e o que esta
+ * gravado. Quando o servidor nao responde, a chamada estoura e quem
+ * chamou desfaz a alteracao na tela (o contexto cuida disso).
  */
 
-import { etapasIniciais } from '@/domain/obras'
-import { hojeISO } from '@/utils/formato'
+import { del, get, patch, post, put } from './api'
 
-const CHAVE = 'customers.dados.v2'
+/** Estado inicial enquanto a primeira leitura nao volta. */
+export const VAZIO = { clientes: [], obras: [], observacoesQuadro: [] }
 
-/** Id curto e legivel, suficiente enquanto os dados sao locais. */
-export function novoId(prefixo = 'id') {
-  return `${prefixo}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+export function carregarTudo() {
+  return get('/dados')
 }
 
-/* ------------------------------------------------------------
-   Semente: sem ela as telas abririam vazias e sem nada para ver.
-   ------------------------------------------------------------ */
+/* ---------------- Clientes ---------------- */
 
-/* Os cinco primeiros sao os setores das etapas (fixo: nao da para apagar).
-   As mesmas cores estao em db/sistema.sql.txt — quando a API responde,
-   e ela que manda. */
-const CARGOS_SEMENTE = [
-  { id: 'cg_comercial', chave: 'comercial', nome: 'Comercial', curto: 'com', cor: '#13b7c7', acessoTotal: false, fixo: true },
-  { id: 'cg_adm', chave: 'adm', nome: 'ADM', curto: 'adm', cor: '#35b566', acessoTotal: false, fixo: true },
-  { id: 'cg_tecnico', chave: 'tecnico', nome: 'Técnico', curto: 'téc', cor: '#f2802a', acessoTotal: false, fixo: true },
-  { id: 'cg_gq', chave: 'gq', nome: 'GQ', curto: 'gq', cor: '#3a63e8', acessoTotal: false, fixo: true },
-  { id: 'cg_excelencia', chave: 'excelencia', nome: 'Excelência', curto: 'exc', cor: '#9a5ce0', acessoTotal: false, fixo: true },
-  { id: 'cg_diretor', chave: 'diretor', nome: 'Diretor', curto: 'dir', cor: '#c2a23a', acessoTotal: true, fixo: false },
-]
-
-const EQUIPE_SEMENTE = [
-  { id: 'u_ana', nome: 'Ana Ribeiro', cargo: 'comercial', foto: null },
-  { id: 'u_bruno', nome: 'Bruno Castro', cargo: 'tecnico', foto: null },
-  { id: 'u_carla', nome: 'Carla Menezes', cargo: 'gq', foto: null },
-  { id: 'u_diego', nome: 'Diego Prado', cargo: 'adm', foto: null },
-  { id: 'u_elisa', nome: 'Elisa Nunes', cargo: 'excelencia', foto: null },
-]
-
-const CLIENTES_SEMENTE = [
-  {
-    id: 'c_alfa',
-    nome: 'Alfa Engenharia',
-    logo: null,
-    endereco: 'Av. Paulista, 1578',
-    bairro: 'Bela Vista',
-    cidade: 'São Paulo',
-    estado: 'SP',
-    cep: '01310-200',
-    criadoEm: '2026-01-12T09:00:00.000Z',
-  },
-  {
-    id: 'c_delta',
-    nome: 'Delta Indústria',
-    logo: null,
-    endereco: 'Rua XV de Novembro, 340',
-    bairro: 'Centro',
-    cidade: 'Curitiba',
-    estado: 'PR',
-    cep: '80020-310',
-    criadoEm: '2026-02-03T09:00:00.000Z',
-  },
-  {
-    id: 'c_orion',
-    nome: 'Órion Serviços',
-    logo: null,
-    endereco: 'Av. Afonso Pena, 1212',
-    bairro: 'Centro',
-    cidade: 'Belo Horizonte',
-    estado: 'MG',
-    cep: '30130-003',
-    criadoEm: '2026-03-21T09:00:00.000Z',
-  },
-]
-
-/** Marca as tarefas de uma etapa como feitas, para a semente nascer com historia. */
-function concluirEtapa(etapas, numero, responsavelId) {
-  const etapa = etapas.find((e) => e.numero === numero)
-  if (!etapa) return
-  Object.values(etapa.setores).forEach((bloco) => {
-    bloco.tarefas.forEach((t) => {
-      t.feito = true
-    })
-    bloco.responsavelId = responsavelId
-  })
+export async function criarCliente(campos) {
+  const { cliente } = await post('/dados/clientes', campos)
+  return cliente
 }
 
-function obraSemente({ id, clienteId, descricao, tipo, prioridade, dataPrevista, avancar = 0, membros }) {
-  const etapas = etapasIniciais()
-  for (let n = 1; n <= avancar; n += 1) concluirEtapa(etapas, n, membros[0])
-  return {
-    id,
-    clienteId,
-    descricao,
-    tipo,
-    prioridade,
-    dataPrevista,
-    membros,
-    etapas,
-    observacoes: [],
-    avisos: [],
-    avaliacao: null,
-    criadoEm: new Date().toISOString(),
-  }
+export async function editarCliente(id, campos) {
+  const { cliente } = await patch(`/dados/clientes/${id}`, campos)
+  return cliente
 }
 
-function semente() {
-  return {
-    cargos: CARGOS_SEMENTE,
-    equipe: EQUIPE_SEMENTE,
-    clientes: CLIENTES_SEMENTE,
-    obras: [
-      obraSemente({
-        id: 'o_1',
-        clienteId: 'c_alfa',
-        descricao: 'Laudo de conformidade das linhas de produção da unidade norte.',
-        tipo: 'padrao',
-        prioridade: 'alta',
-        dataPrevista: '2026-09-18',
-        avancar: 1,
-        membros: ['u_ana', 'u_bruno'],
-      }),
-      obraSemente({
-        id: 'o_2',
-        clienteId: 'c_delta',
-        descricao: 'Consultoria de qualidade para renovação do certificado.',
-        tipo: 'padrao',
-        prioridade: 'media',
-        dataPrevista: '2026-10-02',
-        avancar: 0,
-        membros: ['u_carla'],
-      }),
-      obraSemente({
-        id: 'o_3',
-        clienteId: 'c_orion',
-        descricao: 'Parada não programada: avaliação estrutural do galpão 4.',
-        tipo: 'emergencia',
-        prioridade: 'alta',
-        dataPrevista: '2026-09-05',
-        avancar: 0,
-        membros: ['u_bruno', 'u_elisa'],
-      }),
-    ],
-  }
+export const apagarCliente = (id) => del(`/dados/clientes/${id}`)
+
+/* ---------------- Obras ---------------- */
+
+export async function criarObra(campos) {
+  const { id } = await post('/dados/obras', campos)
+  return id
 }
 
-const VAZIO = { cargos: [], equipe: [], clientes: [], obras: [] }
+export const editarObra = (id, campos) => patch(`/dados/obras/${id}`, campos)
+export const apagarObra = (id) => del(`/dados/obras/${id}`)
 
-/** Le o estado inteiro do storage; se nao houver nada ainda, planta a semente. */
-export function carregar() {
-  try {
-    const bruto = localStorage.getItem(CHAVE)
-    if (!bruto) {
-      const inicial = semente()
-      salvar(inicial)
-      return inicial
-    }
-    const dados = JSON.parse(bruto)
-    return { ...VAZIO, ...dados }
-  } catch {
-    /* storage bloqueado ou JSON corrompido: segue so em memoria */
-    return semente()
-  }
+/* ---------------- Checks ---------------- */
+
+export const marcarCheck = (obraId, checkId) => put(`/dados/obras/${obraId}/checks/${checkId}`)
+export const desmarcarCheck = (obraId, checkId) => del(`/dados/obras/${obraId}/checks/${checkId}`)
+
+/* ---------------- Observacoes ---------------- */
+
+export function criarObservacao(obraId, campos) {
+  return post(`/dados/obras/${obraId}/observacoes`, campos)
 }
 
-export function salvar(dados) {
-  try {
-    localStorage.setItem(CHAVE, JSON.stringify(dados))
-  } catch {
-    /* modo privado: os dados valem so enquanto a aba estiver aberta */
-  }
+export const apagarObservacao = (obraId, obsId) =>
+  del(`/dados/obras/${obraId}/observacoes/${obsId}`)
+
+export const editarObservacao = (obraId, obsId, texto) =>
+  patch(`/dados/obras/${obraId}/observacoes/${obsId}`, { texto })
+
+/** As do quadro (tela de Obras), que nao pertencem a uma obra so. */
+export const criarObservacaoQuadro = (campos) => post('/dados/observacoes', campos)
+export const apagarObservacaoQuadro = (id) => del(`/dados/observacoes/${id}`)
+export const editarObservacaoQuadro = (id, texto) => patch(`/dados/observacoes/${id}`, { texto })
+
+/* ---------------- Avisos ---------------- */
+
+export const criarAviso = (obraId, campos) => post(`/dados/obras/${obraId}/avisos`, campos)
+
+/** Zera o selo do sininho para estes avisos. */
+export const marcarAvisosLidos = (ids) => post('/dados/avisos/lidos', { ids })
+
+/* ---------------- Avaliacoes ----------------
+   Uma obra pode ter varias notas (diretor, cliente, ...). A media
+   delas e o que vale para a obra e para quem participou dela. */
+
+export const criarAvaliacao = (obraId, campos) =>
+  post(`/dados/obras/${obraId}/avaliacoes`, campos)
+
+export const editarAvaliacao = (id, campos) => patch(`/dados/avaliacoes/${id}`, campos)
+export const apagarAvaliacao = (id) => del(`/dados/avaliacoes/${id}`)
+
+/** Tira todas as notas da obra de uma vez. */
+export const limparAvaliacao = (obraId) => del(`/dados/obras/${obraId}/avaliacao`)
+
+/* ---------------- Etiquetas ---------------- */
+
+export async function marcarEtiqueta(obraId, campos) {
+  const { etiqueta } = await post(`/dados/obras/${obraId}/etiquetas`, campos)
+  return etiqueta
 }
 
-export function limpar() {
-  try {
-    localStorage.removeItem(CHAVE)
-  } catch {
-    /* nada a fazer */
-  }
+export async function editarEtiqueta(id, campos) {
+  const { etiqueta } = await patch(`/dados/etiquetas/${id}`, campos)
+  return etiqueta
 }
 
-/* ------------------------------------------------------------
-   Fabricas — as telas montam os registros por aqui.
-   ------------------------------------------------------------ */
+export const tirarEtiqueta = (obraId, etiquetaId) =>
+  del(`/dados/obras/${obraId}/etiquetas/${etiquetaId}`)
 
-export function criarObra({ clienteId, descricao, prioridade, dataPrevista, tipo = 'padrao', autorId }) {
-  return {
-    id: novoId('obra'),
-    clienteId,
-    descricao: String(descricao ?? '').trim(),
-    tipo,
-    prioridade,
-    dataPrevista: dataPrevista || hojeISO(),
-    membros: autorId ? [autorId] : [],
-    etapas: etapasIniciais(),
-    observacoes: [],
-    avisos: [],
-    avaliacao: null,
-    criadoEm: new Date().toISOString(),
-  }
+/* ---------------- Anexos ----------------
+   A lista vem junto com o quadro (so nome e tamanho); o arquivo em
+   si so e buscado quando alguem clica para abrir. */
+
+export const criarAnexo = (obraId, campos) => post(`/dados/obras/${obraId}/anexos`, campos)
+export const baixarAnexo = (id) => get(`/dados/anexos/${id}`)
+export const apagarAnexo = (id) => del(`/dados/anexos/${id}`)
+
+/* ---------------- Chat da obra ---------------- */
+
+export async function carregarChat(obraId) {
+  const { mensagens } = await get(`/dados/obras/${obraId}/chat`)
+  return mensagens ?? []
 }
 
-export function criarCliente({ nome, logo, endereco, bairro, cidade, estado, cep }) {
-  return {
-    id: novoId('cli'),
-    nome: String(nome ?? '').trim(),
-    logo: logo ?? null,
-    endereco: String(endereco ?? '').trim(),
-    bairro: String(bairro ?? '').trim(),
-    cidade: String(cidade ?? '').trim(),
-    estado: String(estado ?? '').trim(),
-    cep: String(cep ?? '').trim(),
-    criadoEm: new Date().toISOString(),
-  }
+export async function enviarMensagem(obraId, campos) {
+  const { mensagem } = await post(`/dados/obras/${obraId}/chat`, campos)
+  return mensagem
 }
 
-export function criarObservacao({ autorId, autorNome, avaliacao, texto, foto }) {
-  return {
-    id: novoId('obs'),
-    autorId: autorId ?? null,
-    autorNome,
-    avaliacao: avaliacao ?? null,
-    texto: String(texto ?? '').trim(),
-    foto: foto ?? null,
-    enviadaEm: new Date().toISOString(),
-  }
-}
-
-/** Cargo novo criado pela tela de Usuarios. */
-export function criarCargo({ nome, cor, curto, acessoTotal = false }) {
-  const limpo = String(nome ?? '').trim()
-  const chave =
-    limpo
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '') || novoId('cargo')
-
-  return {
-    id: novoId('cg'),
-    chave,
-    nome: limpo,
-    curto: String(curto ?? '').trim().slice(0, 6) || chave.slice(0, 3),
-    cor: cor || '#6b7280',
-    acessoTotal: Boolean(acessoTotal),
-    // so os cinco das etapas nascem fixos; cargo criado aqui pode ser apagado
-    fixo: false,
-  }
-}
-
-/** Avaliacao que a empresa deu para a obra. */
-export function criarAvaliacao({ nota, descricao, autorNome }) {
-  return {
-    nota: Number(nota),
-    descricao: String(descricao ?? '').trim(),
-    autorNome: autorNome ?? null,
-    avaliadaEm: new Date().toISOString(),
-  }
-}
+export const apagarMensagem = (obraId, mensagemId) =>
+  del(`/dados/obras/${obraId}/chat/${mensagemId}`)

@@ -1,17 +1,16 @@
 import { Link } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import { useDados } from '@/context/DadosContext'
-import { etapaAtual, obraConcluida, setoresPendentes } from '@/domain/obras'
 import './Home.css'
 
 /** Tela inicial: um resumo curto, com atalho para cada modulo. */
 export default function Home() {
-  const { obras, clientes, equipe } = useDados()
+  const { obras, clientes, equipe, concluida, pendentesDaObra } = useDados()
 
-  const abertas = obras.filter((o) => !obraConcluida(o))
+  const abertas = obras.filter((o) => !concluida(o))
   const emergencias = abertas.filter((o) => o.tipo === 'emergencia')
-  const pendentes = abertas.filter((o) => setoresPendentes(o, etapaAtual(o)).length > 0)
-  const concluidas = obras.filter(obraConcluida)
+  const pendentes = abertas.filter((o) => pendentesDaObra(o).length > 0)
+  const concluidas = obras.filter(concluida)
 
   const cartoes = [
     { rotulo: 'Obras em andamento', valor: abertas.length, rota: '/app/obras' },

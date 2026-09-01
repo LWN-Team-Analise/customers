@@ -6,8 +6,11 @@ import Button from '@/components/Button/Button'
 import SocialRow from '@/components/SocialRow/SocialRow'
 import ThemeToggle from '@/components/ThemeToggle/ThemeToggle'
 import useMediaQuery from '@/hooks/useMediaQuery'
+import useOutlook from '@/hooks/useOutlook'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
+import { entrarComOutlook } from '@/services/authService'
+import ModalSenha from './ModalSenha'
 import logoLight from '@/assets/LogoLWN.png'
 import logoDark from '@/assets/LogoLWNWhite.png'
 import './Login.css'
@@ -18,15 +21,18 @@ const SLICES = [0, 1, 2, 3, 4]
 const SERVICES = ['Venda', 'Agendamento', 'Elaboração']
 
 export default function Login() {
-  const { login, loading } = useAuth()
+  const { login, entrarComSessao, loading, expirou } = useAuth()
   const { isDark } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 768px)')
+  const outlook = useOutlook()
 
   const [form, setForm] = useState({ identifier: '', password: '' })
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState('')
+  const [esqueci, setEsqueci] = useState(false)
+  const [entrandoPeloOutlook, setEntrandoPeloOutlook] = useState(false)
 
   const redirectTo = location.state?.from?.pathname ?? '/app'
 
@@ -43,6 +49,29 @@ export default function Login() {
       navigate(redirectTo, { replace: true })
     } catch (err) {
       setError(err.message || 'Não foi possível entrar. Tente novamente.')
+    }
+  }
+
+  /**
+   * Entrada pela conta Microsoft.
+   *
+   * So funciona para quem ja vinculou o Outlook em Configuracoes: a
+   * primeira vez tem que ser com CPF/e-mail e senha, senao qualquer
+   * conta Microsoft com o mesmo e-mail entraria sem nunca ter passado
+   * pela senha do sistema.
+   */
+  const entrarOutlook = async () => {
+    setError('')
+    setEntrandoPeloOutlook(true)
+    try {
+      const { codigo, redirecionar } = await outlook.abrir()
+      const sessao = await entrarComOutlook(codigo, redirecionar)
+      entrarComSessao(sessao)
+      navigate(redirectTo, { replace: true })
+    } catch (err) {
+      setError(err.message || 'Não foi possível entrar com o Outlook.')
+    } finally {
+      setEntrandoPeloOutlook(false)
     }
   }
 
@@ -124,9 +153,17 @@ export default function Login() {
               <span className="check__label">Manter conectado</span>
             </label>
 
-            <Link className="panel__link" to="/login">
+            <button type="button" className="panel__link" onClick={() => setEsqueci(true)}>
               Esqueci minha senha
-            </Link>
+            </button>
+
+            {/* a sessao caiu sozinha: explica, em vez de deixar a pessoa
+                achando que o sistema a chutou sem motivo */}
+            {expirou && !error && (
+              <p className="panel__aviso" role="status">
+                Sua sessão expirou por tempo. Entre de novo para continuar.
+              </p>
+            )}
 
             {error && (
               <p className="panel__error" role="alert">
@@ -139,7 +176,21 @@ export default function Login() {
             </Button>
           </form>
 
-          <SocialRow onSelect={() => setError('Login com Outlook ainda não configurado.')} />
+          <SocialRow
+            ocupado={entrandoPeloOutlook || outlook.conferindo}
+            rotulo={
+              outlook.disponivel
+                ? 'Entrar com Outlook'
+                : 'Login com Outlook ainda não configurado no servidor'
+            }
+            onSelect={() =>
+              outlook.disponivel
+                ? entrarOutlook()
+                : setError(
+                    'O login com Outlook ainda não foi configurado no servidor. Entre com e-mail ou CPF e senha.',
+                  )
+            }
+          />
         </GlassCard>
       </section>
 
@@ -155,6 +206,12 @@ export default function Login() {
         </Link>
         <span className="login__restricted">Acesso restrito à equipe LWN Team Análise</span>
       </footer>
+
+      <ModalSenha
+        aberto={esqueci}
+        aoFechar={() => setEsqueci(false)}
+        identificadorInicial={form.identifier}
+      />
     </main>
   )
 }

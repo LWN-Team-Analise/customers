@@ -65,6 +65,9 @@
 
 /* ---------------- Card da obra a avaliar ---------------- */
 
+/* A tarja da esquerda leva a cor da EMPRESA — a mesma do card dela na
+   aba Clientes (a predominante da logo). Nao e mais a cor do tipo de
+   obra: essa agora fica no selo, no canto de cima. */
 .avaobra {
   display: flex;
   flex-direction: column;
@@ -73,7 +76,7 @@
   height: 100%;
   padding: 14px;
   border: 1px solid var(--glass-border);
-  border-left: 5px solid var(--obra-padrao);
+  border-left: 5px solid var(--cor-empresa, var(--obra-padrao));
   border-radius: var(--radius-lg);
   background: var(--glass-bg);
   box-shadow: var(--glass-shadow), var(--glass-inner);
@@ -88,10 +91,6 @@
   --avatar-anel: var(--surface);
 }
 
-.avaobra[data-tipo='emergencia'] {
-  border-left-color: var(--obra-emerg);
-}
-
 .avaobra:hover {
   transform: translateY(-2px);
 }
@@ -104,6 +103,18 @@
   display: flex;
   align-items: center;
   gap: 9px;
+}
+
+/* o nome da empresa e o que o card tem de mais importante */
+.avaobra__empresa {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .avaobra__quem {
@@ -392,5 +403,207 @@
 @media (max-width: 560px) {
   .formava__nota {
     flex-wrap: wrap;
+  }
+}
+
+/* ============================================================
+   Card enxuto: empresa, tipo, nota e os rostos de quem participou
+   ============================================================ */
+
+.avaobra__quantas {
+  margin-left: auto;
+  font-size: 0.66rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.avaobra__base {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.avaobra__resto {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+/* ============================================================
+   Pop-up: cabeca, notas e a media que sai delas
+   ============================================================ */
+
+.formava__cabeca {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.formava__datas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+.formava__datas strong {
+  font-weight: 600;
+  color: var(--text-base);
+}
+
+.formava__notas {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.formava__notastopo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.formava__notastopo h3 {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+/* a media aparece enquanto se digita: da para ver o resultado antes
+   mesmo de salvar */
+.formava__previa {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+}
+
+.formava__previa strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.formava__previa em {
+  font-style: normal;
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.formava__mais {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease-out);
+}
+
+.formava__mais:hover {
+  filter: brightness(1.1);
+}
+
+/* ---- uma nota ---- */
+
+.notaitem {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+}
+
+.notaitem .campo {
+  grid-column: 1 / -1;
+}
+
+.notaitem__rotulo {
+  min-width: 0;
+  padding: 7px 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.notaitem__rotulo:hover:not(:disabled) {
+  border-color: var(--control-border);
+}
+
+.notaitem__rotulo:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.notaitem__nota {
+  width: 78px;
+  padding: 7px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.notaitem__nota:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.notaitem__tirar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.notaitem__tirar:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.notaitem__data {
+  grid-column: 1 / -1;
+  font-size: 0.66rem;
+  color: var(--text-faint);
+}
+
+@media (max-width: 520px) {
+  .notaitem {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .notaitem .estrelas {
+    display: none;
   }
 }

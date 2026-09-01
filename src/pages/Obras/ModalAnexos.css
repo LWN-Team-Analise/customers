@@ -1,0 +1,154 @@
+/* ============================================================
+   Anexos da obra
+   ============================================================ */
+
+.anexos {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.anexos__novo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 16px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.anexos__novo:hover:not(:disabled) {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--control-bg);
+  color: var(--text-strong);
+}
+
+.anexos__novo:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.anexos__vazio {
+  margin: 0;
+  padding: 26px 12px;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.anexos__erro {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.anexos__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.anexos__lista li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+}
+
+.anexos__icone {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--control-bg-hover);
+  color: var(--text-muted);
+}
+
+.anexos__quem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.anexos__quem strong {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anexos__quem span {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anexos__acao {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.anexos__acao:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.anexos__acao--perigo:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.anexos__acao--confirma {
+  width: auto;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.anexos__acao--confirma:hover {
+  background: var(--danger);
+  color: #fff;
+  filter: brightness(1.06);
+}

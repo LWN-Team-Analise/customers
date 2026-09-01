@@ -4,8 +4,11 @@ import Button from '@/components/Button/Button'
 import Avatar from '@/components/Avatar/Avatar'
 import { CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
+import { podeEditarCpf } from '@/domain/obras'
+import { SENHA_PADRAO } from '@/services/equipeService'
 import { validateCPF, validateEmail } from '@/services/authService'
 import { formatarCPF, formatarTelefone, soDigitos } from '@/utils/formato'
+import { prepararImagem } from '@/utils/imagem'
 import './ModalColaborador.css'
 
 const VAZIO = {
@@ -22,18 +25,28 @@ const VAZIO = {
  * Cadastro do colaborador: foto a esquerda do nome e, embaixo, os dados
  * que o banco pede (nome, nascimento, CPF, e-mail, cargo, telefone).
  *
- * O CPF so pode ser digitado uma vez: na edicao ele fica travado. Para
- * trocar, apaga-se o colaborador e cadastra-se de novo — e o que
- * combinamos, e o que a coluna UNIQUE do banco espera.
+ * O CPF e travado para todo mundo, com UMA excecao: a diretoria. E trava
+ * de cargo, nao permissao configuravel — a API recusa do mesmo jeito, e
+ * por isso nao adianta so liberar o campo aqui.
+ *
+ * `usuarioLogado` e quem esta mexendo — e dele que sai a permissao.
  */
-export default function ModalColaborador({ aberto, colaborador = null, aoFechar, aoSalvar }) {
+export default function ModalColaborador({
+  aberto,
+  colaborador = null,
+  usuarioLogado = null,
+  aoFechar,
+  aoSalvar,
+}) {
   const { cargos } = useDados()
   const entradaFoto = useRef(null)
 
   const [form, setForm] = useState(VAZIO)
   const [erros, setErros] = useState({})
+  const [salvando, setSalvando] = useState(false)
 
   const editando = Boolean(colaborador)
+  const cpfLiberado = podeEditarCpf(usuarioLogado)
 
   useEffect(() => {
     if (!aberto) return
@@ -44,6 +57,7 @@ export default function ModalColaborador({ aberto, colaborador = null, aoFechar,
             ...colaborador,
             cpf: formatarCPF(colaborador.cpf ?? ''),
             telefone: formatarTelefone(colaborador.telefone ?? ''),
+            nascimento: colaborador.nascimento ?? '',
           }
         : VAZIO,
     )
@@ -62,15 +76,20 @@ export default function ModalColaborador({ aberto, colaborador = null, aoFechar,
     setErros((atual) => ({ ...atual, [campo]: undefined }))
   }
 
-  const escolherFoto = (evento) => {
+  const escolherFoto = async (evento) => {
     const arquivo = evento.target.files?.[0]
+    evento.target.value = ''
     if (!arquivo) return
-    const leitor = new FileReader()
-    leitor.onload = () => setForm((atual) => ({ ...atual, foto: String(leitor.result) }))
-    leitor.readAsDataURL(arquivo)
+    try {
+      const foto = await prepararImagem(arquivo)
+      setForm((atual) => ({ ...atual, foto }))
+      setErros((atual) => ({ ...atual, geral: undefined }))
+    } catch (e) {
+      setErros((atual) => ({ ...atual, geral: e.message }))
+    }
   }
 
-  const enviar = (evento) => {
+  const enviar = async (evento) => {
     evento.preventDefault()
 
     const novos = {}
@@ -78,8 +97,8 @@ export default function ModalColaborador({ aberto, colaborador = null, aoFechar,
     if (!form.nascimento) novos.nascimento = 'Informe a data de nascimento.'
     if (!form.cargo) novos.cargo = 'Escolha o cargo.'
     if (!validateEmail(form.email)) novos.email = 'E-mail inválido.'
-    // na edicao o CPF esta travado: nao ha o que validar
-    if (!editando && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
+    // no cadastro o CPF e obrigatorio; na edicao, so quem pode mexer valida
+    if ((!editando || cpfLiberado) && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
     if (soDigitos(form.telefone).length < 10) novos.telefone = 'Informe o DDD e o número.'
 
     if (Object.keys(novos).length > 0) {
@@ -87,14 +106,29 @@ export default function ModalColaborador({ aberto, colaborador = null, aoFechar,
       return
     }
 
-    aoSalvar({
-      ...form,
+    const campos = {
       nome: form.nome.trim(),
       email: form.email.trim(),
-      cpf: soDigitos(form.cpf),
       telefone: soDigitos(form.telefone),
-    })
-    aoFechar()
+      nascimento: form.nascimento,
+      cargo: form.cargo,
+      foto: form.foto,
+    }
+    /* o CPF so viaja quando pode mudar: na edicao por quem nao e da
+       diretoria, mandar o campo faria a API recusar a gravacao inteira */
+    if (!editando || (cpfLiberado && soDigitos(form.cpf) !== soDigitos(colaborador?.cpf))) {
+      campos.cpf = soDigitos(form.cpf)
+    }
+
+    setSalvando(true)
+    try {
+      await aoSalvar(campos)
+      aoFechar()
+    } catch (e) {
+      setErros({ geral: e.message })
+    } finally {
+      setSalvando(false)
+    }
   }
 
   return (
@@ -102,7 +136,11 @@ export default function ModalColaborador({ aberto, colaborador = null, aoFechar,
       aberto={aberto}
       aoFechar={aoFechar}
       titulo={editando ? 'Editar colaborador' : 'Adicionar colaborador'}
-      subtitulo="Estes sao os mesmos campos da tabela usuario, no banco."
+      subtitulo={
+        editando
+          ? 'Estes são os mesmos campos da tabela usuario, no banco.'
+          : `Entra com a senha ${SENHA_PADRAO} e troca no primeiro acesso.`
+      }
       largura={580}
     >
       <form className="formcolab" onSubmit={enviar} noValidate>
@@ -162,8 +200,14 @@ export default function ModalColaborador({ aberto, colaborador = null, aoFechar,
             value={form.cpf}
             onChange={mudar('cpf')}
             erro={erros.cpf}
-            disabled={editando}
-            dica={editando ? 'O CPF não muda depois de cadastrado.' : undefined}
+            disabled={editando && !cpfLiberado}
+            dica={
+              editando
+                ? cpfLiberado
+                  ? 'Você é da diretoria: pode corrigir o CPF.'
+                  : 'Somente a diretoria altera o CPF.'
+                : undefined
+            }
           />
 
           <CampoTexto
@@ -191,15 +235,23 @@ export default function ModalColaborador({ aberto, colaborador = null, aoFechar,
             onChange={mudar('cargo')}
             erro={erros.cargo}
             vazio="Escolha o cargo..."
-            opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome }))}
+            opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
           />
         </div>
+
+        {erros.geral && (
+          <p className="formcolab__erro" role="alert">
+            {erros.geral}
+          </p>
+        )}
 
         <footer className="formobra__acoes">
           <button type="button" className="formobra__cancelar" onClick={aoFechar}>
             Cancelar
           </button>
-          <Button type="submit">{editando ? 'Salvar alterações' : 'Adicionar colaborador'}</Button>
+          <Button type="submit" loading={salvando}>
+            {editando ? 'Salvar alterações' : 'Adicionar colaborador'}
+          </Button>
         </footer>
       </form>
     </Modal>

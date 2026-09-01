@@ -2,28 +2,27 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
+import Seletor from '@/components/Seletor/Seletor'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
-import {
-  PRIORIDADES,
-  PRIORIDADE_PESO,
-  etapaAtual,
-  obraConcluida,
-  setoresPendentes,
-} from '@/domain/obras'
-import { dataExtensa } from '@/utils/formato'
+import { PRIORIDADES, PRIORIDADE_PESO } from '@/domain/obras'
+import { dataExtensa, dataHora } from '@/utils/formato'
 import CardObra from './CardObra'
 import ModalObra from './ModalObra'
 import ModalMembros from './ModalMembros'
 import ModalSetores from './ModalSetores'
+import ModalObservacoes from './ModalObservacoes'
 import './Obras.css'
 
 const ORDENACOES = [
   { valor: 'prioridade', rotulo: 'Prioridade' },
-  { valor: 'data', rotulo: 'Data prevista' },
+  { valor: 'data', rotulo: 'Data de conclusão' },
   { valor: 'empresa', rotulo: 'Empresa' },
   { valor: 'recentes', rotulo: 'Mais recentes' },
 ]
+
+/* o filtro de setor mostra ate cinco cargos; o resto vai para o "+N" */
+const LIMITE_SETORES = 5
 
 const Mais = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -43,11 +42,16 @@ export default function Obras() {
     obras,
     clientes,
     cargos,
+    observacoesQuadro,
     clientePorId,
     pessoaPorId,
     cargoPorChave,
     adicionarObra,
     registrarAviso,
+    concluida,
+    etapaDaObra,
+    pendentesDaObra,
+    pode,
   } = useDados()
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -55,8 +59,13 @@ export default function Obras() {
   const [modalObra, setModalObra] = useState(null) // 'padrao' | 'emergencia' | null
   const [modalMembros, setModalMembros] = useState(false)
   const [modalSetores, setModalSetores] = useState(false)
+  const [modalObs, setModalObs] = useState(false)
   const [filtrosAbertos, setFiltrosAbertos] = useState(true)
   const [recado, setRecado] = useState('')
+
+  /* sem a permissao, o botao nem aparece — e a API recusa igual */
+  const podeCriarObra = pode('editar_obras')
+  const podeAvisar = pode('enviar_avisos')
 
   const [prioridade, setPrioridade] = useState(null)
   const [ateData, setAteData] = useState('')
@@ -65,10 +74,21 @@ export default function Obras() {
   const [busca, setBusca] = useState('')
   const [ordem, setOrdem] = useState('prioridade')
 
-  /* o filtro mostra ate 5 cargos; o resto vai para o "+N" */
-  const LIMITE_SETORES = 5
-  const cargosVisiveis = cargos.slice(0, LIMITE_SETORES)
-  const cargosRestantes = Math.max(0, cargos.length - LIMITE_SETORES)
+  /**
+   * Os cargos que aparecem na linha do filtro.
+   *
+   * Cargo filtrado vem sempre na frente, mesmo que ele estivesse fora
+   * dos cinco primeiros: quem escolhe um cargo pelo "+N" precisa ver a
+   * escolha na linha, e nao continuar escondida atras do botao. Quem sai
+   * da linha e um dos que NAO foram filtrados.
+   */
+  const cargosVisiveis = useMemo(() => {
+    const escolhidos = cargos.filter((c) => setores.includes(c.chave))
+    const resto = cargos.filter((c) => !setores.includes(c.chave))
+    return [...escolhidos, ...resto].slice(0, Math.max(LIMITE_SETORES, escolhidos.length))
+  }, [cargos, setores])
+
+  const cargosRestantes = Math.max(0, cargos.length - cargosVisiveis.length)
 
   const alternarSetor = (id) =>
     setSetores((atual) => (atual.includes(id) ? atual.filter((s) => s !== id) : [...atual, id]))
@@ -93,13 +113,13 @@ export default function Obras() {
     const alvo = busca.trim().toLowerCase()
 
     const filtradas = obras.filter((obra) => {
-      if (obraConcluida(obra)) return false
+      if (concluida(obra)) return false
       if (prioridade && obra.prioridade !== prioridade) return false
-      if (clienteId && obra.clienteId !== clienteId) return false
-      if (ateData && obra.dataPrevista && obra.dataPrevista > ateData) return false
+      if (clienteId && String(obra.clienteId) !== String(clienteId)) return false
+      if (ateData && obra.dataConclusao && obra.dataConclusao > ateData) return false
 
       if (setores.length > 0) {
-        const pendentes = setoresPendentes(obra, etapaAtual(obra))
+        const pendentes = pendentesDaObra(obra)
         if (!setores.some((s) => pendentes.includes(s))) return false
       }
 
@@ -114,7 +134,7 @@ export default function Obras() {
 
     const comparar = {
       prioridade: (a, b) => PRIORIDADE_PESO[b.prioridade] - PRIORIDADE_PESO[a.prioridade],
-      data: (a, b) => String(a.dataPrevista).localeCompare(String(b.dataPrevista)),
+      data: (a, b) => String(a.dataConclusao ?? '9999').localeCompare(String(b.dataConclusao ?? '9999')),
       empresa: (a, b) =>
         (clientePorId(a.clienteId)?.nome ?? '').localeCompare(
           clientePorId(b.clienteId)?.nome ?? '',
@@ -124,12 +144,23 @@ export default function Obras() {
     }[ordem]
 
     return [...filtradas].sort(comparar)
-  }, [obras, prioridade, clienteId, ateData, setores, busca, ordem, clientePorId])
+  }, [
+    obras,
+    prioridade,
+    clienteId,
+    ateData,
+    setores,
+    busca,
+    ordem,
+    clientePorId,
+    concluida,
+    pendentesDaObra,
+  ])
 
   const padrao = visiveis.filter((o) => o.tipo === 'padrao')
   const emergencia = visiveis.filter((o) => o.tipo === 'emergencia')
   /* so entram na coluna de aviso as obras que realmente devem algo */
-  const pendentes = visiveis.filter((o) => setoresPendentes(o, etapaAtual(o)).length > 0)
+  const pendentes = visiveis.filter((o) => pendentesDaObra(o).length > 0)
 
   const pessoasDa = (obra) => obra.membros.map(pessoaPorId).filter(Boolean)
 
@@ -141,28 +172,30 @@ export default function Obras() {
   }, [visiveis, pessoaPorId])
 
   /** Avisa todos os setores que ainda devem informacao na etapa da obra. */
-  const avisarObra = (obra) => {
-    const faltando = setoresPendentes(obra, etapaAtual(obra))
+  const avisarObra = async (obra) => {
+    const faltando = pendentesDaObra(obra)
     if (faltando.length === 0) return
-    registrarAviso(obra.id, {
+    const etapa = etapaDaObra(obra)
+    await registrarAviso(obra.id, {
       setores: faltando,
-      mensagem: `Pendência na ${etapaAtual(obra)}ª etapa.`,
-      autorNome: user?.name ?? 'Sistema',
-    })
+      mensagem: `Pendência na ${etapa}ª etapa.`,
+      etapa,
+    }).catch(() => null)
     const nomes = faltando.map((s) => cargoPorChave(s)?.nome ?? s).join(', ')
     const empresa = clientePorId(obra.clienteId)?.nome ?? 'obra'
     setRecado(`Aviso enviado para ${nomes} — ${empresa}.`)
   }
 
-  const avisarTodas = () => {
+  const avisarTodas = async () => {
     if (pendentes.length === 0) return
-    pendentes.forEach((obra) => {
-      registrarAviso(obra.id, {
-        setores: setoresPendentes(obra, etapaAtual(obra)),
-        mensagem: `Pendência na ${etapaAtual(obra)}ª etapa.`,
-        autorNome: user?.name ?? 'Sistema',
-      })
-    })
+    for (const obra of pendentes) {
+      const etapa = etapaDaObra(obra)
+      await registrarAviso(obra.id, {
+        setores: pendentesDaObra(obra),
+        mensagem: `Pendência na ${etapa}ª etapa.`,
+        etapa,
+      }).catch(() => null)
+    }
     setRecado(
       `Aviso enviado a todos os setores pendentes de ${pendentes.length} obra${
         pendentes.length > 1 ? 's' : ''
@@ -175,7 +208,7 @@ export default function Obras() {
       <section className="obras">
         {/* ---------------- cabecalho de filtros ---------------- */}
         {filtrosAbertos && (
-          <div className="painel">
+          <div className="painel vidro">
             <div className="painel__filtros">
               <div className="filtro">
                 <span className="filtro__nome">Prioridade</span>
@@ -199,21 +232,18 @@ export default function Obras() {
               <div className="filtro">
                 <span className="filtro__nome">Cliente</span>
                 <div className="filtro__linha">
-                  <select
-                    className="filtro__cliente"
-                    value={clienteId}
-                    onChange={(e) => setClienteId(e.target.value)}
+                  <Seletor
+                    valor={clienteId}
+                    aoMudar={setClienteId}
+                    vazio="Todos os clientes"
                     aria-label="Filtrar por cliente"
-                  >
-                    <option value="">Todos os clientes</option>
-                    {[...clientes]
-                      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nome}
-                        </option>
-                      ))}
-                  </select>
+                    opcoes={[
+                      { valor: '', rotulo: 'Todos os clientes' },
+                      ...[...clientes]
+                        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                        .map((c) => ({ valor: c.id, rotulo: c.nome })),
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -227,7 +257,7 @@ export default function Obras() {
                     className="filtro__data"
                     value={ateData}
                     onChange={(e) => setAteData(e.target.value)}
-                    aria-label="Mostrar obras previstas até esta data"
+                    aria-label="Mostrar obras com conclusão até esta data"
                   />
                   <span className="filtro__dataleg">
                     {ateData ? dataExtensa(ateData) : 'todas as datas'}
@@ -235,8 +265,8 @@ export default function Obras() {
                 </div>
               </div>
 
-              {/* mostra ate 5 cargos; do sexto em diante entra o "+N",
-                  que abre o detalhe do que cada setor esta devendo */}
+              {/* mostra ate 5 cargos; o que for filtrado pelo "+N" sobe
+                  para a frente da linha e passa a aparecer aqui */}
               <div className="filtro">
                 <span className="filtro__nome">Setor pendente</span>
                 <div className="filtro__linha">
@@ -311,18 +341,26 @@ export default function Obras() {
             <strong>{visiveis.length}</strong> Obras
           </p>
 
-          <button type="button" className="acao acao--padrao" onClick={() => setModalObra('padrao')}>
-            <Mais />
-            Adicionar obra padrão
-          </button>
-          <button
-            type="button"
-            className="acao acao--emergencia"
-            onClick={() => setModalObra('emergencia')}
-          >
-            <Mais />
-            Adicionar obra emergência
-          </button>
+          {podeCriarObra && (
+            <>
+              <button
+                type="button"
+                className="acao acao--padrao"
+                onClick={() => setModalObra('padrao')}
+              >
+                <Mais />
+                Adicionar obra padrão
+              </button>
+              <button
+                type="button"
+                className="acao acao--emergencia"
+                onClick={() => setModalObra('emergencia')}
+              >
+                <Mais />
+                Adicionar obra emergência
+              </button>
+            </>
+          )}
 
           <div className="barra__direita">
             <label className="procura">
@@ -357,18 +395,12 @@ export default function Obras() {
               </button>
             )}
 
-            <label className="ferramenta ferramenta--sel">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" />
-              </svg>
-              <select value={ordem} onChange={(e) => setOrdem(e.target.value)} aria-label="Ordenar por">
-                {ORDENACOES.map((o) => (
-                  <option key={o.valor} value={o.valor}>
-                    {o.rotulo}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Seletor
+              valor={ordem}
+              aoMudar={setOrdem}
+              aria-label="Ordenar por"
+              opcoes={ORDENACOES.map((o) => ({ valor: o.valor, rotulo: o.rotulo }))}
+            />
           </div>
         </div>
 
@@ -381,13 +413,16 @@ export default function Obras() {
           </p>
         )}
 
-        {/* ---------------- quadro ---------------- */}
-        <div className="quadro">
+        {/* ---------------- quadro + observacoes ----------------
+            As tres colunas a esquerda, o painel de observacoes a
+            direita — o mesmo desenho da tela de dentro da obra. */}
+        <div className="areaquadro">
+          <div className="quadro">
           <Coluna
             titulo="Obras padrão"
             tom="padrao"
             total={padrao.length}
-            aoAdicionar={() => setModalObra('padrao')}
+            aoAdicionar={podeCriarObra ? () => setModalObra('padrao') : undefined}
             vazio="Nenhuma obra padrão por aqui."
           >
             {padrao.map((obra) => (
@@ -405,7 +440,7 @@ export default function Obras() {
             titulo="Obras emergência"
             tom="emergencia"
             total={emergencia.length}
-            aoAdicionar={() => setModalObra('emergencia')}
+            aoAdicionar={podeCriarObra ? () => setModalObra('emergencia') : undefined}
             vazio="Nenhuma emergência aberta. Ótimo sinal."
           >
             {emergencia.map((obra) => (
@@ -426,6 +461,7 @@ export default function Obras() {
             total={pendentes.length}
             vazio="Ninguém está devendo informação agora."
             acaoTopo={
+              podeAvisar &&
               pendentes.length > 0 && (
                 <button type="button" className="coluna__todos" onClick={avisarTodas}>
                   <Sino />
@@ -435,7 +471,7 @@ export default function Obras() {
             }
           >
             {pendentes.map((obra) => {
-              const faltando = setoresPendentes(obra, etapaAtual(obra))
+              const faltando = pendentesDaObra(obra)
               const nomes = faltando.map((s) => cargoPorChave(s)?.nome ?? s).join(', ')
               return (
                 <CardObra
@@ -443,18 +479,73 @@ export default function Obras() {
                   obra={obra}
                   cliente={clientePorId(obra.clienteId)}
                   pessoas={pessoasDa(obra)}
-                  tom="aviso"
-                  aoAbrir={() => avisarObra(obra)}
-                  rotuloAcao={`Avisar ${nomes}`}
+                  /* o aviso herda a cor do tipo da obra e vai virando
+                     amarelo — e o data-tom que o CSS usa para o gradiente */
+                  tom={`aviso-${obra.tipo}`}
+                  aoAbrir={podeAvisar ? () => avisarObra(obra) : undefined}
+                  rotuloAcao={podeAvisar ? `Avisar ${nomes}` : undefined}
                 >
                   <span className="avisar__dica">
                     <Sino />
-                    Clique para avisar {nomes}
+                    {podeAvisar ? `Clique para avisar ${nomes}` : `Falta ${nomes}`}
                   </span>
                 </CardObra>
               )
             })}
           </Coluna>
+          </div>
+
+          {/* ---------------- observacoes do quadro ----------------
+              Valem para o quadro inteiro, nao para uma obra: e o
+              bloco de recados da equipe sobre as obras em geral.
+              Fica a direita da coluna de aviso. */}
+          <aside className="quadroobs">
+            <header className="quadroobs__topo">
+              <h2 className="quadroobs__titulo">Observações</h2>
+              <span className="quadroobs__contagem">{observacoesQuadro.length}</span>
+              <button
+                type="button"
+                className="quadroobs__mais"
+                onClick={() => setModalObs(true)}
+                title="Nova observação"
+                aria-label="Nova observação"
+              >
+                <Mais />
+              </button>
+            </header>
+
+            {observacoesQuadro.length === 0 ? (
+              <p className="quadroobs__vazio">
+                Nada registrado ainda. Use o + para escrever a primeira.
+              </p>
+            ) : (
+              <ul className="quadroobs__lista">
+                {observacoesQuadro.slice(0, 6).map((o) => (
+                  <li key={o.id} className="quadroobs__item">
+                    <Avatar nome={o.autorNome} foto={pessoaPorId(o.autorId)?.foto} tamanho={28} />
+                    <div>
+                      <p className="quadroobs__quem">
+                        <strong>{o.autorNome}</strong>
+                        <span>{dataHora(o.enviadaEm)}</span>
+                      </p>
+                      <p className="quadroobs__texto">{o.texto}</p>
+                    </div>
+                  </li>
+                ))}
+                {observacoesQuadro.length > 6 && (
+                  <li>
+                    <button
+                      type="button"
+                      className="quadroobs__ver"
+                      onClick={() => setModalObs(true)}
+                    >
+                      Ver as {observacoesQuadro.length} observações
+                    </button>
+                  </li>
+                )}
+              </ul>
+            )}
+          </aside>
         </div>
       </section>
 
@@ -463,7 +554,7 @@ export default function Obras() {
         tipo={modalObra ?? 'padrao'}
         clientes={clientes}
         aoFechar={() => setModalObra(null)}
-        aoSalvar={(campos) => adicionarObra({ ...campos, autorId: user?.id })}
+        aoSalvar={(campos) => adicionarObra(campos)}
       />
 
       <ModalSetores
@@ -478,6 +569,12 @@ export default function Obras() {
         aberto={modalMembros}
         aoFechar={() => setModalMembros(false)}
         pessoas={participantes}
+      />
+
+      <ModalObservacoes
+        aberto={modalObs}
+        aoFechar={() => setModalObs(false)}
+        autor={user}
       />
     </AppShell>
   )

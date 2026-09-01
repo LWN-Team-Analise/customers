@@ -14,9 +14,12 @@
 /* ---------------- Logo ----------------
    Solta no canto superior esquerdo do site, fora da bolha. */
 
+/* a caixa ocupa a mesma faixa da bolha (left + width) e centraliza o
+   conteudo: assim a logo fica no eixo do menu, e nao encostada a esquerda */
 .marca {
   position: fixed;
-  left: 26px;
+  left: 14px;
+  width: 92px;
   top: 22px;
   z-index: 21;
   display: grid;
@@ -55,31 +58,10 @@
   gap: 6px;
   padding: 12px 8px;
   border-radius: 30px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow), var(--glass-inner);
-  backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(165%);
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(165%);
-}
-
-/* brilho de cima, que da o aspecto de bolha */
-.rail::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    170deg,
-    var(--glass-sheen-a) 0%,
-    var(--glass-sheen-b) 38%,
-    transparent 62%
-  );
-  pointer-events: none;
-}
-
-.rail > * {
-  position: relative;
-  z-index: 1;
+  /* o vidro vem da classe .vidro; aqui so o desfoque mais forte, que e
+     o que faz a bolha do menu parecer mais grossa que o resto */
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.7)) saturate(175%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.7)) saturate(175%);
 }
 
 .rail__lista {
@@ -156,19 +138,22 @@
 
 .euzinho {
   position: fixed;
-  left: 25px;
+  left: 14px;
+  width: 92px;
   bottom: 22px;
   z-index: 21;
+  display: grid;
+  place-items: center;
 }
 
 .euzinho__botao {
   display: grid;
   place-items: center;
   padding: 3px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--vidro-borda);
   border-radius: 50%;
-  background: var(--glass-bg);
-  box-shadow: var(--glass-shadow);
+  background: var(--vidro-fundo);
+  box-shadow: var(--vidro-realce), var(--vidro-sombra);
   backdrop-filter: blur(var(--glass-blur)) saturate(160%);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
   cursor: pointer;
@@ -193,9 +178,11 @@
   width: 216px;
   padding: 7px;
   border-radius: var(--radius-md);
-  background: var(--modal-bg);
-  border: 1px solid var(--modal-borda);
-  box-shadow: var(--modal-sombra);
+  background: var(--vidro-menu);
+  border: 1px solid var(--vidro-borda);
+  box-shadow: var(--glass-shadow), var(--vidro-realce);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
   animation: menu-sobe var(--dur-fast) var(--ease-out);
 }
 
@@ -281,11 +268,10 @@
   gap: 14px;
   padding: 9px 10px 9px 18px;
   border-radius: var(--radius-pill);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow), var(--glass-inner);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  /* o vidro vem da classe .vidro; o desfoque forte e o que deixa o
+     conteudo passar por baixo da barra sem atrapalhar a leitura */
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.7)) saturate(175%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.7)) saturate(175%);
 }
 
 .topbar__saudacao {
@@ -310,8 +296,9 @@
   min-width: 0;
   padding: 8px 18px;
   border-radius: var(--radius-pill);
-  background: var(--control-bg);
-  border: 1px solid var(--control-border);
+  background: var(--vidro-fundo);
+  border: 1px solid var(--vidro-borda);
+  box-shadow: var(--vidro-realce);
 }
 
 .omni__orb {
@@ -362,49 +349,15 @@
   gap: 10px;
 }
 
-.tema {
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--control-bg);
-  border: 1px solid var(--control-border);
-}
-
-.tema__opcao {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
-}
-
-.tema__opcao:hover {
-  color: var(--text-strong);
-}
-
-.tema__opcao.is-atual {
-  background: var(--surface);
-  color: var(--text-strong);
-  box-shadow: 0 3px 10px -6px rgba(0, 0, 0, 0.55);
-}
-
 .topbar__sino {
   display: grid;
   place-items: center;
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: var(--control-bg);
-  border: 1px solid var(--control-border);
+  background: var(--vidro-fundo);
+  border: 1px solid var(--vidro-borda);
+  box-shadow: var(--vidro-realce);
   color: var(--text-base);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out),
@@ -412,7 +365,7 @@
 }
 
 .topbar__sino:hover {
-  background: var(--control-bg-hover);
+  background: var(--vidro-fundo-forte);
   color: var(--text-strong);
 }
 
@@ -530,7 +483,224 @@
     white-space: normal;
   }
 
-  .tema__opcao {
-    padding: 7px 10px;
-  }
+}
+
+/* ---------------- Recado de falha na gravacao ----------------
+   Como tudo grava sozinho, quando a gravacao falha o usuario
+   precisa saber na hora — senao ele sai da tela achando que
+   salvou. Fica no topo do conteudo, acima de qualquer tela. */
+
+.shell__erro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 11px 16px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-pill);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.83rem;
+  animation: recado-entra var(--dur-base) var(--ease-out);
+}
+
+.shell__erro button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.shell__erro button:hover {
+  opacity: 1;
+}
+
+/* o menu do avatar abre para a direita da coluna da bolha */
+.euzinho__menu {
+  left: 0;
+}
+
+/* ============================================================
+   Sininho e o painel de notificacoes
+
+   O selo vermelho conta os avisos que chegaram para o cargo de
+   quem esta logado e ainda nao foram abertos. Abrir o painel
+   zera a conta.
+   ============================================================ */
+
+.sininho {
+  position: relative;
+}
+
+.topbar__sino {
+  position: relative;
+}
+
+.topbar__sino.is-aberto {
+  background: var(--vidro-fundo-forte);
+  color: var(--text-strong);
+  box-shadow: var(--vidro-realce), 0 0 0 2px var(--accent);
+}
+
+.sininho__selo {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--page-bg);
+  background: var(--pri-alta);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sininho__painel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 30;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(72dvh, 520px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  background: var(--vidro-menu);
+  border: 1px solid var(--vidro-borda);
+  box-shadow: var(--glass-shadow), var(--vidro-realce);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
+  animation: menu-sobe var(--dur-fast) var(--ease-out);
+  overflow: hidden;
+}
+
+.sininho__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 15px 11px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sininho__topo h2 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.sininho__topo span {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-base);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.sininho__vazio {
+  margin: 0;
+  padding: 26px 18px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.sininho__lista {
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.sininho__item {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px 10px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.sininho__item:hover {
+  background: var(--control-bg);
+}
+
+/* a barrinha da esquerda leva a cor do tipo da obra */
+.sininho__marca {
+  flex-shrink: 0;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--obra-padrao);
+}
+
+.sininho__marca[data-tipo='emergencia'] {
+  background: var(--obra-emerg);
+}
+
+.sininho__corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sininho__corpo strong {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sininho__texto {
+  font-size: 0.79rem;
+  line-height: 1.4;
+  color: var(--text-base);
+}
+
+.sininho__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+}
+
+.sininho__meta em {
+  font-style: normal;
+}
+
+/* aviso ainda nao lido: o nome fica cheio e um ponto marca a linha */
+.sininho__item.is-nova {
+  background: var(--control-bg);
+}
+
+.sininho__item.is-nova .sininho__corpo strong::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: var(--pri-alta);
+  vertical-align: middle;
 }

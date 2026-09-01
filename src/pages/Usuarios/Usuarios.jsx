@@ -3,7 +3,9 @@ import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
 import Confirma from '@/components/Confirma/Confirma'
 import { useDados } from '@/context/DadosContext'
+import { useAuth } from '@/context/AuthContext'
 import { Estrelas } from '@/pages/Avaliacoes/Avaliacoes'
+import { SENHA_PADRAO } from '@/services/equipeService'
 import { formatarTelefone } from '@/utils/formato'
 import ModalCargos from './ModalCargos'
 import ModalColaborador from './ModalColaborador'
@@ -31,7 +33,20 @@ const Icone = {
       <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
     </svg>
   ),
+  lupa: () => (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4.5 4.5" />
+    </svg>
+  ),
 }
+
+/** Tira acento e caixa: "Écio" acha por "ecio". */
+const semAcento = (texto) =>
+  String(texto ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
 
 /**
  * A equipe por cargo, com a nota de cada um — que e a media das obras
@@ -41,25 +56,47 @@ export default function Usuarios() {
   const {
     equipe,
     cargos,
-    origemEquipe,
     cargoPorChave,
     mediaDoUsuario,
     obrasDaPessoa,
     adicionarPessoa,
     atualizarPessoa,
     removerPessoa,
+    pode,
   } = useDados()
+  const { user } = useAuth()
+
+  /* quem nao pode mexer em usuario ainda entra aqui pela permissao de
+     cargo — so nao ve os botoes de cadastrar e editar os outros */
+  const podeUsuarios = pode('editar_usuario')
+  const podeCargos = pode('editar_cargo')
 
   const [modalCargos, setModalCargos] = useState(false)
   const [modalColab, setModalColab] = useState(false)
   const [editando, setEditando] = useState(null)
   const [apagando, setApagando] = useState(null)
-  const [filtro, setFiltro] = useState(null)
+  const [recado, setRecado] = useState('')
+
+  /* dois filtros que se somam: o nome digitado e os cargos marcados */
+  const [busca, setBusca] = useState('')
+  const [filtros, setFiltros] = useState([])
+
+  const alternarCargo = (chave) =>
+    setFiltros((atual) =>
+      atual.includes(chave) ? atual.filter((c) => c !== chave) : [...atual, chave],
+    )
 
   const lista = useMemo(() => {
-    const filtrada = filtro ? equipe.filter((p) => p.cargo === filtro) : equipe
+    const alvo = semAcento(busca.trim())
+    const filtrada = equipe.filter((p) => {
+      // sem cargo marcado, passam todos; com varios, basta bater um
+      if (filtros.length > 0 && !filtros.includes(p.cargo)) return false
+      if (!alvo) return true
+      // procura tambem no e-mail: e por ele que se acha quem tem nome repetido
+      return semAcento(`${p.nome} ${p.email ?? ''}`).includes(alvo)
+    })
     return [...filtrada].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-  }, [equipe, filtro])
+  }, [equipe, filtros, busca])
 
   const abrirNovo = () => {
     setEditando(null)
@@ -71,9 +108,16 @@ export default function Usuarios() {
     setModalColab(true)
   }
 
-  const salvar = (campos) => {
-    if (editando) atualizarPessoa(editando.id, campos)
-    else adicionarPessoa(campos)
+  const salvar = async (campos) => {
+    if (editando) {
+      await atualizarPessoa(editando.id, campos)
+      setRecado(`Cadastro de ${campos.nome} atualizado.`)
+      return
+    }
+    await adicionarPessoa(campos)
+    setRecado(
+      `${campos.nome} foi cadastrado. A senha para o primeiro acesso é ${SENHA_PADRAO} — o sistema pede a troca ao entrar.`,
+    )
   }
 
   return (
@@ -83,54 +127,92 @@ export default function Usuarios() {
           <h1 className="tela__titulo">Usuários</h1>
 
           <div className="usuarios__acoes">
-            <button
-              type="button"
-              className="acao acao--fraca"
-              onClick={() => setModalCargos(true)}
-            >
-              <Icone.etiqueta />
-              Adicionar cargo
-            </button>
-            <button type="button" className="acao acao--padrao" onClick={abrirNovo}>
-              <Icone.mais />
-              Adicionar colaborador
-            </button>
+            {podeCargos && (
+              <button
+                type="button"
+                className="acao acao--fraca"
+                onClick={() => setModalCargos(true)}
+              >
+                <Icone.etiqueta />
+                Cargos
+              </button>
+            )}
+            {podeUsuarios && (
+              <button type="button" className="acao acao--padrao" onClick={abrirNovo}>
+                <Icone.mais />
+                Adicionar colaborador
+              </button>
+            )}
           </div>
         </header>
 
-        {origemEquipe === 'local' && (
-          <p className="usuarios__nota">
-            Mostrando a equipe de exemplo. Rode <code>db/sistema.sql.txt</code> e cadastre os
-            usuários no banco para esta lista virar a de verdade.
+        {recado && (
+          <p className="recado" role="status">
+            {recado}
+            <button type="button" onClick={() => setRecado('')} aria-label="Fechar aviso">
+              ×
+            </button>
           </p>
         )}
 
+        {/* ---- filtros: nome a esquerda, cargos a direita ---- */}
         <div className="usuarios__filtro">
-          <button
-            type="button"
-            className={`chip ${filtro === null ? 'is-atual' : ''}`.trim()}
-            onClick={() => setFiltro(null)}
-          >
-            Todos
-          </button>
-          {cargos.map((c) => {
-            const ativo = filtro === c.chave
-            return (
-              <button
-                key={c.id}
-                type="button"
-                className={`chip ${ativo ? 'is-atual' : ''}`.trim()}
-                style={ativo ? { '--tom': c.cor, '--tom-fg': '#fff' } : undefined}
-                onClick={() => setFiltro((atual) => (atual === c.chave ? null : c.chave))}
-              >
-                {c.nome}
-              </button>
-            )
-          })}
+          <label className="procura">
+            <Icone.lupa />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por nome..."
+              aria-label="Buscar colaborador pelo nome"
+            />
+          </label>
+
+          <div className="usuarios__cargos">
+            <button
+              type="button"
+              className={`chip ${filtros.length === 0 ? 'is-atual' : ''}`.trim()}
+              onClick={() => setFiltros([])}
+            >
+              Todos
+            </button>
+            {/* da para marcar mais de um cargo: os filtros se somam */}
+            {cargos.map((c) => {
+              const ativo = filtros.includes(c.chave)
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`chip ${ativo ? 'is-atual' : ''}`.trim()}
+                  style={ativo ? { '--tom': c.cor, '--tom-fg': '#fff' } : undefined}
+                  aria-pressed={ativo}
+                  onClick={() => alternarCargo(c.chave)}
+                >
+                  {c.nome}
+                </button>
+              )
+            })}
+          </div>
+
+          {(filtros.length > 0 || busca.trim()) && (
+            <button
+              type="button"
+              className="ferramenta ferramenta--fraca"
+              onClick={() => {
+                setFiltros([])
+                setBusca('')
+              }}
+            >
+              Limpar
+            </button>
+          )}
         </div>
 
         {lista.length === 0 ? (
-          <p className="usuarios__vazio">Nenhum usuário com esse cargo.</p>
+          <p className="usuarios__vazio">
+            {busca.trim()
+              ? 'Ninguém encontrado com esse nome.'
+              : 'Nenhum usuário com esse cargo.'}
+          </p>
         ) : (
           <ul className="usuarios__grade">
             {lista.map((pessoa) => {
@@ -151,31 +233,36 @@ export default function Usuarios() {
                         {pessoa.nome}
                         {pessoa.souEu && <span className="pessoa__eu">você</span>}
                       </h2>
+                      {/* so o cargo: o acesso total do cargo nao aparece
+                          em lugar nenhum da tela, de proposito */}
                       <span className="pessoa__cargo">
                         {cargo?.nome ?? pessoa.cargoNome ?? 'Sem cargo'}
-                        {(cargo?.acessoTotal || pessoa.acessoTotal) && ' · acesso total'}
                       </span>
                     </div>
 
-                    {/* aparecem ao passar o mouse pelo card */}
-                    <div className="pessoa__botoes">
-                      <button
-                        type="button"
-                        onClick={() => abrirEdicao(pessoa)}
-                        aria-label={`Editar ${pessoa.nome}`}
-                        title="Editar"
-                      >
-                        <Icone.lapis />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setApagando(pessoa)}
-                        aria-label={`Excluir ${pessoa.nome}`}
-                        title="Excluir"
-                      >
-                        <Icone.lixo />
-                      </button>
-                    </div>
+                    {/* aparecem ao passar o mouse pelo card.
+                        Sem a permissao, cada um so mexe no proprio
+                        cadastro — e isso e em Configuracoes. */}
+                    {podeUsuarios && (
+                      <div className="pessoa__botoes">
+                        <button
+                          type="button"
+                          onClick={() => abrirEdicao(pessoa)}
+                          aria-label={`Editar ${pessoa.nome}`}
+                          title="Editar"
+                        >
+                          <Icone.lapis />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setApagando(pessoa)}
+                          aria-label={`Excluir ${pessoa.nome}`}
+                          title="Excluir"
+                        >
+                          <Icone.lixo />
+                        </button>
+                      </div>
+                    )}
                   </header>
 
                   {(pessoa.email || pessoa.telefone) && (
@@ -223,6 +310,7 @@ export default function Usuarios() {
       <ModalColaborador
         aberto={modalColab}
         colaborador={editando}
+        usuarioLogado={user}
         aoFechar={() => setModalColab(false)}
         aoSalvar={salvar}
       />
@@ -230,10 +318,10 @@ export default function Usuarios() {
       <Confirma
         aberto={Boolean(apagando)}
         titulo={`Excluir ${apagando?.nome ?? 'colaborador'}?`}
-        mensagem="O cadastro sai da equipe. As obras em que a pessoa participou continuam como estão."
+        mensagem="O acesso é desativado e a pessoa sai da lista. As obras em que ela participou continuam como estão."
         aviso={
           apagando?.souEu
-            ? 'Este é o seu próprio usuário — você perde o acesso à lista até entrar de novo.'
+            ? 'Este é o seu próprio usuário — você perde o acesso ao sistema.'
             : undefined
         }
         rotuloConfirmar="Excluir colaborador"

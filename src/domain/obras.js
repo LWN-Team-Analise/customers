@@ -1,21 +1,21 @@
 /* ============================================================
-   Regras de dominio das obras: setores, prioridades, os cinco
-   estagios e as tarefas padrao de cada setor em cada estagio.
+   Regras de dominio das obras.
 
-   Tudo aqui e dado puro (sem React) para poder ser usado tanto
-   pelas telas quanto pelo store — e, mais para frente, pela API.
+   O roteiro (etapas > cards > checks) NAO mora mais aqui: ele e
+   cadastro, vem do banco e a tela de obra cria e apaga etapa,
+   card e check. O que sobra neste arquivo sao as regras que leem
+   esse roteiro — quem fechou, quem falta, quem pode marcar.
+
+   Vocabulario:
+     roteiro  = [{ id, numero, nome, cards: [...] }]
+     card     = { id, titulo, cargos: ['gq', ...], checks: [...] }
+     marcados = { [checkId]: { feitoPor, feitoEm } } — o que a obra ja fez
+
+   Tudo aqui e funcao pura (sem React) para servir tanto as telas
+   quanto o contexto.
    ============================================================ */
 
-/** Os cinco setores da empresa. "curto" e o que aparece na etiqueta do card. */
-export const SETORES = [
-  { id: 'comercial', rotulo: 'Comercial', curto: 'com' },
-  { id: 'adm', rotulo: 'ADM', curto: 'adm' },
-  { id: 'tecnico', rotulo: 'Técnico', curto: 'téc' },
-  { id: 'gq', rotulo: 'GQ', curto: 'gq' },
-  { id: 'excelencia', rotulo: 'Excelência', curto: 'exc' },
-]
-
-export const SETOR_POR_ID = Object.fromEntries(SETORES.map((s) => [s.id, s]))
+import { podeFazer } from './permissoes'
 
 export const PRIORIDADES = [
   { id: 'baixa', rotulo: 'Baixa' },
@@ -30,136 +30,131 @@ export const TIPOS = [
   { id: 'emergencia', rotulo: 'Obra emergência' },
 ]
 
+/** Emergencia nasce e continua alta: a tela nem oferece a escolha. */
+export const PRIORIDADE_FIXA = { emergencia: 'alta' }
+
+export function prioridadeDaObra({ tipo, prioridade }) {
+  return PRIORIDADE_FIXA[tipo] ?? prioridade
+}
+
+export function prioridadeTravada(tipo) {
+  return tipo in PRIORIDADE_FIXA
+}
+
+/** O rotulo da etapa sai da posicao: 1 -> "1ª Etapa". */
+export function rotuloDaEtapa(numero) {
+  return `${numero}ª Etapa`
+}
+
 /* ------------------------------------------------------------
-   As cinco etapas. Cada uma lista os setores envolvidos e, para
-   cada setor, o roteiro de tarefas que precisa ser cumprido.
-   A etapa so fecha quando TODOS os setores dela concluem.
+   O roteiro que CADA obra enxerga
+
+   O roteiro anda para a frente: o que e criado dentro de uma
+   obra vale para ela e para as proximas, e o que e excluido
+   some dela em diante — as anteriores continuam com o roteiro
+   que tinham no dia em que nasceram.
+
+   Quem carimba isso e o servidor, em vigenteDe/vigenteAte de
+   cada etapa, card e check. Aqui a gente so aplica a janela:
+
+       vigenteDe <= nascimento < vigenteAte
+
+   Depois de filtrar, as etapas sao renumeradas (1ª, 2ª, 3ª...)
+   dentro da propria obra: se a 2ª etapa saiu do roteiro em
+   maio, a obra de junho ve a antiga 3ª como a sua 2ª.
    ------------------------------------------------------------ */
-export const ETAPAS = [
-  {
-    numero: 1,
-    rotulo: '1ª Etapa',
-    nome: 'Comercial',
-    tarefas: {
-      comercial: [
-        'Proposta técnica',
-        'Data de execução',
-        'Ciente da proposta de consultoria',
-        'Reunião interna',
-        'Apresentar todas as propostas',
-        'Venda alinhada com técnica e qualidade',
-      ],
-    },
-  },
-  {
-    numero: 2,
-    rotulo: '2ª Etapa',
-    nome: 'Planejamento',
-    tarefas: {
-      tecnico: [
-        'Levantamento em campo',
-        'Definir escopo do serviço',
-        'Montar cronograma de execução',
-        'Enviar documentação técnica',
-      ],
-      adm: ['Abertura de contrato', 'Conferir dados do cliente', 'Emitir nota de entrada'],
-      gq: [
-        'Elaboração',
-        'Determinar focal point',
-        'Reunião interna',
-        'Enviar revisão interna',
-        'Entrar em contato e se apresentar',
-      ],
-      excelencia: ['Checar padrões do processo', 'Registrar indicadores iniciais'],
-    },
-  },
-  {
-    numero: 3,
-    rotulo: '3ª Etapa',
-    nome: 'Execução',
-    tarefas: {
-      tecnico: ['Execução em campo', 'Registro fotográfico', 'Relatório técnico'],
-      gq: ['Revisão do relatório', 'Ajustes com o técnico', 'Aprovação interna'],
-      excelencia: ['Auditoria do processo', 'Feedback do time'],
-      comercial: ['Alinhamento com o cliente', 'Comunicar prazos'],
-    },
-  },
-  {
-    numero: 4,
-    rotulo: '4ª Etapa',
-    nome: 'Entrega',
-    tarefas: {
-      gq: ['Revisão final', 'Fechamento de pendências'],
-      comercial: ['Apresentação ao cliente', 'Coleta de aceite'],
-      adm: ['Emissão da nota fiscal', 'Registro no financeiro'],
-    },
-  },
-  {
-    numero: 5,
-    rotulo: '5ª Etapa',
-    nome: 'Encerramento',
-    tarefas: {
-      comercial: ['Pesquisa de satisfação', 'Proposta de renovação'],
-      adm: ['Arquivamento do contrato', 'Baixa financeira'],
-      gq: ['Arquivar documentação', 'Lições aprendidas'],
-      excelencia: ['Avaliação final do time', 'Registro de indicadores'],
-    },
-  },
-]
 
-/** Setores envolvidos numa etapa, sempre na ordem oficial de SETORES. */
-export function setoresDaEtapa(numero) {
-  const etapa = ETAPAS.find((e) => e.numero === numero)
+const dentroDaJanela = (peca, quando) => {
+  if (!quando) return !peca?.vigenteAte
+  const t = new Date(quando).getTime()
+  const de = peca?.vigenteDe ? new Date(peca.vigenteDe).getTime() : -Infinity
+  const ate = peca?.vigenteAte ? new Date(peca.vigenteAte).getTime() : Infinity
+  return de <= t && t < ate
+}
+
+/**
+ * O roteiro como ele estava (e continua) para uma obra criada em
+ * `nascimento`. Sem data, devolve o roteiro que vale hoje.
+ */
+export function roteiroVigente(roteiro, nascimento) {
+  const quando = nascimento ?? new Date().toISOString()
+
+  return (roteiro ?? [])
+    .filter((etapa) => dentroDaJanela(etapa, quando))
+    .map((etapa, indice) => ({
+      ...etapa,
+      // a numeracao e da OBRA, nao do cadastro: sem buraco na fila
+      numero: indice + 1,
+      cards: (etapa.cards ?? [])
+        .filter((card) => dentroDaJanela(card, quando))
+        .map((card) => ({
+          ...card,
+          checks: (card.checks ?? []).filter((check) => dentroDaJanela(check, quando)),
+        })),
+    }))
+}
+
+/* ------------------------------------------------------------
+   Leitura do que ja foi feito
+   ------------------------------------------------------------ */
+
+const feito = (marcados, checkId) => Boolean(marcados?.[checkId])
+
+/**
+ * Card sem nenhum check nao entra na conta de nada.
+ *
+ * E o estado de quem acabou de criar o card e ainda nao escreveu os
+ * checks. Se ele contasse, um card vazio deixaria a etapa travada em
+ * TODAS as obras ate alguem lembrar de preencher — e ninguem ia
+ * descobrir o porque.
+ */
+const cardVale = (card) => (card?.checks?.length ?? 0) > 0
+
+/** Card fechado = todos os checks dele marcados. */
+export function cardConcluido(card, marcados) {
+  if (!cardVale(card)) return false
+  return card.checks.every((c) => feito(marcados, c.id))
+}
+
+/** Etapa fecha quando todos os cards que valem fecharam. */
+export function etapaConcluida(etapa, marcados) {
+  const valem = (etapa?.cards ?? []).filter(cardVale)
+  if (valem.length === 0) return false
+  return valem.every((card) => cardConcluido(card, marcados))
+}
+
+/** Cargos que ainda devem informacao na etapa — vira [téc] [gq] no card. */
+export function setoresPendentes(roteiro, marcados, numeroEtapa) {
+  const etapa = roteiro?.find((e) => e.numero === numeroEtapa)
   if (!etapa) return []
-  return SETORES.map((s) => s.id).filter((id) => id in etapa.tarefas)
+  const pendentes = etapa.cards
+    .filter((card) => cardVale(card) && !cardConcluido(card, marcados))
+    .flatMap((card) => card.cargos)
+  return [...new Set(pendentes)]
 }
 
-/** Monta o checklist zerado de uma obra nova: 5 etapas x setores x tarefas. */
-export function etapasIniciais() {
-  return ETAPAS.map((etapa) => ({
-    numero: etapa.numero,
-    setores: Object.fromEntries(
-      setoresDaEtapa(etapa.numero).map((setor) => [
-        setor,
-        {
-          tarefas: etapa.tarefas[setor].map((titulo) => ({ titulo, feito: false })),
-          responsavelId: null,
-        },
-      ]),
-    ),
-  }))
+/** Quantos cards da etapa contam para o placar "2/3". */
+export function cardsQueValem(etapa) {
+  return (etapa?.cards ?? []).filter(cardVale)
 }
 
-/** Um setor fecha quando todas as tarefas dele naquela etapa estao marcadas. */
-export function setorConcluido(etapaObra, setor) {
-  const bloco = etapaObra?.setores?.[setor]
-  if (!bloco || bloco.tarefas.length === 0) return false
-  return bloco.tarefas.every((t) => t.feito)
+/** Etapa em andamento: a primeira que ainda nao fechou. */
+export function etapaAtual(roteiro, marcados) {
+  const aberta = roteiro?.find((e) => !etapaConcluida(e, marcados))
+  return aberta ? aberta.numero : (roteiro?.length ?? 1)
 }
 
-/** A etapa fecha quando todos os setores dela fecharam. */
-export function etapaConcluida(etapaObra) {
-  if (!etapaObra) return false
-  const setores = Object.keys(etapaObra.setores)
-  return setores.length > 0 && setores.every((s) => setorConcluido(etapaObra, s))
+/** true quando todas as etapas do roteiro fecharam. */
+export function obraConcluida(roteiro, marcados) {
+  if (!roteiro?.length) return false
+  return roteiro.every((e) => etapaConcluida(e, marcados))
 }
 
-/** Setores que ainda devem informacao na etapa — vira [téc] [gq] no card. */
-export function setoresPendentes(obra, numeroEtapa) {
-  const etapa = obra?.etapas?.find((e) => e.numero === numeroEtapa)
-  if (!etapa) return []
-  return Object.keys(etapa.setores).filter((s) => !setorConcluido(etapa, s))
-}
-
-/** Etapa em andamento: a primeira que ainda nao fechou (5 = tudo pronto). */
-export function etapaAtual(obra) {
-  const aberta = obra?.etapas?.find((e) => !etapaConcluida(e))
-  return aberta ? aberta.numero : ETAPAS.length
-}
-
-/** true quando as cinco etapas fecharam. */
-export function obraConcluida(obra) {
-  return Boolean(obra?.etapas?.length) && obra.etapas.every(etapaConcluida)
+/** Percentual concluido da obra (0–100), usado nas barras de progresso. */
+export function progressoDaObra(roteiro, marcados) {
+  const todos = (roteiro ?? []).flatMap((e) => e.cards.flatMap((c) => c.checks))
+  if (todos.length === 0) return 0
+  return Math.round((todos.filter((c) => feito(marcados, c.id)).length / todos.length) * 100)
 }
 
 /**
@@ -168,25 +163,24 @@ export function obraConcluida(obra) {
  *
  * Obra PADRAO anda em fila: so a etapa atual aceita marcacao e as
  * seguintes ficam com cadeado ate a anterior fechar.
- * Obra EMERGENCIA abre as cinco de uma vez — numa emergencia ninguem
- * pode ficar esperando a etapa anterior fechar para agir.
+ * Obra EMERGENCIA abre todas de uma vez — numa emergencia ninguem pode
+ * ficar esperando a etapa anterior fechar para agir.
  */
-export function estadoDaEtapa(obra, numero) {
-  const etapa = obra?.etapas?.find((e) => e.numero === numero)
-  if (etapaConcluida(etapa)) return 'concluida'
+export function estadoDaEtapa(roteiro, obra, numero) {
+  const marcados = obra?.checks ?? {}
+  const etapa = roteiro?.find((e) => e.numero === numero)
+  if (etapaConcluida(etapa, marcados)) return 'concluida'
   if (obra?.tipo === 'emergencia') return 'atual'
-  const anteriores = obra.etapas.filter((e) => e.numero < numero)
-  return anteriores.every(etapaConcluida) ? 'atual' : 'bloqueada'
+  const anteriores = (roteiro ?? []).filter((e) => e.numero < numero)
+  return anteriores.every((e) => etapaConcluida(e, marcados)) ? 'atual' : 'bloqueada'
 }
 
+/* ------------------------------------------------------------
+   Quem pode o que
+   ------------------------------------------------------------ */
+
 /**
- * Quem pode marcar a tarefa de um setor.
- *
- * Cada cargo mexe so no que e dele: o ADM nao fecha tarefa do Tecnico.
- * A excecao e o cargo com acesso total (diretoria), que enxerga e edita
- * qualquer setor.
- *
- * `usuario` e o do AuthContext; a chave do cargo vem do banco
+ * A chave do cargo de quem esta logado. Vem do banco
  * (usuario.cargoChave) e cai no texto de usuario.cargo quando a tabela
  * cargo ainda nao existe.
  */
@@ -194,12 +188,14 @@ export function chaveDoCargo(usuario) {
   if (!usuario) return null
   if (usuario.cargoChave) return usuario.cargoChave
   // sem a tabela cargo, normaliza o texto livre: "Técnico" -> "tecnico"
-  return String(usuario.cargo ?? '')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || null
+  return (
+    String(usuario.cargo ?? '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || null
+  )
 }
 
 export function temAcessoTotal(usuario) {
@@ -210,15 +206,85 @@ export function temAcessoTotal(usuario) {
   return ['diretor', 'diretoria'].includes(chaveDoCargo(usuario))
 }
 
-export function podeEditarSetor(usuario, setor) {
-  if (!usuario) return false
-  if (temAcessoTotal(usuario)) return true
-  return chaveDoCargo(usuario) === setor
+/* reexportado porque quase toda tela ja importa deste arquivo; a
+   lista de permissoes em si mora em src/domain/permissoes.js */
+export { podeFazer }
+
+/** Somente a diretoria mexe no CPF — trava de cargo, nao de permissao. */
+export function podeEditarCpf(usuario) {
+  return chaveDoCargo(usuario) === 'diretor'
 }
 
-/** Percentual concluido da obra (0–100), usado nas barras de progresso. */
-export function progressoDaObra(obra) {
-  const todas = obra.etapas.flatMap((e) => Object.values(e.setores).flatMap((s) => s.tarefas))
-  if (todas.length === 0) return 0
-  return Math.round((todas.filter((t) => t.feito).length / todas.length) * 100)
+/**
+ * Quem marca os checks de um card.
+ *
+ * Cada cargo mexe so no que e dele: o ADM nao fecha check do Tecnico.
+ * Card de mais de um cargo aceita qualquer um deles. A excecao e o cargo
+ * com acesso total (diretoria), que edita qualquer card.
+ */
+export function podeEditarCard(usuario, card) {
+  if (!usuario) return false
+  if (temAcessoTotal(usuario)) return true
+  return (card?.cargos ?? []).includes(chaveDoCargo(usuario))
+}
+
+/**
+ * De quem e um check.
+ *
+ * Normalmente e de quem e o card. Mas o check pode ter dono proprio — e
+ * ai a lista DELE manda, e a do card nao entra. E o que permite pendurar
+ * "Envio revisao externa" em GQ + Excelencia sem transformar o card
+ * inteiro em "GQ + Excelencia".
+ */
+export function cargosDoCheck(check, card) {
+  const proprios = check?.cargos ?? []
+  return proprios.length > 0 ? proprios : (card?.cargos ?? [])
+}
+
+/** true quando o check tem dono diferente do card — a tela marca isso. */
+export function checkTemDonoProprio(check) {
+  return (check?.cargos ?? []).length > 0
+}
+
+/**
+ * Quem marca ESTE check.
+ *
+ * Tres portas de saida da regra "so o seu cargo":
+ *   - acesso total (diretoria);
+ *   - a permissao "check em todas as etapas";
+ *   - obra de EMERGENCIA — ali ninguem fica esperando o setor certo.
+ */
+export function podeEditarCheck(usuario, check, card, obra) {
+  if (!usuario) return false
+  if (temAcessoTotal(usuario)) return true
+  if (podeFazer(usuario, 'check_todas_etapas')) return true
+  if (obra?.tipo === 'emergencia') return true
+  return cargosDoCheck(check, card).includes(chaveDoCargo(usuario))
+}
+
+/* ------------------------------------------------------------
+   Aparencia do card de setor
+
+   Um cargo -> cor cheia. Dois ou mais -> gradiente com as cores de
+   cada um, na ordem em que foram escolhidos.
+   ------------------------------------------------------------ */
+
+export function corDoCard(card, corDoCargo) {
+  const cores = (card?.cargos ?? []).map(corDoCargo).filter(Boolean)
+  if (cores.length === 0) return '#6b7280'
+  return cores[0]
+}
+
+export function fundoDoCard(card, corDoCargo) {
+  const cores = (card?.cargos ?? []).map(corDoCargo).filter(Boolean)
+  if (cores.length === 0) return '#6b7280'
+  if (cores.length === 1) return cores[0]
+  return `linear-gradient(120deg, ${cores.join(', ')})`
+}
+
+/** Nome que aparece no topo do card: o titulo escrito ou os cargos dele. */
+export function nomeDoCard(card, nomeDoCargo) {
+  if (card?.titulo) return card.titulo
+  const nomes = (card?.cargos ?? []).map(nomeDoCargo).filter(Boolean)
+  return nomes.length > 0 ? nomes.join(' + ') : 'Sem cargo'
 }

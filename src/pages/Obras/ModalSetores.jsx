@@ -1,6 +1,5 @@
 import Modal from '@/components/Modal/Modal'
 import { useDados } from '@/context/DadosContext'
-import { ETAPAS, etapaAtual, setoresPendentes } from '@/domain/obras'
 import './ModalSetores.css'
 
 /**
@@ -11,16 +10,16 @@ import './ModalSetores.css'
  * nao sobre o sistema inteiro.
  */
 export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, selecionados = [] }) {
-  const { cargos, clientePorId } = useDados()
+  const { cargos, clientePorId, roteiroDaObra, etapaDaObra, pendentesDaObra } = useDados()
 
   /* para cada cargo, as obras em que ele ainda deve algo na etapa atual */
   const pendencias = cargos.map((cargo) => {
     const devendo = obras
-      .filter((o) => setoresPendentes(o, etapaAtual(o)).includes(cargo.chave))
+      .filter((o) => pendentesDaObra(o).includes(cargo.chave))
       .map((o) => ({
         obra: o,
         cliente: clientePorId(o.clienteId),
-        etapa: etapaAtual(o),
+        etapa: etapaDaObra(o),
       }))
     return { cargo, devendo }
   })
@@ -46,11 +45,8 @@ export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, 
                 />
                 <span className="setores__quem">
                   <strong>{cargo.nome}</strong>
-                  <span>
-                    {cargo.acessoTotal
-                      ? 'edita todos os setores'
-                      : `sigla ${cargo.curto}`}
-                  </span>
+                  {/* o acesso total do cargo nao aparece: quem tem, tem */}
+                  <span>sigla {cargo.curto}</span>
                 </span>
 
                 <span
@@ -85,7 +81,10 @@ export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, 
                         <em>{obra.descricao}</em>
                       </span>
                       <span className="setores__etapa">
-                        {etapa}ª — {ETAPAS.find((e) => e.numero === etapa)?.nome.toLowerCase()}
+                        {etapa}ª —{' '}
+                        {roteiroDaObra(obra)
+                          .find((e) => e.numero === etapa)
+                          ?.nome?.toLowerCase()}
                       </span>
                     </li>
                   ))}

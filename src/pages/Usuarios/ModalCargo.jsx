@@ -1,0 +1,346 @@
+import { useEffect, useState } from 'react'
+import Modal from '@/components/Modal/Modal'
+import Button from '@/components/Button/Button'
+import { useDados } from '@/context/DadosContext'
+import EscolhaCor from '@/components/EscolhaCor/EscolhaCor'
+import { ALTERACAO, CHAVES, VISUALIZACAO, dependentes, normalizar, travada } from '@/domain/permissoes'
+import './ModalCargos.css'
+
+const CORES_SUGERIDAS = [
+  '#13b7c7', '#35b566', '#f2802a', '#3a63e8', '#9a5ce0',
+  '#c2a23a', '#e0457b', '#0f9aa8', '#7a5c3e', '#5b6470',
+]
+
+/* cargo novo nasce SEM nenhuma permissao — quem administra marca uma a uma */
+const VAZIO = {
+  nome: '',
+  cor: CORES_SUGERIDAS[0],
+  curto: '',
+  acessoTotal: false,
+  permissoes: [],
+}
+
+/**
+ * Um cargo: cria ou edita, com Excluir ao lado de Salvar.
+ *
+ * O que o cargo PODE fazer mora aqui embaixo, em duas listas:
+ *
+ *   Visualizacao — que abas ele enxerga no menu;
+ *   Alteracao    — o que ele mexe dentro delas.
+ *
+ * As duas sao amarradas: alteracao depende da visualizacao
+ * correspondente. Desmarcar "Obras" apaga junto tudo o que so faz
+ * sentido dentro de Obras — e essas linhas ficam travadas ate a
+ * visualizacao voltar. Sem isso daria para ter um cargo que edita obra
+ * e nao consegue abrir a aba de obras.
+ *
+ * "Acesso total" (diretoria) passa por cima de tudo: com ele marcado,
+ * as listas viram informacao, nao trava.
+ */
+export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
+  const { cargos, equipe, adicionarCargo, atualizarCargo, removerCargo } = useDados()
+
+  const [form, setForm] = useState(VAZIO)
+  const [erro, setErro] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
+
+  const editando = Boolean(cargo)
+  const emUso = editando ? equipe.filter((p) => p.cargo === cargo.chave).length : 0
+
+  useEffect(() => {
+    if (!aberto) return
+    setForm(
+      cargo
+        ? {
+            nome: cargo.nome,
+            cor: cargo.cor,
+            curto: cargo.curto,
+            acessoTotal: Boolean(cargo.acessoTotal),
+            permissoes: normalizar(cargo.permissoes ?? []),
+          }
+        : VAZIO,
+    )
+    setErro('')
+    setConfirmando(false)
+  }, [aberto, cargo])
+
+  const mudar = (campo) => (valor) => {
+    setForm((atual) => ({ ...atual, [campo]: valor }))
+    setErro('')
+  }
+
+  /**
+   * Liga/desliga uma permissao.
+   *
+   * Ao DESMARCAR uma de visualizacao, as alteracoes que dependiam dela
+   * caem junto — senao ficariam marcadas e sem efeito nenhum, o que e
+   * pior que nao estar marcada.
+   */
+  const alternar = (chave) => {
+    setForm((atual) => {
+      const tem = atual.permissoes.includes(chave)
+      let lista = tem
+        ? atual.permissoes.filter((c) => c !== chave)
+        : [...atual.permissoes, chave]
+
+      if (tem) {
+        const caem = dependentes(chave)
+        lista = lista.filter((c) => !caem.includes(c))
+      }
+
+      return { ...atual, permissoes: normalizar(lista) }
+    })
+    setErro('')
+  }
+
+  const marcarTodas = () => setForm((atual) => ({ ...atual, permissoes: [...CHAVES] }))
+  const desmarcarTodas = () => setForm((atual) => ({ ...atual, permissoes: [] }))
+
+  const enviar = async (evento) => {
+    evento.preventDefault()
+    const nome = form.nome.trim()
+    if (!nome) {
+      setErro('Informe o nome do cargo.')
+      return
+    }
+
+    const repetido = cargos.some(
+      (c) => c.id !== cargo?.id && c.nome.toLowerCase() === nome.toLowerCase(),
+    )
+    if (repetido) {
+      setErro('Já existe um cargo com esse nome.')
+      return
+    }
+
+    setSalvando(true)
+    try {
+      const campos = { ...form, nome, permissoes: normalizar(form.permissoes) }
+      if (editando) await atualizarCargo(cargo.id, campos)
+      else await adicionarCargo(campos)
+      aoFechar()
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const apagar = async () => {
+    setSalvando(true)
+    try {
+      await removerCargo(cargo.id)
+      aoFechar()
+    } catch (e) {
+      setErro(e.message)
+      setConfirmando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const marcadas = form.permissoes.length
+
+  return (
+    <Modal
+      aberto={aberto}
+      aoFechar={aoFechar}
+      nivel={1}
+      titulo={editando ? `Editar ${cargo.nome}` : 'Novo cargo'}
+      subtitulo={
+        editando
+          ? `${emUso} pessoa${emUso === 1 ? '' : 's'} neste cargo.`
+          : 'A cor escolhida pinta as etiquetas do card e os blocos das etapas.'
+      }
+      largura={620}
+    >
+      <form className="cargos__form" onSubmit={enviar}>
+        <div className="cargos__linhacampos">
+          <label className="cargos__campo cargos__campo--nome">
+            <span>Nome</span>
+            <input
+              value={form.nome}
+              onChange={(e) => mudar('nome')(e.target.value)}
+              placeholder="Ex.: Jurídico"
+              autoFocus
+            />
+          </label>
+
+          <label className="cargos__campo cargos__campo--sigla">
+            <span>Sigla</span>
+            <input
+              value={form.curto}
+              onChange={(e) => mudar('curto')(e.target.value)}
+              placeholder="jur"
+              maxLength={6}
+            />
+          </label>
+        </div>
+
+        <EscolhaCor valor={form.cor} aoMudar={mudar('cor')} rotulo="Cor e opacidade" />
+
+        <div className="cargos__paleta">
+          {CORES_SUGERIDAS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={`cargos__cor ${form.cor.toLowerCase() === c ? 'is-atual' : ''}`.trim()}
+              style={{ background: c }}
+              onClick={() => mudar('cor')(c)}
+              aria-label={`Usar a cor ${c}`}
+            />
+          ))}
+        </div>
+
+        <label className="cargos__total">
+          <input
+            type="checkbox"
+            checked={form.acessoTotal}
+            onChange={(e) => mudar('acessoTotal')(e.target.checked)}
+          />
+          <span>
+            Edita as tarefas de <strong>todos</strong> os setores
+          </span>
+        </label>
+
+        {/* ============================================================
+            Permissoes
+            ============================================================ */}
+        <section className="perm">
+          <header className="perm__topo">
+            <h3>Permissões</h3>
+            <span className="perm__contagem">
+              {marcadas} de {CHAVES.length}
+            </span>
+            <span className="perm__atalhos">
+              <button type="button" onClick={marcarTodas}>
+                Marcar todas
+              </button>
+              <button type="button" onClick={desmarcarTodas}>
+                Desmarcar todas
+              </button>
+            </span>
+          </header>
+
+          {form.acessoTotal && (
+            <p className="perm__nota perm__nota--total">
+              Este cargo tem <strong>acesso total</strong>: ele passa por qualquer permissão,
+              marcada ou não. A lista abaixo continua valendo se o acesso total for desligado.
+            </p>
+          )}
+
+          <div className="perm__grupos">
+            <div className="perm__grupo">
+              <h4>Visualização</h4>
+              <p className="perm__nota">O que aparece no menu para este cargo.</p>
+              <ul>
+                {VISUALIZACAO.map((p) => (
+                  <li key={p.chave}>
+                    <label className="perm__item">
+                      <input
+                        type="checkbox"
+                        checked={form.permissoes.includes(p.chave)}
+                        onChange={() => alternar(p.chave)}
+                      />
+                      <span>{p.rotulo}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="perm__grupo">
+              <h4>Alteração</h4>
+              <p className="perm__nota">
+                Cada uma depende da visualização da aba correspondente. Sem ela, a linha fica
+                travada.
+              </p>
+              <ul>
+                {ALTERACAO.map((p) => {
+                  const bloqueada = travada(p.chave, form.permissoes)
+                  const exigida = VISUALIZACAO.find((v) => v.chave === p.dependeDe)
+                  return (
+                    <li key={p.chave}>
+                      <label
+                        className={`perm__item ${bloqueada ? 'is-travada' : ''}`.trim()}
+                        title={
+                          bloqueada ? `Marque "${exigida?.rotulo}" em Visualização primeiro.` : undefined
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.permissoes.includes(p.chave)}
+                          onChange={() => alternar(p.chave)}
+                          disabled={bloqueada}
+                        />
+                        <span>
+                          {p.rotulo}
+                          {bloqueada && (
+                            <em className="perm__trava">precisa de “{exigida?.rotulo}”</em>
+                          )}
+                          {!bloqueada && p.nota && <em className="perm__dica">{p.nota}</em>}
+                        </span>
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* previa: a etiqueta como ela aparece no sistema. O fundo e
+            translucido e a letra segue a cor do tema — assim ela se le
+            no claro e no escuro sem duas amostras lado a lado. */}
+        <div className="cargos__previa">
+          <span className="cargos__previanome">Como a etiqueta fica</span>
+          <span className="cargos__etiqueta is-previa" style={{ '--cargo-cor': form.cor }}>
+            {form.nome.trim() || 'Nome do cargo'}
+          </span>
+        </div>
+
+        {erro && (
+          <p className="cargos__erro" role="alert">
+            {erro}
+          </p>
+        )}
+
+        <footer className="formobra__acoes">
+          {editando &&
+            (confirmando ? (
+              <button
+                type="button"
+                className="formrot__apagar is-confirmando"
+                onClick={apagar}
+                disabled={salvando}
+              >
+                Confirmar exclusão
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="formrot__apagar"
+                onClick={() => setConfirmando(true)}
+                disabled={salvando || cargo.fixo}
+                title={cargo.fixo ? 'Cargo usado pelas etapas da obra' : undefined}
+              >
+                Excluir
+              </button>
+            ))}
+          <button type="button" className="formobra__cancelar" onClick={aoFechar}>
+            Cancelar
+          </button>
+          <Button type="submit" loading={salvando}>
+            Salvar
+          </Button>
+        </footer>
+
+        {confirmando && (
+          <p className="formrot__aviso" role="alert">
+            O cargo sai da lista. Não dá para desfazer.
+          </p>
+        )}
+      </form>
+    </Modal>
+  )
+}

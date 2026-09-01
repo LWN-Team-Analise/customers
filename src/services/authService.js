@@ -79,20 +79,92 @@ export async function signIn({ identifier, password }) {
   return resposta.json()
 }
 
-/** Revalida a sessao guardada; devolve null se o token nao vale mais. */
+/**
+ * Revalida a sessao guardada. Devolve uma de tres respostas:
+ *
+ *   { user }             — o token vale, e este e o cadastro de agora
+ *   { expirada: true }   — o token morreu; a pessoa precisa entrar de novo
+ *   { indefinido: true } — nao deu para perguntar (API fora do ar)
+ *
+ * A diferenca entre as duas ultimas e o que importa: sem ela, um
+ * servidor momentaneamente fora do ar deslogaria todo mundo.
+ */
 export async function fetchMe(token) {
+  let resposta
   try {
-    const resposta = await fetch('/api/auth/me', {
+    resposta = await fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (!resposta.ok) return null
-    const { user } = await resposta.json()
-    return user
   } catch {
-    return null
+    return { indefinido: true }
   }
+
+  if (resposta.ok) {
+    const { user } = await resposta.json().catch(() => ({}))
+    return user ? { user } : { indefinido: true }
+  }
+  if (resposta.status === 401) return { expirada: true }
+  return { indefinido: true }
 }
 
 export async function signOut() {
   // o token e sem estado no servidor: sair e apagar a sessao local
 }
+
+/* ============================================================
+   Esqueci minha senha — os tres passos do pop-up
+   ============================================================ */
+
+async function falar(caminho, corpo, cabecalhos = {}) {
+  let resposta
+  try {
+    resposta = await fetch(`/api/auth/${caminho}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cabecalhos },
+      body: JSON.stringify(corpo),
+    })
+  } catch {
+    throw new Error('Não foi possível falar com o servidor. Tente de novo.')
+  }
+  const dados = await resposta.json().catch(() => null)
+  if (!resposta.ok) throw new Error(dados?.erro ?? 'Não foi possível completar a operação.')
+  return dados ?? {}
+}
+
+/** 1º passo: manda o codigo para o e-mail do cadastro. */
+export const pedirCodigo = (identificador) => falar('recuperar', { identificador })
+
+/** 2º passo: confere o codigo e devolve a permissao do ultimo passo. */
+export const conferirCodigo = (identificador, codigo) =>
+  falar('codigo', { identificador, codigo })
+
+/** 3º passo: grava a senha nova. */
+export const redefinirSenha = (permissao, nova) => falar('redefinir', { permissao, nova })
+
+/* ============================================================
+   Outlook
+
+   A tela abre uma janelinha no site da Microsoft; quando ela
+   volta com o `code`, o servidor troca esse code por perfil e
+   foto. Aqui so ficam as chamadas.
+   ============================================================ */
+
+/** O botao do Outlook so aparece quando o servidor esta configurado. */
+export async function outlookConfigurado() {
+  try {
+    const resposta = await fetch('/api/auth/outlook/config')
+    if (!resposta.ok) return false
+    const { configurado } = await resposta.json()
+    return Boolean(configurado)
+  } catch {
+    return false
+  }
+}
+
+export const inicioDoOutlook = (redirecionar) => falar('outlook/inicio', { redirecionar })
+
+export const entrarComOutlook = (codigo, redirecionar) =>
+  falar('outlook/entrar', { codigo, redirecionar })
+
+export const vincularOutlook = (codigo, redirecionar, token) =>
+  falar('outlook/vincular', { codigo, redirecionar }, { Authorization: `Bearer ${token}` })
