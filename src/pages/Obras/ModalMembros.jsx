@@ -1,7 +1,7 @@
 import Modal from '@/components/Modal/Modal'
 import Avatar from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
-import { cardConcluido } from '@/domain/obras'
+import { cardConcluido, tituloDaObra } from '@/domain/obras'
 import './ModalMembros.css'
 
 /**
@@ -38,7 +38,7 @@ export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
                     className="membros__cargo"
                     style={{ '--cargo-cor': cargo?.cor ?? '#6b7280' }}
                   >
-                    {cargo?.nome ?? pessoa.cargoNome ?? 'Sem cargo'}
+                    {cargo?.nome ?? pessoa.cargoNome ?? 'Sem setor'}
                   </span>
                 </div>
                 <span className="membros__contagem">
@@ -68,8 +68,8 @@ export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
                       <li key={obra.id} className="membros__obra">
                         <span className="membros__tipo" data-tipo={obra.tipo} aria-hidden="true" />
                         <span className="membros__nomeobra">
-                          {cliente?.nome ?? 'Cliente removido'}
-                          <em>{obra.descricao}</em>
+                          {tituloDaObra(obra, cliente)}
+                          {obra.descricao && <em>{obra.descricao}</em>}
                         </span>
                         <span className="membros__etapa">
                           {numero}ª — {modelo?.nome?.toLowerCase()}

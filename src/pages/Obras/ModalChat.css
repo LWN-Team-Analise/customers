@@ -3,6 +3,9 @@
    ============================================================ */
 
 .chat {
+  /* âncora do painel de "apagar mensagem", que cobre a conversa e só
+     ela — a decisão é sobre uma fala daquele chat */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -457,3 +460,144 @@
     max-width: 95%;
   }
 }
+
+/* ============================================================
+   Obra concluída: no lugar da caixa de escrever, o motivo.
+
+   A conversa inteira continua rolando acima — é ela que conta o
+   que aconteceu na obra —, e aqui embaixo, onde a mão vai
+   procurar o campo de texto, está a explicação de por que ele
+   não está mais lá.
+   ============================================================ */
+
+.chat__encerrado {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ============================================================
+   Apagar mensagem: para todos ou só para mim
+
+   Duas ações com consequências bem diferentes, então elas são
+   escolhidas num painel e não num botão só. O painel cobre a
+   conversa (e não a tela inteira) porque a decisão é sobre uma
+   mensagem daquela conversa — sair dela é clicar fora.
+   ============================================================ */
+
+.chat__apagar {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 10, 14, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.chat__apagarcaixa {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 340px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--modal-sombra);
+}
+
+.chat__apagartitulo {
+  margin: 0 0 2px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.chat__apagaropcao {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-base);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.chat__apagaropcao strong {
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.chat__apagaropcao span {
+  font-size: 0.73rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.chat__apagaropcao:hover {
+  border-color: var(--accent);
+  background: var(--control-bg);
+}
+
+/* "para todos" é a que não tem volta: ela avisa disso na cor */
+.chat__apagaropcao--forte:hover {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.chat__apagaropcao--forte:hover strong {
+  color: var(--danger);
+}
+
+.chat__apagarcancelar {
+  margin-top: 2px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat__apagarcancelar:hover {
+  color: var(--text-strong);
+}
+
+/* ---- a mensagem que foi apagada para todos ----
+
+   Ela continua na conversa, e é isso que importa: quem respondeu a
+   mensagem apagada continua entendendo a própria resposta. O balão
+   perde a cor e o conteúdo, e fica só o rastro. */
+
+.fala__balao.is-apagada {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--text-faint);
+}
+
+.fala__apagada {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-faint);
+}
+

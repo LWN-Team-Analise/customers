@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
@@ -303,6 +303,10 @@ function iniciais(nome) {
     .toUpperCase()
 }
 
+/* quanto tempo a animação de fechar dura; precisa bater com o
+   `cliente-fecha` do CSS, senão o card some antes de terminar */
+const MS_FECHANDO = 300
+
 /**
  * Card do cliente, em dois estados.
  *
@@ -312,19 +316,53 @@ function iniciais(nome) {
  * ABERTO ele vira o cartao de quinas recortadas: a logo ocupa o topo,
  * a cidade fica na tarja vazada de baixo e a contagem de obras no selo
  * de cima. Foi o pedido: o cartao recortado e o do cliente ABERTO.
+ *
+ * A passagem entre os dois e animada NOS DOIS SENTIDOS:
+ *
+ *   abrindo  — o cartao se desenrola de cima para baixo, como uma
+ *              persiana que desce a partir da linha fechada;
+ *   fechando — ele se recolhe de baixo para cima, pelo mesmo caminho.
+ *
+ * Fechar precisa do estado `fechando` porque a animacao de saida so
+ * roda enquanto o elemento AINDA ESTA na tela: sem ele, o React tira o
+ * cartao do DOM no mesmo instante do clique e nao ha o que animar. Por
+ * isso o clique nao fecha na hora — ele marca `fechando`, deixa a
+ * animacao correr e so entao desmonta.
+ *
+ * Fecha por dois caminhos, e os dois valem: o botao "Fechar" sobre a
+ * foto e o proprio cabecalho (a faixa da logo com o nome). Clicar de
+ * novo onde se clicou para abrir e o gesto que a mao ja espera.
  */
 function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApagar, aoVer }) {
   const cor = useCorDaLogo(cliente.logo, cliente.nome)
   const [aberto, setAberto] = useState(false)
+  const [fechando, setFechando] = useState(false)
   /* a lista das obras avaliadas fica fechada ate alguem pedir: o card ja
      mostra a media, e a media e o que responde "esse cliente foi bem?" */
   const [verNotas, setVerNotas] = useState(false)
+
+  /* ao desmontar no meio da animacao, o timer nao pode chamar setState */
+  const timer = useRef(null)
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  const fechar = () => {
+    if (fechando) return
+    setFechando(true)
+    timer.current = setTimeout(() => {
+      setAberto(false)
+      setFechando(false)
+      /* a lista de notas volta recolhida na próxima abertura */
+      setVerNotas(false)
+    }, MS_FECHANDO)
+  }
+
+  const alternar = () => (aberto ? fechar() : setAberto(true))
 
   const cabeca = (
     <button
       type="button"
       className="cliente__topo"
-      onClick={() => setAberto((v) => !v)}
+      onClick={alternar}
       aria-expanded={aberto}
       title={aberto ? 'Fechar' : 'Ver endereço e obras'}
     >
@@ -354,7 +392,7 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
   return (
     <li>
       <CutoutCard
-        className="cliente cliente--aberto"
+        className={`cliente cliente--aberto ${fechando ? 'is-fechando' : ''}`.trim()}
         style={{ '--cor-logo': cor, '--corte-cor': cor }}
         destaque
       >
@@ -389,7 +427,7 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
           </CutoutCardInsetLabel>
 
           <CutoutCardAction>
-            <button type="button" className="cliente__fechar" onClick={() => setAberto(false)}>
+            <button type="button" className="cliente__fechar" onClick={fechar}>
               Fechar
             </button>
           </CutoutCardAction>
@@ -460,7 +498,10 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
                     {nota.obras.map((o) => (
                       <li key={o.id} className="clinota__obra" data-tipo={o.tipo}>
                         <p className="clinota__obratopo">
-                          <strong className="clinota__obradesc">{o.descricao}</strong>
+                          <strong className="clinota__obradesc">
+                            {o.proposta ? `${o.proposta} — ` : ''}
+                            {o.descricao || 'obra sem descrição'}
+                          </strong>
                           <span className="clinota__obradata">
                             {dataBR(String(o.criadoEm).slice(0, 10))}
                           </span>

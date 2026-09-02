@@ -19,38 +19,15 @@
   box-shadow: var(--modal-sombra);
 }
 
-.barreira__titulo {
-  margin: 0 0 10px;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-strong);
-}
-
-.barreira__texto {
-  margin: 0 0 16px;
-  font-size: 0.9rem;
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-
-.barreira__motivo {
-  margin: 0 0 20px;
-  padding: 12px 14px;
-  border: 1px solid var(--danger-border);
-  border-radius: var(--radius-sm);
-  background: var(--danger-bg);
-  color: var(--danger);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
+/* A caixa ficou só com os dois caminhos de volta: o título, o texto e a
+   mensagem técnica saíram da tela (a mensagem continua no console). Sem
+   nada acima deles, os botões vão para o centro — encostados na
+   esquerda de uma caixa vazia pareciam sobra de outra coisa. */
 .barreira__acoes {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .barreira__btn {

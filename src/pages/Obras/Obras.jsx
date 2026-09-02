@@ -59,6 +59,7 @@ export default function Obras() {
     concluida,
     etapaDaObra,
     pendentesDaObra,
+    rotuloEtapa,
     pode,
   } = useDados()
   const { user } = useAuth()
@@ -132,8 +133,10 @@ export default function Obras() {
       }
 
       if (alvo) {
+        /* a busca acha pelo n. da proposta também — é por ele que a obra
+           costuma ser procurada, e a descrição agora pode estar vazia */
         const empresa = clientePorId(obra.clienteId)?.nome ?? ''
-        const texto = `${empresa} ${obra.descricao}`.toLowerCase()
+        const texto = `${obra.proposta ?? ''} ${empresa} ${obra.descricao ?? ''}`.toLowerCase()
         if (!texto.includes(alvo)) return false
       }
 
@@ -186,7 +189,9 @@ export default function Obras() {
     const etapa = etapaDaObra(obra)
     await registrarAviso(obra.id, {
       setores: faltando,
-      mensagem: `Pendência na ${etapa}ª etapa.`,
+      /* "Pendência na 3ª Etapa." — a palavra "Etapa" vem da configuração
+         da empresa, não do código */
+      mensagem: `Pendência na ${rotuloEtapa(etapa)}.`,
       etapa,
     }).catch(() => null)
     const nomes = faltando.map((s) => cargoPorChave(s)?.nome ?? s).join(', ')
@@ -200,7 +205,7 @@ export default function Obras() {
       const etapa = etapaDaObra(obra)
       await registrarAviso(obra.id, {
         setores: pendentesDaObra(obra),
-        mensagem: `Pendência na ${etapa}ª etapa.`,
+        mensagem: `Pendência na ${rotuloEtapa(etapa)}.`,
         etapa,
       }).catch(() => null)
     }
@@ -391,7 +396,7 @@ export default function Obras() {
               <input
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar obra ou empresa..."
+                placeholder="Buscar proposta, obra ou empresa..."
                 aria-label="Buscar obra ou empresa"
               />
             </label>

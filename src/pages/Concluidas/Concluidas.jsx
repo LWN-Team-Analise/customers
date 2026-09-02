@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
+import Confirma from '@/components/Confirma/Confirma'
 import { useDados } from '@/context/DadosContext'
-import { dataBR } from '@/utils/formato'
+import { tituloDaObra } from '@/domain/obras'
+import { dataBR, dataHora } from '@/utils/formato'
 import './Concluidas.css'
 
 const MESES = [
@@ -29,6 +31,12 @@ const SetaDir = () => (
   </svg>
 )
 
+const Lixo = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
+  </svg>
+)
+
 /* os dois tipos de obra, na ordem em que se leem no quadro */
 const GRUPOS = [
   { id: 'padrao', rotulo: 'Obras padrão' },
@@ -36,10 +44,10 @@ const GRUPOS = [
 ]
 
 /**
- * Quando a obra fechou. Vale o carimbo do banco (view obra_conclusao:
- * o horario do ultimo check marcado); sem ele, cai na data de conclusao e,
- * em ultimo caso, na de criacao — assim nenhuma fica fora do
- * agrupamento.
+ * Quando a obra fechou. Vale o carimbo do banco (obra.concluida_em, a
+ * hora em que alguem clicou em "Concluir obra"); sem ele, cai na data de
+ * conclusao e, em ultimo caso, na de criacao — assim nenhuma fica fora
+ * do agrupamento.
  */
 function quandoFechou(obra) {
   const iso = obra.concluidaEm ?? obra.dataConclusao ?? obra.criadoEm
@@ -48,11 +56,25 @@ function quandoFechou(obra) {
 }
 
 export default function Concluidas() {
-  const { obras, clientePorId, pessoaPorId, concluida } = useDados()
+  const { obras, clientePorId, pessoaPorId, concluida, removerObra, pode } = useDados()
   const navigate = useNavigate()
 
   const [ano, setAno] = useState(null)
   const [mesAberto, setMesAberto] = useState(null)
+  /* a obra que esta esperando confirmacao de exclusao */
+  const [apagando, setApagando] = useState(null)
+
+  /**
+   * Apagar obra concluida tem permissao PROPRIA.
+   *
+   * Nao e a mesma coisa que "editar obras": aqui nao se mexe em trabalho
+   * em andamento, apaga-se o REGISTRO do que a empresa entregou — com o
+   * chat, os anexos, a rastreabilidade e as avaliacoes junto. Quem toca
+   * o quadro no dia a dia nao precisa disso; quem precisa, recebe a
+   * permissao marcada no setor. Sem ela o botao nem aparece, e a API
+   * recusa do mesmo jeito.
+   */
+  const podeExcluir = pode('excluir_concluidas')
 
   /* agrupa as concluidas por ano e, dentro dele, por mes */
   const { anos, porAno } = useMemo(() => {
@@ -215,7 +237,7 @@ export default function Concluidas() {
                           const cliente = clientePorId(obra.clienteId)
                           const pessoas = obra.membros.map(pessoaPorId).filter(Boolean)
                           return (
-                            <li key={obra.id}>
+                            <li key={obra.id} className="fechada__linha">
                               <button
                                 type="button"
                                 className="fechada"
@@ -230,12 +252,20 @@ export default function Concluidas() {
                                   quadrado
                                 />
                                 <span className="fechada__quem">
-                                  <strong>{cliente?.nome ?? "Cliente removido"}</strong>
-                                  <span>{obra.descricao}</span>
+                                  {/* "1042/2026 - Acme", igual ao card do quadro */}
+                                  <strong>{tituloDaObra(obra, cliente)}</strong>
+                                  <span>
+                                    {obra.descricao || (
+                                      <em className="fechada__semdesc">sem descrição</em>
+                                    )}
+                                  </span>
                                 </span>
 
                                 <span className="fechada__data">
                                   {dataBR(quandoFechou(obra).toISOString().slice(0, 10))}
+                                  {obra.concluidaPorNome && (
+                                    <em>por {obra.concluidaPorNome}</em>
+                                  )}
                                 </span>
 
                                 <span className="fechada__nota">
@@ -252,6 +282,21 @@ export default function Concluidas() {
                                   ))}
                                 </span>
                               </button>
+
+                              {/* fora do botão de abrir, e não dentro: um
+                                  clique no lixo não pode virar um clique
+                                  em "abrir a obra" por um pixel de erro */}
+                              {podeExcluir && (
+                                <button
+                                  type="button"
+                                  className="fechada__apagar"
+                                  onClick={() => setApagando(obra)}
+                                  title="Excluir esta obra"
+                                  aria-label={`Excluir a obra ${tituloDaObra(obra, cliente)}`}
+                                >
+                                  <Lixo />
+                                </button>
+                              )}
                             </li>
                           )
                         })}
@@ -264,6 +309,32 @@ export default function Concluidas() {
           </>
         )}
       </section>
+
+      {/* Excluir obra concluída apaga o registro inteiro dela — e por isso
+          a confirmação lista o que vai junto. Não há desfazer. */}
+      <Confirma
+        aberto={Boolean(apagando)}
+        titulo="Excluir esta obra concluída?"
+        mensagem="Ela sai da lista de concluídas e não dá para recuperar."
+        detalhes={
+          apagando && (
+            <dl>
+              <dt>Obra</dt>
+              <dd>{tituloDaObra(apagando, clientePorId(apagando.clienteId))}</dd>
+
+              <dt>Concluída em</dt>
+              <dd>{dataHora(apagando.concluidaEm) || '—'}</dd>
+
+              <dt>Concluída por</dt>
+              <dd>{apagando.concluidaPorNome ?? '—'}</dd>
+            </dl>
+          )
+        }
+        aviso="Vão junto a rastreabilidade dos checks, o chat, as observações, as etiquetas, os anexos e as avaliações desta obra."
+        rotuloConfirmar="Excluir obra"
+        aoConfirmar={() => removerObra(apagando.id)}
+        aoFechar={() => setApagando(null)}
+      />
     </AppShell>
   )
 }

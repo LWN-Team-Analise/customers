@@ -28,6 +28,8 @@ function paraUsuario(linha) {
     cpf: linha.cpf,
     dataNascimento: linha.data_nascimento,
     telefone: linha.telefone,
+    /* `cargo` aqui e o SETOR (a tabela cargo, onde moram as permissoes);
+       o cargo especifico da pessoa vem em cargoTitulo, logo abaixo */
     cargo: linha.cargo,
     permissoes: linha.permissoes ?? [],
     avaliacao: linha.avaliacao === null ? null : Number(linha.avaliacao),
@@ -40,6 +42,8 @@ function paraUsuario(linha) {
     cargoChave: linha.cargo_chave ?? null,
     cargoNome: linha.cargo_nome ?? linha.cargo,
     cargoCor: linha.cargo_cor ?? null,
+    // "Analista de Qualidade" — texto livre, nao decide permissao nenhuma
+    cargoTitulo: linha.cargo_titulo ?? '',
     acessoTotal: linha.acesso_total ?? false,
     // o que o cargo pode fazer; e por esta lista que o menu e os botoes
     // se escondem (db/atualizacao.sql.txt cria a coluna)
@@ -53,7 +57,7 @@ const CAMPOS_BASE = `u.id, u.name, u.email, u.cpf, u.data_nascimento, u.telefone
                      u.cargo, u.permissoes, u.avaliacao, u.outlook, u.senha_hash, u.ativo,
                      u.senha_temporaria`
 
-const CAMPOS_CARGO = `, u.foto, u.cargo_id, u.outlook_email,
+const CAMPOS_CARGO = `, u.foto, u.cargo_id, u.cargo_titulo, u.outlook_email,
                       c.chave AS cargo_chave, c.nome AS cargo_nome,
                       c.cor AS cargo_cor, c.acesso_total,
                       c.permissoes AS cargo_permissoes`

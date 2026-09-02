@@ -65,6 +65,27 @@ export function rotuloDaEtapa(numero) {
 }
 
 /* ------------------------------------------------------------
+   O nome da obra na tela
+
+   Uma obra se chama "1042/2026 - Acme": primeiro o n. da
+   proposta, depois o cliente. E nessa ordem porque e assim que
+   ela e procurada — quem liga perguntando de uma obra tem o
+   numero da proposta na mao, nao o nome da empresa (que costuma
+   ter cinco obras abertas ao mesmo tempo).
+
+   Vive aqui, e nao em cada tela, porque o card do quadro, a
+   capa da obra, a lista de Concluidas, o chat e o sininho
+   escrevem o MESMO nome — e obra antiga, sem proposta, precisa
+   cair no nome do cliente sozinho em todos eles.
+   ------------------------------------------------------------ */
+
+export function tituloDaObra(obra, cliente) {
+  const nome = cliente?.nome ?? 'Cliente removido'
+  const proposta = String(obra?.proposta ?? '').trim()
+  return proposta ? `${proposta} - ${nome}` : nome
+}
+
+/* ------------------------------------------------------------
    O roteiro que CADA obra enxerga
 
    O roteiro anda para a frente: o que e criado dentro de uma
@@ -162,10 +183,47 @@ export function etapaAtual(roteiro, marcados) {
   return aberta ? aberta.numero : (roteiro?.length ?? 1)
 }
 
-/** true quando todas as etapas do roteiro fecharam. */
+/**
+ * true quando todas as etapas do roteiro fecharam.
+ *
+ * ATENCAO: isto e "marcou tudo", nao "a obra acabou". Sao coisas
+ * diferentes desde que a conclusao virou um clique:
+ *
+ *   obraConcluida()  -> nao sobrou check em aberto. E o que faz o
+ *                       botao "Concluir obra" aparecer;
+ *   obraFechada()    -> alguem clicou nele. E o que tira a obra do
+ *                       quadro e a leva para Concluidas.
+ *
+ * Antes as duas eram a mesma coisa, e um check marcado por engano
+ * mandava a obra inteira para o arquivo sem ninguem decidir nada.
+ */
 export function obraConcluida(roteiro, marcados) {
   if (!roteiro?.length) return false
   return roteiro.every((e) => etapaConcluida(e, marcados))
+}
+
+/**
+ * A obra foi ENCERRADA por alguem?
+ *
+ * O carimbo vem do banco (obra.concluida_em), gravado no clique do
+ * "Concluir obra". Enquanto ele for nulo a obra continua no quadro,
+ * mesmo com todos os checks marcados.
+ */
+export function obraFechada(obra) {
+  return Boolean(obra?.concluidaEm)
+}
+
+/**
+ * A obra esta pronta para ser concluida?
+ *
+ * Tres condicoes, e as tres precisam valer:
+ *   - ainda esta aberta (nao adianta concluir duas vezes);
+ *   - o roteiro dela tem check (obra sem roteiro nao "acaba");
+ *   - nao sobrou nenhum check por marcar.
+ */
+export function prontaParaConcluir(roteiro, obra) {
+  if (obraFechada(obra)) return false
+  return obraConcluida(roteiro, obra?.checks)
 }
 
 /** Percentual concluido da obra (0–100), usado nas barras de progresso. */
@@ -216,19 +274,26 @@ export function chaveDoCargo(usuario) {
   )
 }
 
+/**
+ * Setor com acesso total (diretoria).
+ *
+ * Le SO a marca `acessoTotal`, que e a mesma coluna que o servidor
+ * consulta em `meuCargo()`. Ja houve aqui dois atalhos a mais — o
+ * texto 'todos' na lista antiga e a chave do setor ser "diretor" —
+ * e eles eram a origem do check que marcava e desmarcava sozinho:
+ * a tela liberava o clique, o servidor recusava a gravacao e o
+ * recarregamento devolvia o check ao estado anterior. Cliente e
+ * servidor precisam responder a MESMA coisa.
+ */
 export function temAcessoTotal(usuario) {
-  if (!usuario) return false
-  if (usuario.acessoTotal) return true
-  if (usuario.permissoes?.includes('todos')) return true
-  // diretoria continua passando mesmo sem a tabela cargo
-  return ['diretor', 'diretoria'].includes(chaveDoCargo(usuario))
+  return Boolean(usuario?.acessoTotal)
 }
 
 /* reexportado porque quase toda tela ja importa deste arquivo; a
    lista de permissoes em si mora em src/domain/permissoes.js */
 export { podeFazer }
 
-/** Somente a diretoria mexe no CPF — trava de cargo, nao de permissao. */
+/** Somente a diretoria mexe no CPF — trava de setor, nao de permissao. */
 export function podeEditarCpf(usuario) {
   return chaveDoCargo(usuario) === 'diretor'
 }

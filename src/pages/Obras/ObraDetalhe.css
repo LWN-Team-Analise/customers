@@ -219,6 +219,47 @@
   min-width: 150px;
 }
 
+/* ---- "Concluir obra", ao lado do Progresso ----
+
+   Só existe com a barra em 100%: enquanto sobrar um check, o botão nem
+   é renderizado. Verde porque é a única ação de fechamento da tela, e
+   ela precisa se distinguir das outras à primeira vista — quem chega
+   aqui já marcou tudo e está procurando exatamente por ele. */
+.concluir {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--etapa-ok);
+  color: #fff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.8);
+  transition: filter var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.concluir:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.concluir:active {
+  transform: translateY(0);
+}
+
+/* o glifo do botão já é o círculo verde do "etapa concluída"; sobre o
+   fundo verde ele precisa virar branco para não sumir */
+.concluir svg circle {
+  fill: rgba(255, 255, 255, 0.28);
+}
+
 .barrinha {
   display: block;
   height: 6px;
@@ -361,7 +402,7 @@
   box-shadow: 0 0 0 2px var(--etapa-ok);
 }
 
-/* etapa aberta, mas de outro cargo: da para ler, nao para marcar */
+/* etapa aberta, mas de outro setor: da para ler, nao para marcar */
 .setorcard.is-deoutro {
   opacity: 0.62;
 }
@@ -433,8 +474,31 @@
   background: rgba(255, 255, 255, 0.16);
 }
 
+/* Check que não é seu: BLOQUEADO, e que se veja que está.
+
+   O botão já vinha com `disabled`, mas visualmente ele continuava um
+   check comum — e a pessoa clicava, não acontecia nada, e ela clicava
+   de novo. Agora o cursor avisa antes do clique, o hover não responde e
+   a caixinha fica riscada em diagonal: a leitura é "aqui não é comigo",
+   e não "não funcionou". */
 .tarefa:disabled {
   cursor: not-allowed;
+}
+
+.tarefa.is-deoutro .tarefa__marca {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.45);
+  background-image: linear-gradient(
+    135deg,
+    transparent 45%,
+    rgba(255, 255, 255, 0.5) 45%,
+    rgba(255, 255, 255, 0.5) 55%,
+    transparent 55%
+  );
+}
+
+.tarefa.is-deoutro:hover {
+  background: transparent;
 }
 
 .tarefa__marca {
@@ -839,16 +903,10 @@
   text-align: center;
 }
 
-/* "emergência é sempre alta", ao lado da prioridade travada */
-.info__fixa {
-  margin-left: 7px;
-  font-size: 0.64rem;
-  font-style: normal;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  opacity: 0.75;
-}
+/* O "emergência é sempre alta" que morava colado na pastilha da
+   prioridade saiu da tela: ele esticava a pastilha num parágrafo e, com
+   isso, escondia a própria cor que ela existe para mostrar. A regra
+   continua escrita onde ela decide algo — no cadastro da obra. */
 
 /* ============================================================
    Botao flutuante (canto inferior direito)
@@ -1070,6 +1128,12 @@
   min-width: 0;
 }
 
+/* a observação da conclusão é texto corrido: ganha a faixa inteira em
+   vez de espremer as outras quatro colunas */
+.carimbo__item--largo {
+  flex-basis: 100%;
+}
+
 .carimbo__nome {
   font-size: 0.64rem;
   font-weight: 700;
@@ -1121,4 +1185,11 @@
   .capa__acoes {
     justify-content: flex-start;
   }
+}
+
+/* a descrição da obra virou opcional; sem ela a capa diz isso em vez de
+   abrir um vazio entre o selo do tipo e os botões */
+.capa__semdesc {
+  font-style: italic;
+  opacity: 0.62;
 }

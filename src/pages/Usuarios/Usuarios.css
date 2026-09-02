@@ -243,3 +243,16 @@
   color: var(--text-faint);
   white-space: nowrap;
 }
+
+/* O CARGO da pessoa, logo abaixo da etiqueta do SETOR.
+
+   Os dois não podem se parecer: a etiqueta colorida é o setor (o que
+   define permissão) e esta linha é o título dentro dele. Por isso ela
+   vem sem fundo, menor e em tom apagado — informa, não classifica. */
+.pessoa__titulo {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}

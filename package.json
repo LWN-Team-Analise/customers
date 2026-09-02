@@ -10,7 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "db:senha": "node server/scripts/gerar-hash.js",
-    "db:validar": "node server/scripts/validar-sql.js"
+    "db:validar": "node server/scripts/validar-sql.js",
+    "db:atualizar": "node server/scripts/atualizar-banco.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

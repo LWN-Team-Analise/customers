@@ -77,6 +77,15 @@ export async function criarObra(campos) {
 export const editarObra = (id, campos) => patch(`/dados/obras/${id}`, campos)
 export const apagarObra = (id) => del(`/dados/obras/${id}`)
 
+/**
+ * Encerra a obra.
+ *
+ * So passa com TODOS os checks do roteiro dela marcados — a API
+ * confere de novo antes de carimbar. A observacao e opcional.
+ */
+export const concluirObra = (id, observacao) =>
+  post(`/dados/obras/${id}/concluir`, { observacao })
+
 /* ---------------- Checks ---------------- */
 
 export const marcarCheck = (obraId, checkId) => put(`/dados/obras/${obraId}/checks/${checkId}`)
@@ -154,5 +163,22 @@ export async function enviarMensagem(obraId, campos) {
   return mensagem
 }
 
-export const apagarMensagem = (obraId, mensagemId) =>
-  del(`/dados/obras/${obraId}/chat/${mensagemId}`)
+/**
+ * Apaga uma mensagem do chat.
+ *
+ * `escopo` diz para quem: 'todos' tira da conversa de todo mundo e
+ * deixa a marca "mensagem apagada" no lugar; 'mim' (o padrão) some só
+ * da tela de quem pediu. O padrão é o menos destrutivo de propósito.
+ */
+export const apagarMensagem = (obraId, mensagemId, escopo = 'mim') =>
+  del(`/dados/obras/${obraId}/chat/${mensagemId}?escopo=${escopo}`)
+
+/* ---------------- Termos da empresa ----------------
+   As palavras que a empresa troca pela tela — hoje, como se
+   chama "Etapa". Vem junto na carga do quadro; isto aqui só
+   grava a mudança. */
+
+export async function salvarTermos(campos) {
+  const { termos } = await patch('/dados/termos', campos)
+  return termos
+}

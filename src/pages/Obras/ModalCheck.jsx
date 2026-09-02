@@ -11,7 +11,7 @@ import './ModalRoteiro.css'
  *
  * O "dono" e a parte importante. Normalmente o check e de quem e o card.
  * Aqui da para dizer que UM check especifico responde a outro(s)
- * cargo(s) — sem criar card novo e sem mudar o dono dos outros checks.
+ * setor(es) — sem criar card novo e sem mudar o dono dos outros checks.
  * E o caso de "Envio revisao externa": mora no card do GQ, mas quem
  * marca sao GQ e Excelencia.
  *
@@ -104,7 +104,7 @@ export default function ModalCheck({
             valores={donos}
             aoMudar={setDonos}
             vazio={doCard ? `Segue o card (${doCard})` : 'Segue o card'}
-            aria-label="Cargos que podem marcar este check"
+            aria-label="Setores que podem marcar este check"
             opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
           />
           {/* em branco o campo ja diz "Segue o card (...)"; so quando
@@ -112,7 +112,7 @@ export default function ModalCheck({
           {donos.length > 0 && (
             <>
               <p className="formrot__dica">
-                Só estes cargos marcam este check. Os outros checks do card não mudam.
+                Só estes setores marcam este check. Os outros checks do card não mudam.
               </p>
               <button type="button" className="formrot__limpar" onClick={() => setDonos([])}>
                 Voltar a seguir o card

@@ -15,6 +15,7 @@ import './ModalObra.css'
 
 const VAZIO = {
   clienteId: '',
+  proposta: '',
   descricao: '',
   prioridade: 'media',
   dataInicio: '',
@@ -25,6 +26,15 @@ const VAZIO = {
  * Cadastro e edicao de obra. O mesmo formulario serve para padrao e
  * emergencia — o que muda e o tipo (e, por tabela, a cor do card no
  * quadro).
+ *
+ * O que identifica a obra sao DOIS campos, e nessa ordem:
+ *
+ *   N° da proposta — obrigatorio. E por ele que a obra e procurada no
+ *                    resto da empresa, e por isso ele vem na frente do
+ *                    nome do cliente no card e no titulo da obra;
+ *   Descricao      — OPCIONAL. Era obrigatoria, e o resultado eram
+ *                    dezenas de obras descritas como "obra" ou "-":
+ *                    campo obrigatorio sem o que dizer vira ruido.
  *
  * Duas datas:
  *   Data de inicio     — ja vem preenchida com hoje;
@@ -63,6 +73,7 @@ export default function ModalObra({
       obra
         ? {
             clienteId: obra.clienteId ?? '',
+            proposta: obra.proposta ?? '',
             descricao: obra.descricao ?? '',
             prioridade: obra.prioridade ?? 'media',
             dataInicio: obra.dataInicio ?? '',
@@ -88,7 +99,8 @@ export default function ModalObra({
 
     const novosErros = {}
     if (!form.clienteId) novosErros.clienteId = 'Escolha a empresa.'
-    if (!form.descricao.trim()) novosErros.descricao = 'Descreva a obra.'
+    if (!form.proposta.trim()) novosErros.proposta = 'Informe o n° da proposta.'
+    /* a descricao NAO entra aqui: e opcional de propósito */
     if (!form.dataInicio) novosErros.dataInicio = 'Informe a data de início.'
     /* conclusao antes do inicio quase sempre e dedo trocado no teclado */
     if (form.dataConclusao && form.dataConclusao < form.dataInicio) {
@@ -161,6 +173,17 @@ export default function ModalObra({
           />
         )}
 
+        {/* o n° da proposta vem logo depois da empresa: os dois juntos
+            sao o nome da obra em todo o resto do sistema */}
+        <CampoTexto
+          rotulo="N° da proposta"
+          largo
+          placeholder="Ex.: 1042/2026"
+          value={form.proposta}
+          onChange={mudar('proposta')}
+          erro={erros.proposta}
+        />
+
         <CampoArea
           rotulo="Descrição"
           largo
@@ -169,6 +192,7 @@ export default function ModalObra({
           value={form.descricao}
           onChange={mudar('descricao')}
           erro={erros.descricao}
+          dica="Opcional — a obra já é identificada pela proposta e pelo cliente."
         />
 
         {/* emergencia nao escolhe: a prioridade e alta e nao muda */}
@@ -236,6 +260,9 @@ export default function ModalObra({
         mensagem="Ela entra no quadro e passa a cobrar os setores da primeira etapa."
         detalhes={
           <dl>
+            <dt>N° da proposta</dt>
+            <dd>{form.proposta.trim() || '—'}</dd>
+
             <dt>Empresa</dt>
             <dd>{clientes.find((c) => String(c.id) === String(form.clienteId))?.nome ?? '—'}</dd>
 
@@ -246,7 +273,7 @@ export default function ModalObra({
             <dd>{rotuloDaPrioridade(prioridade)}</dd>
 
             <dt>Descrição</dt>
-            <dd>{form.descricao.trim() || '—'}</dd>
+            <dd>{form.descricao.trim() || <em>sem descrição</em>}</dd>
           </dl>
         }
         aviso={

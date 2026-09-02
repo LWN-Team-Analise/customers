@@ -404,3 +404,66 @@
     flex-basis: 60%;
   }
 }
+
+/* ============================================================
+   Excluir uma obra concluída
+
+   O lixo fica FORA do botão que abre a obra, não dentro: um
+   botão dentro de outro é onde o clique erra de alvo, e aqui
+   errar significa apagar o registro de uma obra entregue.
+
+   Ele nasce quase invisível e só ganha cor no hover da linha —
+   a ação normal desta tela é abrir a obra, não apagá-la.
+   ============================================================ */
+
+.fechada__linha {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.fechada__linha .fechada {
+  flex: 1;
+  min-width: 0;
+}
+
+.fechada__apagar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.fechada__linha:hover .fechada__apagar {
+  opacity: 1;
+}
+
+.fechada__apagar:hover {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* "por Fulano" embaixo da data: quem confirmou a conclusão */
+.fechada__data em {
+  display: block;
+  font-size: 0.68rem;
+  font-style: normal;
+  opacity: 0.75;
+}
+
+/* a descrição virou opcional; sem ela, a linha diz isso em vez de
+   deixar um buraco onde o texto costumava estar */
+.fechada__semdesc {
+  font-style: italic;
+  opacity: 0.6;
+}

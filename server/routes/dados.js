@@ -8,6 +8,41 @@ const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 const texto = (valor) => String(valor ?? '').trim()
 
 /* ============================================================
+   OBRA FECHADA E REGISTRO, NAO RASCUNHO
+
+   Depois que alguem clica em "Concluir obra", nada mais entra
+   nela: nem mensagem no chat, nem observacao, nem etiqueta,
+   nem anexo, nem check. A tela ja esconde os botoes; isto aqui
+   e o que impede chamar a API na mao — e o que garante que a
+   ficha de rastreabilidade continue valendo como registro.
+
+   Usa-se como middleware, antes do handler:
+
+       router.post('/obras/:id/x', exigeSessao, obraAberta, ...)
+
+   O id da obra sai de req.params.id, que e como todas as rotas
+   de dentro da obra ja se chamam.
+   ============================================================ */
+
+async function obraAberta(req, res, next) {
+  try {
+    const { rows } = await query('SELECT concluida_em FROM obra WHERE id = $1', [req.params.id])
+    if (!rows[0]) return res.status(404).json({ erro: 'Obra não encontrada.' })
+    if (rows[0].concluida_em) {
+      return res.status(409).json({
+        erro: 'Esta obra foi concluída. O conteúdo dela fica só para consulta.',
+      })
+    }
+    return next()
+  } catch (erro) {
+    /* banco ainda sem a coluna nova: nao trava o sistema, so deixa de
+       proteger — quem rodar db/atualizacao-2.sql.txt ganha a trava */
+    if (erro.code === '42703') return next()
+    return tratar(erro, res, 'dados/obra-aberta')
+  }
+}
+
+/* ============================================================
    LEITURA — tudo o que o quadro precisa, numa resposta so.
 
    Sao poucas tabelas e o volume e pequeno (uma empresa, um
@@ -40,6 +75,35 @@ const paraCliente = (l) => ({
   criadoEm: l.criado_em,
 })
 
+/* ============================================================
+   TERMOS DA EMPRESA
+
+   As palavras que a empresa pode trocar sem mexer no codigo.
+   Hoje sao duas — o singular e o plural de "Etapa" —, porque o
+   roteiro pode um dia se chamar Fase, Marco ou Frente, e nesse
+   dia TODA tela que escreve "3ª Etapa" tem de acompanhar junto.
+
+   Chave/valor, e nao colunas: termo novo e uma linha, nao uma
+   migracao.
+
+   Os padroes daqui sao a rede de seguranca de quem ainda nao
+   rodou db/atualizacao-3.sql.txt — sem a tabela, o sistema
+   continua dizendo "Etapa" em vez de quebrar.
+   ============================================================ */
+
+const TERMOS_PADRAO = { termo_etapa: 'Etapa', termo_etapas: 'Etapas' }
+
+async function lerTermos() {
+  try {
+    const { rows } = await query('SELECT chave, valor FROM configuracao')
+    const lidos = Object.fromEntries(rows.map((l) => [l.chave, l.valor]))
+    return { ...TERMOS_PADRAO, ...lidos }
+  } catch (erro) {
+    if (erro.code === '42P01') return { ...TERMOS_PADRAO }
+    throw erro
+  }
+}
+
 async function lerTudo(usuarioId) {
   const [
     clientes,
@@ -56,18 +120,23 @@ async function lerTudo(usuarioId) {
     obraEtiquetas,
     anexos,
     lidos,
+    termos,
   ] = await Promise.all([
     query('SELECT * FROM cliente ORDER BY lower(nome)'),
     /* os setores vem junto: sao poucos e a tela de Clientes precisa
        deles para pintar a etiqueta de cada card */
     query('SELECT * FROM setor_cliente ORDER BY lower(nome)').catch(() => ({ rows: [] })),
-    query(`SELECT o.*, c.concluida_em,
+    /* concluida_em sai da COLUNA da obra (o clique em "Concluir obra"),
+       e nao mais da view obra_conclusao — que agora responde outra
+       pergunta: "ja marcaram todos os checks?" */
+    query(`SELECT o.*,
                   autor.name  AS criado_por_nome,
-                  editor.name AS atualizado_por_nome
+                  editor.name AS atualizado_por_nome,
+                  fim.name    AS concluida_por_nome
              FROM obra o
-             LEFT JOIN obra_conclusao c ON c.obra_id = o.id
              LEFT JOIN usuario autor    ON autor.id  = o.criado_por
              LEFT JOIN usuario editor   ON editor.id = o.atualizado_por
+             LEFT JOIN usuario fim      ON fim.id    = o.concluida_por
             ORDER BY o.criado_em`),
     query('SELECT obra_id, check_id, feito_por, feito_em FROM obra_check'),
     query('SELECT obra_id, usuario_id FROM obra_membro'),
@@ -84,6 +153,7 @@ async function lerTudo(usuarioId) {
     query(`SELECT id, obra_id, nome, tipo, tamanho, autor_nome, enviado_por, enviado_em
              FROM obra_anexo ORDER BY enviado_em DESC`),
     query('SELECT aviso_id FROM aviso_leitura WHERE usuario_id = $1', [usuarioId]),
+    lerTermos(),
   ])
 
   const junta = (linhas, chave, monta) => {
@@ -160,6 +230,7 @@ async function lerTudo(usuarioId) {
   }
 
   return {
+    termos,
     clientes: clientes.rows.map(paraCliente),
     setores: setores.rows.map(paraSetor),
     etiquetas: etiquetas.rows.map((l) => ({
@@ -170,7 +241,10 @@ async function lerTudo(usuarioId) {
     obras: obras.rows.map((o) => ({
       id: String(o.id),
       clienteId: String(o.cliente_id),
-      descricao: o.descricao,
+      /* o n. da proposta vem na frente do nome do cliente no card e no
+         titulo da obra: e por ele que ela e procurada na empresa */
+      proposta: o.proposta ?? '',
+      descricao: o.descricao ?? '',
       tipo: o.tipo,
       prioridade: o.prioridade,
       dataInicio: o.data_inicio,
@@ -181,7 +255,14 @@ async function lerTudo(usuarioId) {
       atualizadoEm: o.atualizado_em,
       atualizadoPor: o.atualizado_por === null ? null : String(o.atualizado_por),
       atualizadoPorNome: o.atualizado_por_nome ?? null,
+      /* os tres so aparecem na aba Concluidas; na obra aberta sao null */
       concluidaEm: o.concluida_em ?? null,
+      concluidaPor:
+        o.concluida_por === null || o.concluida_por === undefined
+          ? null
+          : String(o.concluida_por),
+      concluidaPorNome: o.concluida_por_nome ?? null,
+      conclusaoObs: o.conclusao_obs ?? '',
       checks: checksDaObra[o.id] ?? {},
       membros: membrosDaObra[o.id] ?? [],
       observacoes: obsDaObra[o.id] ?? [],
@@ -243,6 +324,47 @@ router.get('/vitrine', async (_req, res) => {
        derrubar a tela de login por causa de enfeite */
     console.error('[dados/vitrine]', erro.message)
     return res.json({ fotos: [] })
+  }
+})
+
+/* ------------------------------------------------------------
+   Trocar um termo
+
+   Mexer no vocabulario do sistema inteiro nao e edicao de
+   cadastro: e configuracao. Por isso pede "editar_etapa" — quem
+   ja manda no roteiro e quem decide como o roteiro se chama.
+   ------------------------------------------------------------ */
+
+const TERMOS_ACEITOS = Object.keys(TERMOS_PADRAO)
+
+router.patch('/termos', exigeSessao, exige('editar_etapa'), async (req, res) => {
+  const mudancas = Object.entries(req.body ?? {})
+    .filter(([chave]) => TERMOS_ACEITOS.includes(chave))
+    .map(([chave, valor]) => [chave, texto(valor)])
+
+  if (mudancas.length === 0) return res.status(400).json({ erro: 'Nada para alterar.' })
+  if (mudancas.some(([, valor]) => !valor)) {
+    return res.status(400).json({ erro: 'O termo não pode ficar em branco.' })
+  }
+  if (mudancas.some(([, valor]) => valor.length > 30)) {
+    return res.status(400).json({ erro: 'Use no máximo 30 caracteres.' })
+  }
+
+  try {
+    for (const [chave, valor] of mudancas) {
+      await query(
+        `INSERT INTO configuracao (chave, valor, atualizado_por)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (chave) DO UPDATE
+            SET valor = excluded.valor,
+                atualizado_em = now(),
+                atualizado_por = excluded.atualizado_por`,
+        [chave, valor, req.dono.sub],
+      )
+    }
+    return res.json({ termos: await lerTermos() })
+  } catch (e) {
+    return tratar(e, res, 'dados/termos')
   }
 })
 
@@ -471,23 +593,28 @@ const PRIORIDADES = ['baixa', 'media', 'alta']
 
 router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
   const clienteId = texto(req.body?.clienteId)
+  const proposta = texto(req.body?.proposta)
+  /* a descricao virou opcional: quem identifica a obra e a dupla
+     proposta + cliente, e obrigar um texto livre so fazia aparecer
+     "obra" e "-" no lugar dela */
   const descricao = texto(req.body?.descricao)
   const tipo = req.body?.tipo === 'emergencia' ? 'emergencia' : 'padrao'
   // emergencia e sempre alta; o gatilho do banco garante, aqui so evita ida a toa
   const prioridade = tipo === 'emergencia' ? 'alta' : (req.body?.prioridade ?? 'media')
 
   if (!clienteId) return res.status(400).json({ erro: 'Escolha a empresa.' })
-  if (!descricao) return res.status(400).json({ erro: 'Descreva a obra.' })
+  if (!proposta) return res.status(400).json({ erro: 'Informe o n° da proposta.' })
   if (!PRIORIDADES.includes(prioridade)) return res.status(400).json({ erro: 'Prioridade inválida.' })
 
   try {
     const { rows } = await query(
-      `INSERT INTO obra (cliente_id, descricao, tipo, prioridade,
+      `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
                          data_inicio, data_conclusao, criado_por, atualizado_por)
-       VALUES ($1, $2, $3, $4, coalesce($5::date, CURRENT_DATE), $6, $7, $7)
+       VALUES ($1, $2, $3, $4, $5, coalesce($6::date, CURRENT_DATE), $7, $8, $8)
        RETURNING id`,
       [
         clienteId,
+        proposta,
         descricao,
         tipo,
         prioridade,
@@ -503,7 +630,7 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
   }
 })
 
-router.patch('/obras/:id', exigeSessao, exige('editar_obras'), async (req, res) => {
+router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async (req, res) => {
   const campos = []
   const valores = []
   const por = (coluna, valor) => {
@@ -512,6 +639,11 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), async (req, res) 
   }
 
   if (req.body?.descricao !== undefined) por('descricao', texto(req.body.descricao))
+  if (req.body?.proposta !== undefined) {
+    const proposta = texto(req.body.proposta)
+    if (!proposta) return res.status(400).json({ erro: 'Informe o n° da proposta.' })
+    por('proposta', proposta)
+  }
   if (req.body?.clienteId !== undefined) por('cliente_id', req.body.clienteId)
   if (req.body?.dataInicio !== undefined) por('data_inicio', req.body.dataInicio || null)
   if (req.body?.dataConclusao !== undefined) por('data_conclusao', req.body.dataConclusao || null)
@@ -546,13 +678,90 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), async (req, res) 
   }
 })
 
-router.delete('/obras/:id', exigeSessao, exige('editar_obras'), async (req, res) => {
+/**
+ * DELETE /api/dados/obras/:id — apaga a obra.
+ *
+ * Duas permissoes diferentes, porque sao dois gestos diferentes:
+ *
+ *   obra ABERTA    -> "editar_obras". Apagar uma obra em andamento e
+ *                     parte de tocar o quadro;
+ *   obra CONCLUIDA -> "excluir_concluidas". Ali nao se apaga trabalho
+ *                     em andamento, apaga-se o REGISTRO do que a
+ *                     empresa entregou — e isso e de quem tem essa
+ *                     permissao marcada no setor, nao de quem edita
+ *                     obra no dia a dia.
+ */
+router.delete('/obras/:id', exigeSessao, async (req, res) => {
   try {
+    const alvo = await query('SELECT concluida_em FROM obra WHERE id = $1', [req.params.id])
+      .catch((e) => (e.code === '42703' ? { rows: [{ concluida_em: null }] } : Promise.reject(e)))
+    if (!alvo.rows[0]) return res.status(404).json({ erro: 'Obra não encontrada.' })
+
+    const fechada = Boolean(alvo.rows[0].concluida_em)
+    const meu = await meuCargo(req.dono.sub)
+    const chave = fechada ? 'excluir_concluidas' : 'editar_obras'
+
+    if (!cargoPode(meu, chave)) {
+      return res.status(403).json({
+        erro: fechada
+          ? 'Seu setor não tem permissão para excluir obra concluída.'
+          : 'Seu setor não tem permissão para excluir obras.',
+      })
+    }
+
     const { rowCount } = await query('DELETE FROM obra WHERE id = $1', [req.params.id])
     if (rowCount === 0) return res.status(404).json({ erro: 'Obra não encontrada.' })
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/obra-apagar')
+  }
+})
+
+/* ------------------------------------------------------------
+   Concluir a obra
+
+   A obra NAO fecha sozinha ao marcar o ultimo check. Marcar tudo
+   so faz o botao "Concluir obra" aparecer ao lado do Progresso;
+   fechar mesmo e o clique — com dupla confirmacao na tela e, se
+   houver, uma observacao de encerramento.
+
+   Antes o fechamento era automatico (view obra_conclusao), e um
+   check marcado por engano mandava a obra inteira para o arquivo
+   sem ninguem decidir nada.
+
+   A trava daqui e a mesma da tela: so fecha quem PODE editar a
+   obra, e so quando nao sobrou nenhum check do roteiro DELA.
+   ------------------------------------------------------------ */
+
+router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (req, res) => {
+  const observacao = texto(req.body?.observacao)
+
+  try {
+    const obra = await query('SELECT concluida_em FROM obra WHERE id = $1', [req.params.id])
+    if (!obra.rows[0]) return res.status(404).json({ erro: 'Obra não encontrada.' })
+    if (obra.rows[0].concluida_em) {
+      return res.status(409).json({ erro: 'Esta obra já foi concluída.' })
+    }
+
+    /* "ja marcou tudo?" — a mesma conta da view, que ja respeita a
+       vigencia: obra de marco nao e cobrada pelo check criado em maio */
+    const pronta = await query('SELECT 1 FROM obra_conclusao WHERE obra_id = $1', [req.params.id])
+    if (pronta.rows.length === 0) {
+      return res.status(409).json({
+        erro: 'Ainda há check em aberto nesta obra. Conclua todos antes de encerrá-la.',
+      })
+    }
+
+    await query(
+      `UPDATE obra
+          SET concluida_em = now(), concluida_por = $1,
+              conclusao_obs = $2, atualizado_por = $1
+        WHERE id = $3`,
+      [req.dono.sub, observacao || null, req.params.id],
+    )
+    return res.json({ ok: true })
+  } catch (e) {
+    return tratar(e, res, 'dados/obra-concluir')
   }
 })
 
@@ -595,7 +804,7 @@ async function podeMarcar(usuarioId, checkId, obraId) {
   return rows.some((l) => l.chave === meu.chave)
 }
 
-router.put('/obras/:id/checks/:checkId', exigeSessao, async (req, res) => {
+router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, res) => {
   try {
     if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
@@ -613,7 +822,7 @@ router.put('/obras/:id/checks/:checkId', exigeSessao, async (req, res) => {
   }
 })
 
-router.delete('/obras/:id/checks/:checkId', exigeSessao, async (req, res) => {
+router.delete('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, res) => {
   try {
     if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
@@ -636,7 +845,7 @@ router.delete('/obras/:id/checks/:checkId', exigeSessao, async (req, res) => {
    Cargo com acesso total continua podendo limpar qualquer uma.
    ------------------------------------------------------------ */
 
-router.post('/obras/:id/observacoes', exigeSessao, async (req, res) => {
+router.post('/obras/:id/observacoes', exigeSessao, obraAberta, async (req, res) => {
   const conteudo = texto(req.body?.texto)
   if (!conteudo) return res.status(400).json({ erro: 'Escreva a observação.' })
 
@@ -653,7 +862,7 @@ router.post('/obras/:id/observacoes', exigeSessao, async (req, res) => {
   }
 })
 
-router.patch('/obras/:id/observacoes/:obsId', exigeSessao, async (req, res) => {
+router.patch('/obras/:id/observacoes/:obsId', exigeSessao, obraAberta, async (req, res) => {
   const conteudo = texto(req.body?.texto)
   if (!conteudo) return res.status(400).json({ erro: 'Escreva a observação.' })
 
@@ -678,7 +887,7 @@ router.patch('/obras/:id/observacoes/:obsId', exigeSessao, async (req, res) => {
   }
 })
 
-router.delete('/obras/:id/observacoes/:obsId', exigeSessao, async (req, res) => {
+router.delete('/obras/:id/observacoes/:obsId', exigeSessao, obraAberta, async (req, res) => {
   try {
     const dona = await query('SELECT usuario_id FROM obra_observacao WHERE id = $1', [
       req.params.obsId,
@@ -766,7 +975,7 @@ router.delete('/observacoes/:id', exigeSessao, async (req, res) => {
    Avisos aos setores pendentes
    ------------------------------------------------------------ */
 
-router.post('/obras/:id/avisos', exigeSessao, exige('enviar_avisos'), async (req, res) => {
+router.post('/obras/:id/avisos', exigeSessao, exige('enviar_avisos'), obraAberta, async (req, res) => {
   const setores = (req.body?.setores ?? []).map(texto).filter(Boolean)
   if (setores.length === 0) return res.status(400).json({ erro: 'Nenhum setor para avisar.' })
 
@@ -925,7 +1134,7 @@ router.delete('/obras/:id/avaliacao', exigeSessao, exige('editar_avaliacoes'), a
    que ja existe apenas reaproveita a que existe.
    ------------------------------------------------------------ */
 
-router.post('/obras/:id/etiquetas', exigeSessao, exige('editar_obras'), async (req, res) => {
+router.post('/obras/:id/etiquetas', exigeSessao, exige('editar_obras'), obraAberta, async (req, res) => {
   const nome = texto(req.body?.nome)
   const cor = texto(req.body?.cor) || '#6b7280'
   if (!nome) return res.status(400).json({ erro: 'Escreva o nome da etiqueta.' })
@@ -1001,7 +1210,7 @@ router.patch('/etiquetas/:id', exigeSessao, exige('editar_obras'), async (req, r
 })
 
 /** Tira a etiqueta DESTA obra; a etiqueta continua existindo para as outras. */
-router.delete('/obras/:id/etiquetas/:etiquetaId', exigeSessao, exige('editar_obras'), async (req, res) => {
+router.delete('/obras/:id/etiquetas/:etiquetaId', exigeSessao, exige('editar_obras'), obraAberta, async (req, res) => {
   try {
     await query('DELETE FROM obra_etiqueta WHERE obra_id = $1 AND etiqueta_id = $2', [
       req.params.id,
@@ -1030,7 +1239,7 @@ router.delete('/obras/:id/etiquetas/:etiquetaId', exigeSessao, exige('editar_obr
    tamanho; o arquivo em si so quando alguem clica para baixar.
    ------------------------------------------------------------ */
 
-router.post('/obras/:id/anexos', exigeSessao, exige('editar_obras'), async (req, res) => {
+router.post('/obras/:id/anexos', exigeSessao, exige('editar_obras'), obraAberta, async (req, res) => {
   const nome = texto(req.body?.nome)
   const conteudo = String(req.body?.conteudo ?? '')
 
@@ -1079,8 +1288,23 @@ router.get('/anexos/:id', exigeSessao, async (req, res) => {
   }
 })
 
+/* o anexo e apagado pelo id DELE, nao pelo da obra: a checagem de
+   obra fechada precisa ser feita na mao aqui dentro */
 router.delete('/anexos/:id', exigeSessao, exige('editar_obras'), async (req, res) => {
   try {
+    const dono = await query(
+      `SELECT o.concluida_em
+         FROM obra_anexo a JOIN obra o ON o.id = a.obra_id
+        WHERE a.id = $1`,
+      [req.params.id],
+    ).catch((e) => (e.code === '42703' ? { rows: [] } : Promise.reject(e)))
+
+    if (dono.rows[0]?.concluida_em) {
+      return res.status(409).json({
+        erro: 'Esta obra foi concluída. Os anexos dela ficam só para consulta.',
+      })
+    }
+
     await query('DELETE FROM obra_anexo WHERE id = $1', [req.params.id])
     return res.status(204).end()
   } catch (e) {
@@ -1096,24 +1320,56 @@ router.delete('/anexos/:id', exigeSessao, exige('editar_obras'), async (req, res
    as mencoes viram uma lista de ids, para a tela destacar.
    ------------------------------------------------------------ */
 
-const paraMensagem = (l) => ({
-  id: String(l.id),
-  autorId: l.usuario_id === null ? null : String(l.usuario_id),
-  autorNome: l.autor_nome,
-  texto: l.texto ?? '',
-  respondeA: l.responde_a === null ? null : String(l.responde_a),
-  arquivo: l.arquivo_nome
-    ? { nome: l.arquivo_nome, tipo: l.arquivo_tipo ?? '', conteudo: l.arquivo_conteudo }
-    : null,
-  enviadaEm: l.enviada_em,
-  editadaEm: l.editada_em ?? null,
-  mencoes: [],
-})
+/**
+ * A mensagem como a tela a recebe.
+ *
+ * Mensagem APAGADA PARA TODOS chega vazia de proposito: sem texto, sem
+ * arquivo, so com o autor, a hora e a marca `apagada`. E o que permite
+ * a conversa continuar fazendo sentido — quem respondeu aquela mensagem
+ * ainda ve que houve algo ali — sem que o conteudo sobreviva ao pedido
+ * de apagar.
+ */
+const paraMensagem = (l) => {
+  const apagada = Boolean(l.apagada_em)
+  return {
+    id: String(l.id),
+    autorId: l.usuario_id === null ? null : String(l.usuario_id),
+    autorNome: l.autor_nome,
+    texto: apagada ? '' : (l.texto ?? ''),
+    respondeA: l.responde_a === null ? null : String(l.responde_a),
+    arquivo:
+      !apagada && l.arquivo_nome
+        ? { nome: l.arquivo_nome, tipo: l.arquivo_tipo ?? '', conteudo: l.arquivo_conteudo }
+        : null,
+    enviadaEm: l.enviada_em,
+    editadaEm: apagada ? null : (l.editada_em ?? null),
+    apagada,
+    apagadaEm: l.apagada_em ?? null,
+    mencoes: [],
+  }
+}
 
 router.get('/obras/:id/chat', exigeSessao, async (req, res) => {
   try {
     const [mensagens, mencoes] = await Promise.all([
-      query('SELECT * FROM obra_chat WHERE obra_id = $1 ORDER BY enviada_em', [req.params.id]),
+      /* o "apagar para mim" e por pessoa: a mensagem escondida por
+         alguem continua inteira na conversa de todos os outros, e por
+         isso ela sai aqui, na leitura, e nao do banco */
+      query(
+        `SELECT c.* FROM obra_chat c
+          WHERE c.obra_id = $1
+            AND NOT EXISTS (
+                SELECT 1 FROM obra_chat_oculta o
+                 WHERE o.mensagem_id = c.id AND o.usuario_id = $2
+            )
+          ORDER BY c.enviada_em`,
+        [req.params.id, req.dono.sub],
+      ).catch((e) =>
+        /* banco sem a tabela nova ainda: le a conversa inteira */
+        e.code === '42P01'
+          ? query('SELECT * FROM obra_chat WHERE obra_id = $1 ORDER BY enviada_em', [req.params.id])
+          : Promise.reject(e),
+      ),
       query(
         `SELECT m.mensagem_id, m.usuario_id
            FROM obra_chat_mencao m JOIN obra_chat c ON c.id = m.mensagem_id
@@ -1140,7 +1396,7 @@ router.get('/obras/:id/chat', exigeSessao, async (req, res) => {
   }
 })
 
-router.post('/obras/:id/chat', exigeSessao, async (req, res) => {
+router.post('/obras/:id/chat', exigeSessao, obraAberta, async (req, res) => {
   const conteudo = texto(req.body?.texto)
   const arquivo = req.body?.arquivo ?? null
 
@@ -1187,22 +1443,60 @@ router.post('/obras/:id/chat', exigeSessao, async (req, res) => {
   }
 })
 
-router.delete('/obras/:id/chat/:mensagemId', exigeSessao, async (req, res) => {
+/**
+ * DELETE /obras/:id/chat/:mensagemId?escopo=todos|mim
+ *
+ * Dois gestos diferentes, e a diferenca importa:
+ *
+ *   escopo=todos — a mensagem sai da conversa de TODO MUNDO. A linha
+ *     fica, mas vazia: texto e arquivo viram NULL e no lugar dela a tela
+ *     mostra "mensagem apagada". O rastro e o que evita o buraco na
+ *     conversa — quem respondeu aquela mensagem continua entendendo a
+ *     propria resposta. So o autor pode (e o cargo com acesso total,
+ *     para o caso de alguem sair da empresa deixando algo indevido).
+ *
+ *   escopo=mim (padrao) — some so da MINHA tela. Vale para qualquer
+ *     mensagem, minha ou de outra pessoa, e nao muda nada para ninguem.
+ *
+ * O padrao e o menos destrutivo dos dois: uma chamada sem `escopo` nao
+ * apaga a mensagem de outras pessoas.
+ */
+router.delete('/obras/:id/chat/:mensagemId', exigeSessao, obraAberta, async (req, res) => {
+  const paraTodos = String(req.query?.escopo ?? 'mim') === 'todos'
+
   try {
-    const dona = await query('SELECT usuario_id FROM obra_chat WHERE id = $1', [
-      req.params.mensagemId,
-    ])
-    if (!dona.rows[0]) return res.status(204).end()
-
-    const meu = await meuCargo(req.dono.sub)
-    if (!meu.acessoTotal && String(dona.rows[0].usuario_id) !== String(req.dono.sub)) {
-      return res.status(403).json({ erro: 'Você só apaga as suas próprias mensagens.' })
-    }
-
-    await query('DELETE FROM obra_chat WHERE id = $1 AND obra_id = $2', [
+    const dona = await query('SELECT usuario_id FROM obra_chat WHERE id = $1 AND obra_id = $2', [
       req.params.mensagemId,
       req.params.id,
     ])
+    if (!dona.rows[0]) return res.status(204).end()
+
+    if (!paraTodos) {
+      await query(
+        `INSERT INTO obra_chat_oculta (mensagem_id, usuario_id)
+         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [req.params.mensagemId, req.dono.sub],
+      )
+      return res.status(204).end()
+    }
+
+    const meu = await meuCargo(req.dono.sub)
+    if (!meu.acessoTotal && String(dona.rows[0].usuario_id) !== String(req.dono.sub)) {
+      return res.status(403).json({
+        erro: 'Você só apaga para todos as suas próprias mensagens.',
+      })
+    }
+
+    /* o conteudo some de verdade; o que sobra e a marca de que houve
+       uma mensagem ali. As menções vao junto: elas eram do texto. */
+    await query(
+      `UPDATE obra_chat
+          SET texto = NULL, arquivo_nome = NULL, arquivo_tipo = NULL,
+              arquivo_conteudo = NULL, apagada_em = now(), apagada_por = $1
+        WHERE id = $2 AND obra_id = $3`,
+      [req.dono.sub, req.params.mensagemId, req.params.id],
+    )
+    await query('DELETE FROM obra_chat_mencao WHERE mensagem_id = $1', [req.params.mensagemId])
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/chat-apagar')

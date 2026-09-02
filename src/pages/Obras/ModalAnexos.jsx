@@ -16,6 +16,11 @@ import './ModalAnexos.css'
  * arquivo em si so e buscado no clique de abrir. Sem isso, cada
  * carregamento do sistema arrastaria todos os documentos de todas as
  * obras junto.
+ *
+ * `somenteLeitura` e a obra CONCLUIDA. Os documentos continuam ali e
+ * continuam BAIXAVEIS — e para isso que se guarda documento de obra —,
+ * so somem o "Anexar" e o excluir. Baixar nao muda nada; os outros dois
+ * mudariam o registro de uma obra ja fechada.
  */
 
 const BYTES_MAXIMOS = 4 * 1024 * 1024
@@ -60,7 +65,7 @@ function lerArquivo(arquivo) {
   })
 }
 
-export default function ModalAnexos({ aberto, obra, aoFechar }) {
+export default function ModalAnexos({ aberto, obra, somenteLeitura = false, aoFechar }) {
   const { user } = useAuth()
   const { adicionarAnexo, baixarAnexo, removerAnexo, pode } = useDados()
 
@@ -69,7 +74,7 @@ export default function ModalAnexos({ aberto, obra, aoFechar }) {
   const [enviando, setEnviando] = useState(false)
   const [apagando, setApagando] = useState(null)
 
-  const podeMexer = pode('editar_obras')
+  const podeMexer = !somenteLeitura && pode('editar_obras')
   const anexos = obra?.anexos ?? []
 
   const escolher = async (evento) => {
@@ -132,7 +137,11 @@ export default function ModalAnexos({ aberto, obra, aoFechar }) {
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Anexos da obra"
-      subtitulo="Os documentos ficam guardados nesta obra. Até 4 MB por arquivo."
+      subtitulo={
+        somenteLeitura
+          ? 'Obra concluída: dá para baixar os documentos, não para mexer neles.'
+          : 'Os documentos ficam guardados nesta obra. Até 4 MB por arquivo.'
+      }
       largura={520}
     >
       <div className="anexos">
@@ -166,7 +175,9 @@ export default function ModalAnexos({ aberto, obra, aoFechar }) {
 
         {anexos.length === 0 ? (
           <p className="anexos__vazio">
-            Nenhum documento anexado ainda.
+            {somenteLeitura
+              ? 'Esta obra foi concluída sem nenhum documento anexado.'
+              : 'Nenhum documento anexado ainda.'}
             {podeMexer ? ' Use o botão acima para enviar o primeiro.' : ''}
           </p>
         ) : (
@@ -194,8 +205,10 @@ export default function ModalAnexos({ aberto, obra, aoFechar }) {
                   <Icone.baixar />
                 </button>
 
-                {/* apaga quem pode editar a obra, ou quem enviou o arquivo */}
-                {(podeMexer || String(a.enviadoPor) === String(user?.id)) &&
+                {/* apaga quem pode editar a obra, ou quem enviou o arquivo —
+                    e ninguem, se a obra ja foi concluida */}
+                {!somenteLeitura &&
+                  (podeMexer || String(a.enviadoPor) === String(user?.id)) &&
                   (apagando === a.id ? (
                     <button
                       type="button"

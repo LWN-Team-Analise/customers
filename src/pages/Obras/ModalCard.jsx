@@ -18,7 +18,8 @@ import './ModalRoteiro.css'
  * que ja passaram nao mudam — nem o que elas ja tinham marcado.
  */
 export default function ModalCard({ aberto, etapa, card = null, obraId = null, aoFechar }) {
-  const { cargos, corDoCargo, adicionarCard, atualizarCard, removerCard } = useDados()
+  const { cargos, corDoCargo, adicionarCard, atualizarCard, removerCard, rotuloEtapa } =
+    useDados()
 
   const [escolhidos, setEscolhidos] = useState([])
   const [titulo, setTitulo] = useState('')
@@ -39,7 +40,7 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
   const salvar = async (evento) => {
     evento.preventDefault()
     if (escolhidos.length === 0) {
-      setErro('Escolha ao menos um cargo.')
+      setErro('Escolha ao menos um setor.')
       return
     }
 
@@ -76,19 +77,19 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
       aberto={aberto}
       aoFechar={aoFechar}
       titulo={editando ? 'Editar card' : 'Novo card'}
-      subtitulo={`${etapa?.numero ?? ''}ª etapa — ${
+      subtitulo={`${rotuloEtapa(etapa?.numero ?? 1)} — ${
         etapa?.nome ?? ''
       }. Vale desta obra em diante.`}
       largura={520}
     >
       <form className="formrot" onSubmit={salvar} noValidate>
-        <label className="formrot__rotulo">Cargos responsáveis</label>
+        <label className="formrot__rotulo">Setores responsáveis</label>
         <SeletorMulti
           largo
           valores={escolhidos}
           aoMudar={setEscolhidos}
-          vazio="Escolha um ou mais cargos..."
-          aria-label="Cargos responsáveis pelo card"
+          vazio="Escolha um ou mais setores..."
+          aria-label="Setores responsáveis pelo card"
           opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
         />
         <p className="formrot__dica">
@@ -99,7 +100,7 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
         <CampoTexto
           rotulo="Título (opcional)"
           largo
-          placeholder="Em branco, usa o nome do(s) cargo(s)"
+          placeholder="Em branco, usa o nome do(s) setor(es)"
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
         />

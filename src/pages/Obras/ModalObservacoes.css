@@ -111,3 +111,37 @@
   background: var(--danger-bg);
   color: var(--danger);
 }
+
+/* ---- Editar a própria observação ----
+
+   O lápis fica ao lado do lixo, e só na própria observação. Antes havia
+   só o lixo, e corrigir uma palavra obrigava a apagar o recado e
+   escrever de novo — o que mandava a observação para o topo da lista e
+   apagava o contexto de quem já tinha lido. */
+
+.quadrolista__ferramentas {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+/* a marca de que o texto mudou depois de publicado */
+.quadrolista__editada {
+  font-size: 0.68rem;
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.quadrolista__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.quadrolista__formacoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}

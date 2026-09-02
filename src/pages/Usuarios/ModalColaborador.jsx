@@ -19,16 +19,33 @@ const VAZIO = {
   cpf: '',
   email: '',
   cargo: '',
+  cargoTitulo: '',
   telefone: '',
   foto: null,
 }
 
 /**
- * Cadastro do colaborador: foto a esquerda do nome e, embaixo, os dados
- * que o banco pede (nome, nascimento, CPF, e-mail, cargo, telefone).
+ * Cadastro do colaborador.
+ *
+ * SETOR e CARGO sao coisas diferentes aqui, e a confusao entre os dois
+ * custa caro:
+ *
+ *   SETOR — Comercial, Excelência, GQ. E o que decide TUDO o que a
+ *           pessoa pode fazer no sistema, quais checks ela marca e que
+ *           avisos chegam para ela. Obrigatorio, e escolhido de uma
+ *           lista (`form.cargo`, que e a chave do setor no banco).
+ *   CARGO — "Analista de Qualidade", "Coordenador de Obras". E o titulo
+ *           dela dentro do setor. Texto livre, opcional, e nao muda
+ *           nenhuma permissao — dois analistas e um coordenador do mesmo
+ *           setor podem exatamente as mesmas coisas.
+ *
+ * OBRIGATORIOS: nome, data de nascimento, CPF e setor.
+ * OPCIONAIS: e-mail, telefone, cargo e foto. E-mail e telefone eram
+ * obrigatorios e travavam o cadastro de quem trabalha em campo e nao tem
+ * e-mail corporativo — quem nao tem e-mail entra pelo CPF.
  *
  * O CPF e travado para todo mundo, com UMA excecao: a diretoria. E trava
- * de cargo, nao permissao configuravel — a API recusa do mesmo jeito, e
+ * de setor, nao permissao configuravel — a API recusa do mesmo jeito, e
  * por isso nao adianta so liberar o campo aqui.
  *
  * `usuarioLogado` e quem esta mexendo — e dele que sai a permissao.
@@ -101,11 +118,17 @@ export default function ModalColaborador({
     const novos = {}
     if (!form.nome.trim()) novos.nome = 'Informe o nome completo.'
     if (!form.nascimento) novos.nascimento = 'Informe a data de nascimento.'
-    if (!form.cargo) novos.cargo = 'Escolha o cargo.'
-    if (!validateEmail(form.email)) novos.email = 'E-mail inválido.'
+    if (!form.cargo) novos.cargo = 'Escolha o setor.'
     // no cadastro o CPF e obrigatorio; na edicao, so quem pode mexer valida
     if ((!editando || cpfLiberado) && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
-    if (soDigitos(form.telefone).length < 10) novos.telefone = 'Informe o DDD e o número.'
+
+    /* E-mail e telefone sao OPCIONAIS: so entram na conferência quando a
+       pessoa escreveu alguma coisa. Vazio passa; errado, nao — o que a
+       validacao deve pegar e o dedo trocado, nao a ausencia. */
+    if (form.email.trim() && !validateEmail(form.email)) novos.email = 'E-mail inválido.'
+    if (form.telefone.trim() && soDigitos(form.telefone).length < 10) {
+      novos.telefone = 'Informe o DDD e o número.'
+    }
 
     if (Object.keys(novos).length > 0) {
       setErros(novos)
@@ -118,6 +141,7 @@ export default function ModalColaborador({
       telefone: soDigitos(form.telefone),
       nascimento: form.nascimento,
       cargo: form.cargo,
+      cargoTitulo: form.cargoTitulo.trim(),
       foto: form.foto,
     }
     /* o CPF so viaja quando pode mudar: na edicao por quem nao e da
@@ -220,6 +244,7 @@ export default function ModalColaborador({
             value={form.email}
             onChange={mudar('email')}
             erro={erros.email}
+            dica="Opcional — sem e-mail, o acesso é pelo CPF."
           />
 
           <CampoTexto
@@ -229,16 +254,30 @@ export default function ModalColaborador({
             value={form.telefone}
             onChange={mudar('telefone')}
             erro={erros.telefone}
+            dica="Opcional."
           />
 
+          {/* SETOR: obrigatório, e é ele que decide o que a pessoa pode */}
           <CampoSelecao
-            rotulo="Cargo"
+            rotulo="Setor"
             largo
             value={form.cargo}
             onChange={mudar('cargo')}
             erro={erros.cargo}
-            vazio="Escolha o cargo..."
+            vazio="Escolha o setor..."
             opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
+            dica="É o setor que define as permissões desta pessoa."
+          />
+
+          {/* CARGO: o título dentro do setor. Não muda permissão nenhuma. */}
+          <CampoTexto
+            rotulo="Cargo"
+            largo
+            placeholder="Ex.: Analista de Qualidade"
+            value={form.cargoTitulo}
+            onChange={mudar('cargoTitulo')}
+            erro={erros.cargoTitulo}
+            dica="Opcional — o cargo específico dentro do setor."
           />
         </div>
 
@@ -258,10 +297,10 @@ export default function ModalColaborador({
         </footer>
       </form>
 
-      {/* A conferência é sobre o CARGO.
+      {/* A conferência é sobre o SETOR.
 
-          Cadastrar uma pessoa e escolher o cargo dela sao a mesma acao aqui,
-          e e o cargo que decide o que ela pode fazer desde o primeiro acesso.
+          Cadastrar uma pessoa e escolher o setor dela sao a mesma acao aqui,
+          e e o setor que decide o que ela pode fazer desde o primeiro acesso.
           Mostrar a lista antes de gravar e o que evita descobrir semana que
           vem que o novo tecnico tambem apagava obra. */}
       <Confirma
@@ -285,7 +324,7 @@ export default function ModalColaborador({
 
 /**
  * O resumo que aparece na confirmacao: quem e a pessoa e, principalmente, o
- * que o cargo escolhido libera para ela.
+ * que o SETOR escolhido libera para ela.
  */
 function ResumoDoCargo({ campos, cargos }) {
   if (!campos) return null
@@ -301,10 +340,13 @@ function ResumoDoCargo({ campos, cargos }) {
       <dd>{campos.nome}</dd>
 
       <dt>E-mail</dt>
-      <dd>{campos.email}</dd>
+      <dd>{campos.email || <em>sem e-mail — entra pelo CPF</em>}</dd>
+
+      <dt>Setor</dt>
+      <dd>{cargo?.nome ?? campos.cargo}</dd>
 
       <dt>Cargo</dt>
-      <dd>{cargo?.nome ?? campos.cargo}</dd>
+      <dd>{campos.cargoTitulo || <em>não informado</em>}</dd>
 
       <dt>Pode</dt>
       <dd>

@@ -2,19 +2,22 @@ import { useEffect, useMemo, useState } from 'react'
 import Avatar from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
 import { dataHora } from '@/utils/formato'
+import ModalTermos from './ModalTermos'
 import './Rastreabilidade.css'
 
 /**
- * A ficha completa de uma obra fechada.
+ * A ficha completa da obra: tudo o que aconteceu nela, em ordem.
  *
- * Obra encerrada nao aceita mais nada — nem check, nem mensagem, nem
- * observacao. O que ela guarda e a HISTORIA: quem marcou cada check e a que
- * horas, o que foi conversado no chat, o que foi observado, os avisos que
- * sairam, os anexos e as notas.
+ * Quem marcou cada check e a que horas, o que foi conversado no chat, o que
+ * foi observado, os avisos que sairam, os anexos e as notas.
  *
  * Tudo isso ja estava no banco, so que espalhado por quatro pop-ups
  * diferentes. Aqui vira uma linha do tempo unica, do mais antigo para o mais
  * novo — que e como se lembra de uma obra: pela ordem em que aconteceu.
+ *
+ * Vale para QUALQUER obra, aberta ou fechada. Na fechada ela e o registro do
+ * que foi feito; na aberta, o acompanhamento de quem esta segurando o que —
+ * e a pergunta ("quem marcou isso?") e a mesma nos dois casos.
  *
  * O chat vem por chamada propria (nao entra na carga do quadro, que ficaria
  * pesada) e so quando esta tela abre.
@@ -55,10 +58,16 @@ const Icone = {
   ),
 }
 
-/* os filtros do topo — o "tipo" bate com o campo de cada acontecimento */
-const FILTROS = [
-  { id: 'tudo', rotulo: 'Tudo' },
-  { id: 'check', rotulo: 'Checks' },
+const Engrenagem = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3.1" />
+    <path d="M19.4 15a1.6 1.6 0 0 0 .32 1.77l.06.06a1.9 1.9 0 1 1-2.7 2.7l-.05-.06a1.6 1.6 0 0 0-1.78-.32 1.6 1.6 0 0 0-1 1.47V21a1.9 1.9 0 0 1-3.8 0v-.1a1.6 1.6 0 0 0-1.05-1.47 1.6 1.6 0 0 0-1.77.32l-.06.06a1.9 1.9 0 1 1-2.7-2.7l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.47-1H3a1.9 1.9 0 0 1 0-3.8h.1a1.6 1.6 0 0 0 1.47-1.05 1.6 1.6 0 0 0-.32-1.77l-.06-.06a1.9 1.9 0 1 1 2.7-2.7l.06.06a1.6 1.6 0 0 0 1.77.32H9a1.6 1.6 0 0 0 1-1.47V3a1.9 1.9 0 0 1 3.8 0v.1a1.6 1.6 0 0 0 1 1.47 1.6 1.6 0 0 0 1.78-.32l.05-.06a1.9 1.9 0 1 1 2.7 2.7l-.06.06a1.6 1.6 0 0 0-.32 1.77V9a1.6 1.6 0 0 0 1.47 1H21a1.9 1.9 0 0 1 0 3.8h-.1a1.6 1.6 0 0 0-1.47 1z" />
+  </svg>
+)
+
+/* Os filtros que NAO dependem do roteiro. Os das etapas entram no meio
+   deles, montados a partir da obra — ver `filtros`, mais abaixo. */
+const FILTROS_FIXOS = [
   { id: 'chat', rotulo: 'Chat' },
   { id: 'nota', rotulo: 'Observações' },
   { id: 'aviso', rotulo: 'Avisos' },
@@ -74,11 +83,13 @@ function porData(a, b) {
 }
 
 export default function Rastreabilidade({ obra, roteiro }) {
-  const { pessoaPorId, cargoPorChave, nomeDoCargo, carregarChat } = useDados()
+  const { pessoaPorId, cargoPorChave, nomeDoCargo, carregarChat, rotuloEtapa, termoEtapas, pode } =
+    useDados()
 
   const [mensagens, setMensagens] = useState([])
   const [carregandoChat, setCarregandoChat] = useState(true)
   const [filtro, setFiltro] = useState('tudo')
+  const [trocandoTermo, setTrocandoTermo] = useState(false)
 
   useEffect(() => {
     let vivo = true
@@ -118,12 +129,17 @@ export default function Rastreabilidade({ obra, roteiro }) {
           itens.push({
             chave: `check-${check.id}`,
             tipo: 'check',
+            /* de qual etapa este check veio. É o que o filtro por etapa
+               usa para separar "[1ª Etapa]" de "[2ª Etapa]" — antes
+               havia um filtro só, "Checks", que jogava as cinco etapas
+               na mesma pilha e não respondia à pergunta que se faz
+               olhando a ficha: "o que aconteceu na 3ª?". */
+            etapa: etapa.numero,
             quando: marca.feitoEm,
             quem: pessoa?.nome ?? 'Usuário removido',
             foto: pessoa?.foto,
             titulo: check.titulo,
-            /* o caminho ate o check: e o que diz de qual etapa ele veio */
-            corpo: `${etapa.numero}ª etapa · ${
+            corpo: `${rotuloEtapa(etapa.numero)} · ${
               card.titulo || card.cargos?.map((c) => nomeDoCargo(c)).join(', ') || 'card'
             }`,
           })
@@ -169,7 +185,7 @@ export default function Rastreabilidade({ obra, roteiro }) {
         quando: a.enviadoEm,
         quem: a.enviadoPorNome ?? 'Sistema',
         titulo: `Aviso para ${a.setores.map((s) => cargoPorChave(s)?.nome ?? s).join(', ')}`,
-        corpo: a.mensagem || `Pendência na ${a.etapa}ª etapa.`,
+        corpo: a.mensagem || `Pendência na ${rotuloEtapa(a.etapa)}.`,
       })
     })
 
@@ -198,25 +214,66 @@ export default function Rastreabilidade({ obra, roteiro }) {
     })
 
     return itens.sort(porData)
-  }, [obra, roteiro, mensagens, pessoaPorId, cargoPorChave, nomeDoCargo])
+  }, [obra, roteiro, mensagens, pessoaPorId, cargoPorChave, nomeDoCargo, rotuloEtapa])
 
-  /* quantos de cada tipo — o filtro mostra o numero e some quando e zero */
+  /**
+   * Os filtros do topo, na ordem em que se leem:
+   *
+   *   [Tudo] [1ª Etapa] [2ª Etapa] ... [Chat] [Observações] [Avisos] ...
+   *
+   * As etapas vêm do roteiro DESTA obra, e por isso são quantas ela
+   * tiver — uma obra de cinco etapas mostra cinco chips, e uma que
+   * ganhou a sexta em maio mostra seis. Elas ocupam o lugar do antigo
+   * filtro "Checks", que existia sozinho e não separava nada.
+   */
+  const filtros = useMemo(
+    () => [
+      { id: 'tudo', rotulo: 'Tudo' },
+      ...roteiro.map((e) => ({
+        id: `etapa-${e.numero}`,
+        rotulo: rotuloEtapa(e.numero),
+        etapa: e.numero,
+        /* o nome da etapa ("Integração") não cabe no chip, mas cabe na
+           dica: é o que diz de qual parte do roteiro se trata */
+        dica: e.nome,
+      })),
+      ...FILTROS_FIXOS,
+    ],
+    [roteiro, rotuloEtapa],
+  )
+
+  /* quantos de cada filtro — o chip mostra o numero e some quando e zero */
   const contagem = useMemo(() => {
     const mapa = { tudo: linha.length }
     linha.forEach((i) => {
       mapa[i.tipo] = (mapa[i.tipo] ?? 0) + 1
+      if (i.tipo === 'check' && i.etapa) {
+        const chave = `etapa-${i.etapa}`
+        mapa[chave] = (mapa[chave] ?? 0) + 1
+      }
     })
     return mapa
   }, [linha])
 
-  const visiveis = filtro === 'tudo' ? linha : linha.filter((i) => i.tipo === filtro)
+  const visiveis = useMemo(() => {
+    if (filtro === 'tudo') return linha
+    if (filtro.startsWith('etapa-')) {
+      const numero = Number(filtro.slice(6))
+      return linha.filter((i) => i.tipo === 'check' && i.etapa === numero)
+    }
+    return linha.filter((i) => i.tipo === filtro)
+  }, [linha, filtro])
+
+  /* trocar o nome de "Etapa" muda o sistema inteiro: é de quem já
+     manda no roteiro */
+  const podeTrocarTermo = pode('editar_etapa')
 
   return (
     <section className="rastro vidro">
       <header className="rastro__topo">
         <h2 className="rastro__titulo">Rastreabilidade</h2>
         <div className="rastro__filtros">
-          {FILTROS.map((f) => {
+          {filtros.map((f) => {
             const quantos = contagem[f.id] ?? 0
             if (f.id !== 'tudo' && quantos === 0) return null
             return (
@@ -226,14 +283,32 @@ export default function Rastreabilidade({ obra, roteiro }) {
                 className={`chip ${filtro === f.id ? 'is-atual' : ''}`.trim()}
                 onClick={() => setFiltro(f.id)}
                 aria-pressed={filtro === f.id}
+                title={f.dica}
               >
                 {f.rotulo}
                 <em className="rastro__quantos">{quantos}</em>
               </button>
             )
           })}
+
+          {/* Renomear "Etapa" para o que a empresa usar. Fica aqui, ao
+              lado dos chips, porque é olhando para eles que se percebe
+              que a palavra não é a certa. */}
+          {podeTrocarTermo && (
+            <button
+              type="button"
+              className="rastro__termo"
+              onClick={() => setTrocandoTermo(true)}
+              title={`Renomear "${termoEtapas}" no sistema inteiro`}
+              aria-label={`Renomear ${termoEtapas}`}
+            >
+              <Engrenagem />
+            </button>
+          )}
         </div>
       </header>
+
+      <ModalTermos aberto={trocandoTermo} aoFechar={() => setTrocandoTermo(false)} />
 
       {carregandoChat && <p className="rastro__vazio">Carregando o histórico...</p>}
 

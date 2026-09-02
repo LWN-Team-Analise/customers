@@ -4,6 +4,7 @@ import AppShell from '@/components/AppShell/AppShell'
 import Avatar, { PilhaAvatares } from '@/components/Avatar/Avatar'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
+import Confirma from '@/components/Confirma/Confirma'
 import { CampoArea } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
@@ -16,6 +17,7 @@ import {
   fundoDoCard,
   nomeDoCard,
   podeEditarCheck,
+  tituloDaObra,
 } from '@/domain/obras'
 import { textoSobre } from '@/utils/cor'
 import { dataExtensa, dataHora } from '@/utils/formato'
@@ -103,10 +105,17 @@ const Icone = {
  * A tela da obra.
  *
  * `somenteLeitura` e o modo que a aba Concluidas usa: a obra aparece
- * INTEIRA — capa, etapas, checks marcados, observacoes, anexos —, so que
- * nada aceita clique. Nao e "esconder os botoes": os botoes somem e os
- * campos ficam desabilitados, porque obra encerrada e registro, e registro
- * que se pode alterar depois de fechado nao serve de registro.
+ * INTEIRA — capa, etapas, checks marcados, observacoes, chat, etiquetas,
+ * anexos —, so que nada aceita escrita. Nao e "esconder os botoes": os
+ * botoes de gravar somem, os campos ficam desabilitados e o servidor
+ * recusa igual, porque obra encerrada e registro, e registro que se pode
+ * alterar depois de fechado nao serve de registro.
+ *
+ * A prop e so a PORTA de entrada: quem manda de verdade e `soLeitura`,
+ * logo abaixo, que soma a ela o estado da propria obra. Uma obra fechada
+ * aberta pela rota de Obras (um link antigo, o botao de voltar do
+ * navegador) tem de vir travada do mesmo jeito — a trava e da obra, nao
+ * do caminho por onde se chegou nela.
  *
  * `voltarPara` diz de onde a pessoa veio. Aberta pela aba Concluidas, ela
  * volta para la — nao faria sentido cair no quadro de obras abertas.
@@ -120,7 +129,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     obraPorId,
     clientePorId,
     pessoaPorId,
-    equipe,
     clientes,
     roteiroDaObra,
     cargoPorChave,
@@ -136,6 +144,9 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     progresso,
     estadoEtapa,
     concluida,
+    prontaParaConcluir,
+    concluirObra,
+    rotuloEtapa,
     carregando,
     pode,
   } = useDados()
@@ -143,6 +154,14 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const [novaObs, setNovaObs] = useState(false)
   const [texto, setTexto] = useState('')
   const [editandoObs, setEditandoObs] = useState(null)
+
+  /* Concluir a obra: dois passos de propósito.
+     `concluindo` abre o formulário (a observação, que é opcional);
+     `confirmandoFim` é o segundo clique, o que grava. */
+  const [concluindo, setConcluindo] = useState(false)
+  const [obsFinal, setObsFinal] = useState('')
+  const [confirmandoFim, setConfirmandoFim] = useState(false)
+  const [fechando, setFechando] = useState(false)
 
   /* pop-ups do roteiro: guardam o alvo (etapa/card/check) e abrem */
   const [editandoEtapa, setEditandoEtapa] = useState(null) // {etapa} | {novo:true}
@@ -168,24 +187,55 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   if (!obra) return <Navigate to="/app/obras" replace />
 
   const cliente = clientePorId(obra.clienteId)
+  const nomeDaObra = tituloDaObra(obra, cliente)
   const prioridade = PRIORIDADES.find((p) => p.id === obra.prioridade)
+  /* a trava vale pela ROTA (aba Concluídas) ou pela própria obra estar
+     encerrada — o que vier primeiro */
+  const soLeitura = somenteLeitura || concluida(obra)
   /* o roteiro que ESTA obra enxerga: o que foi criado depois dela nao
      entra, e o que saiu depois dela continua aqui */
   const roteiro = roteiroDaObra(obra)
   const numeroAtual = etapaDaObra(obra)
   const etapaCorrente = roteiro.find((e) => e.numero === numeroAtual)
   const pct = progresso(obra)
-  const fechada = concluida(obra)
   const membros = obra.membros.map(pessoaPorId).filter(Boolean)
   const marcas = etiquetasDaObra(obra)
 
   /* No modo leitura TODA permissao cai junto, num lugar so. Espalhar o
-     `!somenteLeitura` por quinze condicoes e como se esquece uma. */
-  const podeEtapa = !somenteLeitura && pode('editar_etapa')
-  const podeCards = !somenteLeitura && pode('editar_cards')
-  const podeChecks = !somenteLeitura && pode('editar_checks')
-  const podeObra = !somenteLeitura && pode('editar_obras')
+     `!soLeitura` por quinze condicoes e como se esquece uma. */
+  const podeEtapa = !soLeitura && pode('editar_etapa')
+  const podeCards = !soLeitura && pode('editar_cards')
+  const podeChecks = !soLeitura && pode('editar_checks')
+  const podeObra = !soLeitura && pode('editar_obras')
   const mexeNoRoteiro = podeEtapa || podeCards || podeChecks
+
+  /* O botão "Concluir obra" só existe quando as três valem:
+     a obra está aberta, a barra chegou a 100% (nenhum check em
+     aberto) e quem está olhando pode editar obra. Antes disso ele
+     nem aparece — botão desabilitado só faz perguntar por quê. */
+  const podeConcluir = podeObra && prontaParaConcluir(obra)
+
+  const encerrar = async () => {
+    setFechando(true)
+    try {
+      await concluirObra(obra.id, obsFinal.trim())
+      setConfirmandoFim(false)
+      setConcluindo(false)
+      setObsFinal('')
+      /* A obra sai do quadro e passa a viver em Concluídas: é para lá que
+         a pessoa vai, e não para uma tela que ela acabou de fechar.
+
+         Só que nem todo setor enxerga Concluídas — mandar para lá quem
+         não pode abrir a aba daria uma volta pelo login. Nesse caso ela
+         volta para o quadro, que é de onde veio. */
+      navigate(pode('ver_concluidas') ? `/app/concluidas/${obra.id}` : '/app/obras')
+    } catch {
+      /* o motivo já aparece na faixa do AppShell */
+      setConfirmandoFim(false)
+    } finally {
+      setFechando(false)
+    }
+  }
 
   const enviarObservacao = async (evento) => {
     evento.preventDefault()
@@ -236,10 +286,14 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             </button>
 
             <p className="capa__trilha">
+              {/* o rótulo é da ROTA, não do estado da obra: quem chegou
+                  aqui pela aba Obras volta para Obras */}
               <Link to={voltarPara}>{somenteLeitura ? 'Concluídas' : 'Obras'}</Link>/
-              {cliente?.nome ?? 'Cliente removido'}
+              {nomeDaObra}
             </p>
-            <h1 className="capa__titulo">{cliente?.nome ?? 'Cliente removido'}</h1>
+            {/* "1042/2026 - Acme": a proposta na frente, que é como a obra
+                é procurada no resto da empresa */}
+            <h1 className="capa__titulo">{nomeDaObra}</h1>
 
             {marcas.length > 0 && (
               <span className="capa__etiquetas">
@@ -258,19 +312,26 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 
           <div className="capa__lado">
             <span className="capa__selo">{obra.tipo === 'emergencia' ? 'Emergência' : 'Padrão'}</span>
-            <p className="capa__desc">{obra.descricao}</p>
+            {/* a descrição é opcional; sem ela a capa diz isso em vez de
+                deixar um vazio entre o selo e os botões */}
+            <p className="capa__desc">
+              {obra.descricao || <em className="capa__semdesc">sem descrição</em>}
+            </p>
 
-            {/* etiqueta, anexo e editar: as tres acoes da obra em si.
-                Na obra fechada elas somem — nada aqui e so consulta, todas
-                as tres abrem pop-up que grava. */}
+            {/* Etiquetas e Anexos ficam na obra FECHADA também — só que
+                em modo consulta. Antes os dois botões sumiam junto com o
+                Editar, e o efeito era que tudo o que tinha sido etiquetado
+                ou anexado durante a obra desaparecia no dia em que ela era
+                concluída: justo quando esse material vira registro e passa
+                a ser o que alguém volta para consultar.
+
+                O Editar continua sumindo: aquele grava de verdade. */}
             <span className="capa__acoes">
-              {!somenteLeitura && (
-                <>
               <button
                 type="button"
                 className="capa__acao"
                 onClick={() => setEtiquetas(true)}
-                title="Etiquetas desta obra"
+                title={soLeitura ? 'Etiquetas desta obra (consulta)' : 'Etiquetas desta obra'}
               >
                 <Icone.etiqueta tamanho={15} />
                 Etiquetas
@@ -281,7 +342,11 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                 type="button"
                 className="capa__acao"
                 onClick={() => setAnexos(true)}
-                title="Documentos anexados a esta obra"
+                title={
+                  soLeitura
+                    ? 'Documentos desta obra (consulta)'
+                    : 'Documentos anexados a esta obra'
+                }
               >
                 <Icone.clipe tamanho={15} />
                 Anexos
@@ -299,8 +364,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                   Editar
                 </button>
               )}
-                </>
-              )}
             </span>
           </div>
         </header>
@@ -309,9 +372,13 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         <div className="infos vidro">
           <div className="info">
             <span className="info__nome">Prioridade</span>
+            {/* só a palavra. O "emergência é sempre alta" que ficava colado
+                aqui transformava a pastilha num parágrafo e, de quebra,
+                escondia a própria cor da prioridade — que é o que essa
+                pastilha existe para mostrar. Quem quiser a regra a lê no
+                cadastro, onde ela muda alguma coisa. */}
             <span className="info__valor info__valor--pri" data-pri={obra.prioridade}>
               {prioridade?.rotulo}
-              {obra.tipo === 'emergencia' && <em className="info__fixa">emergência é sempre alta</em>}
             </span>
           </div>
 
@@ -328,7 +395,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
           </div>
 
           <div className="info">
-            <span className="info__nome">Setores da {numeroAtual}ª etapa</span>
+            <span className="info__nome">Setores da {rotuloEtapa(numeroAtual)}</span>
             <span className="info__linha">
               {(etapaCorrente?.cards ?? []).map((card) => {
                 const pronto = cardConcluido(card, obra.checks)
@@ -352,18 +419,47 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               <span className="barrinha__cheio" style={{ width: `${pct}%` }} />
             </span>
             <span className="info__valor">{pct}%</span>
+
+            {/* Ao lado do Progresso, e só quando a barra fecha em 100%.
+                A obra não se encerra mais sozinha ao marcar o último
+                check: marcar tudo faz o botão aparecer, encerrar é o
+                clique — com uma segunda confirmação depois dele. */}
+            {podeConcluir && (
+              <button
+                type="button"
+                className="concluir"
+                onClick={() => {
+                  setObsFinal('')
+                  setConcluindo(true)
+                }}
+                title="Encerrar esta obra e mandá-la para Concluídas"
+              >
+                <Icone.ok />
+                Concluir obra
+              </button>
+            )}
           </div>
 
           {/* Membros a esquerda, "Abrir chat" logo a direita deles — os
               dois no mesmo bloco para nunca se separarem na quebra */}
           <div className="infos__fim">
+            {/* Membro da obra é quem MARCOU algum check nela — mais
+                ninguém. Antes, obra sem nenhum check marcado mostrava aqui
+                os quatro primeiros da equipe como se fossem os
+                participantes: gente que nunca tinha encostado naquela obra
+                aparecia como responsável por ela. Sem membro, agora, a
+                tela diz que não há. */}
             <div className="info info--membros">
               <span className="info__nome">Membros</span>
-              <span className="info__avatares">
-                {(membros.length > 0 ? membros : equipe.slice(0, 4)).map((p) => (
-                  <Avatar key={p.id} nome={p.nome} foto={p.foto} tamanho={30} titulo={p.nome} />
-                ))}
-              </span>
+              {membros.length === 0 ? (
+                <span className="info__vazio">ninguém marcou check ainda</span>
+              ) : (
+                <span className="info__avatares">
+                  {membros.map((p) => (
+                    <Avatar key={p.id} nome={p.nome} foto={p.foto} tamanho={30} titulo={p.nome} />
+                  ))}
+                </span>
+              )}
             </div>
 
             <button type="button" className="abrirchat" onClick={() => setChat(true)}>
@@ -393,6 +489,28 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               {obra.atualizadoPorNome ?? obra.criadoPorNome ?? '—'}
             </span>
           </p>
+
+          {/* "Concluída em" e "Concluída por" só existem na obra fechada —
+              é o pedido, e é o que faz sentido: numa obra em andamento os
+              dois seriam duas linhas vazias ocupando a faixa. */}
+          {soLeitura && obra.concluidaEm && (
+            <>
+              <p className="carimbo__item">
+                <span className="carimbo__nome">Concluída em</span>
+                <span className="carimbo__valor">{dataHora(obra.concluidaEm)}</span>
+              </p>
+              <p className="carimbo__item">
+                <span className="carimbo__nome">Concluída por</span>
+                <span className="carimbo__valor">{obra.concluidaPorNome ?? '—'}</span>
+              </p>
+              {obra.conclusaoObs && (
+                <p className="carimbo__item carimbo__item--largo">
+                  <span className="carimbo__nome">Observação da conclusão</span>
+                  <span className="carimbo__valor">{obra.conclusaoObs}</span>
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {/* ---------------- etapas + observacoes ---------------- */}
@@ -408,7 +526,10 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               return (
                 <section key={etapa.id} className="etapa vidro" data-estado={estado}>
                   <header className="etapa__topo">
-                    <h2 className="etapa__titulo">{etapa.numero}ª Etapa</h2>
+                    {/* "3ª Etapa" — a palavra "Etapa" vem da configuração
+                        da empresa, não do código: ela pode virar Fase,
+                        Marco ou Frente sem passar por aqui */}
+                    <h2 className="etapa__titulo">{rotuloEtapa(etapa.numero)}</h2>
                     {estado === 'concluida' && <Icone.ok />}
                     {estado === 'atual' && <Icone.atual />}
                     {estado === 'bloqueada' && <Icone.travada />}
@@ -423,7 +544,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                             className="etapa__botao"
                             onClick={() => setEditandoCard({ etapa })}
                             title="Novo card nesta etapa"
-                            aria-label={`Novo card na ${etapa.numero}ª etapa`}
+                            aria-label={`Novo card na ${rotuloEtapa(etapa.numero)}`}
                           >
                             <Icone.mais tamanho={15} />
                           </button>
@@ -434,7 +555,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                             className="etapa__botao"
                             onClick={() => setEditandoEtapa({ etapa })}
                             title="Editar ou excluir a etapa"
-                            aria-label={`Editar a ${etapa.numero}ª etapa`}
+                            aria-label={`Editar a ${rotuloEtapa(etapa.numero)}`}
                           >
                             <Icone.lapis />
                           </button>
@@ -453,7 +574,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                         obra={obra}
                         /* na obra fechada todo check e so leitura, mesmo
                            os da etapa que estava aberta */
-                        travado={somenteLeitura || estado === 'bloqueada'}
+                        travado={soLeitura || estado === 'bloqueada'}
                         /* a permissao e olhada check a check: um deles
                            pode ter dono proprio, diferente do card */
                         usuario={user}
@@ -473,7 +594,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 
                   {estado === 'bloqueada' && (
                     <p className="etapa__aviso">
-                      Liberada quando a {etapa.numero - 1}ª etapa fechar.
+                      Liberada quando a {rotuloEtapa(etapa.numero - 1)} fechar.
                     </p>
                   )}
                 </section>
@@ -493,7 +614,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             <header className="obs__topo">
               <h2 className="obs__titulo">Observações</h2>
               <span className="obs__contagem">{obra.observacoes.length}</span>
-              {!somenteLeitura && (
+              {!soLeitura && (
               <button
                 type="button"
                 className="obs__mais"
@@ -513,7 +634,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             <div className="obs__lista">
               {obra.observacoes.length === 0 && (
                 <p className="obs__vazio">
-                  {somenteLeitura
+                  {soLeitura
                     ? 'Nenhuma observação nesta obra.'
                     : 'Nada registrado ainda. Use o + para escrever a primeira.'}
                 </p>
@@ -525,7 +646,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                    de novo antes de gravar */
                 /* obra fechada: nem a propria observacao se edita mais */
                 const minha =
-                  !somenteLeitura && String(o.autorId) === String(user?.id)
+                  !soLeitura && String(o.autorId) === String(user?.id)
                 return (
                   <article key={o.id} className="nota">
                     <div className="nota__texto">
@@ -579,7 +700,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 
       {/* ---------------- botao flutuante ----------------
           Some na obra fechada: todas as acoes dele gravam. */}
-      {!somenteLeitura && (
+      {!soLeitura && (
       <BotaoFlutuante
         aberto={menuFlutuante}
         aoAlternar={() => setMenuFlutuante((v) => !v)}
@@ -690,11 +811,101 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         aoFechar={() => setEditandoCheck(null)}
       />
 
-      <ModalChat aberto={chat} obra={obra} aoFechar={() => setChat(false)} />
+      {/* os três em modo consulta quando a obra está fechada: a conversa
+          inteira continua à vista, sem a caixa de escrever */}
+      <ModalChat
+        aberto={chat}
+        obra={obra}
+        somenteLeitura={soLeitura}
+        aoFechar={() => setChat(false)}
+      />
 
-      <ModalEtiquetas aberto={etiquetas} obra={obra} aoFechar={() => setEtiquetas(false)} />
+      <ModalEtiquetas
+        aberto={etiquetas}
+        obra={obra}
+        somenteLeitura={soLeitura}
+        aoFechar={() => setEtiquetas(false)}
+      />
 
-      <ModalAnexos aberto={anexos} obra={obra} aoFechar={() => setAnexos(false)} />
+      <ModalAnexos
+        aberto={anexos}
+        obra={obra}
+        somenteLeitura={soLeitura}
+        aoFechar={() => setAnexos(false)}
+      />
+
+      {/* ---------------- concluir a obra ----------------
+          Passo 1: a observação (opcional).
+          Passo 2: a confirmação, que é onde a obra fecha de verdade. */}
+      <Modal
+        aberto={concluindo}
+        aoFechar={() => setConcluindo(false)}
+        titulo="Concluir esta obra?"
+        subtitulo="Ela sai do quadro e passa a viver na aba Concluídas, só para consulta."
+        largura={470}
+      >
+        <form
+          className="formobs"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setConfirmandoFim(true)
+          }}
+        >
+          <div className="formobs__autor">
+            <Avatar nome={user?.name} foto={user?.foto} tamanho={38} titulo={user?.name} />
+            <p>
+              <strong>{user?.name ?? 'Usuário'}</strong>
+            </p>
+          </div>
+
+          <CampoArea
+            rotulo="Observação da conclusão"
+            largo
+            linhas={4}
+            placeholder="Alguma coisa que precise ficar registrada no encerramento?"
+            value={obsFinal}
+            onChange={(e) => setObsFinal(e.target.value)}
+            dica="Opcional — dá para concluir sem escrever nada."
+          />
+
+          <footer className="formobra__acoes">
+            <button
+              type="button"
+              className="formobra__cancelar"
+              onClick={() => setConcluindo(false)}
+            >
+              Cancelar
+            </button>
+            <Button type="submit" loading={fechando}>
+              Concluir obra
+            </Button>
+          </footer>
+        </form>
+      </Modal>
+
+      <Confirma
+        aberto={confirmandoFim}
+        nivel={1}
+        tom="acao"
+        titulo="Encerrar a obra agora?"
+        mensagem="Depois disso ninguém escreve mais nada nela: nem check, nem chat, nem observação, nem anexo."
+        detalhes={
+          <dl>
+            <dt>Obra</dt>
+            <dd>{nomeDaObra}</dd>
+
+            <dt>Concluída por</dt>
+            <dd>{user?.name ?? '—'}</dd>
+
+            <dt>Observação</dt>
+            <dd>{obsFinal.trim() || <em>sem observação</em>}</dd>
+          </dl>
+        }
+        aviso="A obra continua inteira em Concluídas — etapas, checks, chat, etiquetas e anexos —, mas só para leitura."
+        rotuloConfirmar="Concluir obra"
+        aoConfirmar={encerrar}
+        aoFechar={() => setConfirmandoFim(false)}
+      />
 
       <ModalObra
         aberto={editandoObra}

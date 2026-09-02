@@ -65,6 +65,34 @@ claro atras da frase "Trajetoria de Clientes".
 
 ## Banco de dados
 
+> **Instalacao NOVA — rodar nesta ordem:** `db/usuario.sql.txt`,
+> `db/sistema.sql.txt`, `db/quadro.sql.txt`, `db/atualizacao.sql.txt`,
+> `db/setores-e-chat.sql.txt`, `db/atualizacao-2.sql.txt` e, por ultimo,
+> `db/atualizacao-3.sql.txt`.
+>
+> **Banco que JA roda — um comando so:**
+>
+> ```bash
+> npm run db:atualizar
+> ```
+>
+> Ele aplica os arquivos de atualizacao que faltam, na ordem, e no fim
+> lista o que ficou no banco. Usa a mesma conexao da API (o `.env`),
+> entao nao precisa de `psql` no PATH nem de digitar senha. Pode rodar
+> de novo quantas vezes quiser.
+>
+> Os tres primeiros arquivos ficam de fora dele de proposito: sao de
+> instalacao. Num banco existente eles nao acrescentam nada, e o
+> `sistema.sql.txt` ainda desfaz o que o `quadro.sql.txt` fez (ele repoe
+> as views antigas, que olham a tabela `obra_tarefa`). Se rodar aquele
+> por engano, rode o `quadro.sql.txt` logo em seguida.
+>
+> Os arquivos de atualizacao so ACRESCENTAM e podem rodar mais de uma
+> vez sem problema. Enquanto o `-2` nao rodar, a API nao sobe: ela ja le
+> `obra.proposta`, `obra.concluida_em` e `usuario.cargo_titulo`. A aba
+> **Concluidas** volta a listar depois dele, que e quem carimba as obras
+> ja fechadas na coluna nova.
+
 PostgreSQL. As credenciais ficam no `.env` (fora do git):
 
 ```
@@ -83,10 +111,12 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/sistema.sql.txt`     | cargos, clientes, obras, observacoes e avaliacoes                 |
 | `db/quadro.sql.txt`      | o roteiro (etapas, cards, checks), `obra_check` e a senha padrao  |
 | `db/atualizacao.sql.txt` | permissoes, chat, etiquetas, anexos, notas, avisos lidos e senha  |
+| `db/atualizacao-2.sql.txt` | n. da proposta, conclusao manual, cargo x setor, e-mail opcional |
+| `db/atualizacao-3.sql.txt` | termos configuraveis e o "apagar para todos / para mim" do chat  |
 
-Rode o primeiro na ordem indicada dentro dele; depois rode os outros tres
-inteiros, conectado ao banco `TrajetoClientes`. Os tres ultimos sao
-**idempotentes**: podem rodar de novo sem quebrar nada do que ja existe.
+Rode o primeiro na ordem indicada dentro dele; depois rode os outros
+inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
+sao **idempotentes**: podem rodar de novo sem quebrar nada do que ja existe.
 
 ### O que `db/atualizacao.sql.txt` acrescenta
 
@@ -140,9 +170,39 @@ Para conferir sem tocar no banco de verdade:
 npm run db:validar
 ```
 
+E para APLICAR as atualizacoes no banco de verdade, sem `psql`:
+
+```bash
+npm run db:atualizar
+```
+
 Ele cria um banco descartavel, roda **os dois scripts**, testa as restricoes, a
 protecao do usuario id=1, os gatilhos, a media das avaliacoes e as consultas que
 a API usa — e apaga o banco no fim.
+
+### O que `db/atualizacao-2.sql.txt` acrescenta
+
+- `obra.proposta`: o n. da proposta, obrigatorio nas obras novas (as antigas
+  ficam com o campo vazio — nao da para inventar numero de proposta velha);
+- `obra.descricao` passa a aceitar NULL: virou campo **opcional**;
+- `obra.concluida_em / concluida_por / conclusao_obs`: a conclusao deixou de
+  ser automatica e virou um clique. O arquivo **carimba** as obras que ja
+  estavam fechadas pela regra antiga, para nenhuma sumir de Concluidas;
+- `usuario.cargo_titulo`: o CARGO especifico da pessoa. O SETOR continua sendo
+  `usuario.cargo_id` -> tabela `cargo`;
+- `usuario.email` passa a aceitar NULL: e-mail virou **opcional**;
+- gatilho `obra_check_sai`: quem desmarca o ultimo check sai da lista de
+  membros da obra (o par do `obra_check_entra`, que ja existia);
+- a permissao `excluir_concluidas` entra nos setores com acesso total.
+
+### O que `db/atualizacao-3.sql.txt` acrescenta
+
+- tabela `configuracao`: os termos que a empresa troca pela tela — hoje, como
+  se chama "Etapa" (singular e plural);
+- `obra_chat.apagada_em / apagada_por`: mensagem apagada **para todos** fica na
+  conversa, vazia, com a marca "mensagem apagada";
+- tabela `obra_chat_oculta`: mensagem apagada **so para mim**, que continua
+  inteira para todo o resto do chat.
 
 ### Usuario protegido
 
@@ -187,6 +247,8 @@ Senha padrao do sistema: `123456`.
 | `DELETE /api/equipe/usuarios/:id` | desativa o acesso (o historico fica)       |
 | `GET /api/dados`                | clientes, obras, checks, observacoes, avisos |
 | `GET /api/dados/vitrine`        | so as logos dos clientes — **sem sessao**, para a esfera do login |
+| `POST/PATCH/DELETE /api/dados/setores` | setores do cliente (o ramo da empresa) |
+| `GET/POST/DELETE /api/dados/chat` | o chat geral da equipe (botao flutuante) |
 | `POST/PATCH/DELETE /api/dados/clientes` | cadastro de cliente                  |
 | `POST/PATCH/DELETE /api/dados/obras` | cadastro de obra                        |
 | `PUT/DELETE /api/dados/obras/:id/checks/:ck` | marca/desmarca um check        |
@@ -240,19 +302,28 @@ que o site abrir.
 
 ### Permissoes
 
-Cada cargo tem uma lista de chaves em `cargo.permissoes`. A lista mora em
+Cada **setor** tem uma lista de chaves em `cargo.permissoes`. A lista mora em
 `src/domain/permissoes.js` — **um arquivo so, usado pelos dois lados**: a tela
 esconde o botao e a API recusa a chamada usando exatamente as mesmas chaves.
 
 | Grupo        | Chaves                                                              |
 | ------------ | ------------------------------------------------------------------- |
 | Visualizacao | `ver_inicio`, `ver_obras`, `ver_clientes`, `ver_concluidas`, `ver_avaliacoes`, `ver_avisos` |
-| Alteracao    | `editar_usuario`, `editar_cargo`, `editar_avaliacoes`, `editar_clientes`, `editar_obras`, `check_todas_etapas`, `editar_etapa`, `editar_cards`, `editar_cargos_card`, `editar_checks`, `enviar_avisos` |
+| Alteracao    | `editar_usuario`, `editar_cargo`, `editar_avaliacoes`, `editar_clientes`, `editar_obras`, `excluir_concluidas`, `check_todas_etapas`, `editar_etapa`, `editar_cards`, `editar_cargos_card`, `editar_checks`, `enviar_avisos` |
 
 Alteracao **sempre** depende da visualizacao correspondente: desmarcar "Obras"
 apaga junto tudo o que so faz sentido dentro de Obras, e essas linhas ficam
 travadas ate a visualizacao voltar. Quem tem `acesso_total` (diretoria) passa
 por qualquer uma, marcada ou nao.
+
+Duas chaves valem uma nota:
+
+- **`excluir_concluidas`** e separada de `editar_obras` de proposito. Apagar
+  uma obra fechada nao e mexer em trabalho em andamento: e apagar o registro do
+  que a empresa entregou. Ela depende de `ver_concluidas`;
+- **`editar_etapa`** manda tambem no **nome** das etapas — a palavra "Etapa" em
+  si, que a empresa pode trocar. Quem manda no roteiro decide como o roteiro se
+  chama.
 
 ### E-mail (esqueci minha senha)
 
@@ -401,6 +472,182 @@ banco" e usa os dados locais, sem quebrar nada.
 Usuario e senha errados devolvem a mesma mensagem, de proposito: nao entrega a
 quem tenta adivinhar qual e-mail existe no sistema.
 
+## Notificacoes
+
+O sininho mostra **so os avisos endereçados ao SEU setor**. Quem e da
+Excelencia nao recebe a cobranca de um check pendente do Comercial: nao ha nada
+que essa pessoa possa fazer a respeito, e um sino cheio de aviso de outro setor
+e um sino que ninguem mais abre.
+
+A regra vale **inclusive para a diretoria**. Antes o acesso total trazia tudo, e
+o sino dela virava o despejo do quadro inteiro; quem quer a visao geral do que
+falta em cada setor tem a coluna de pendencias na tela de Obras, que mostra a
+mesma coisa organizada.
+
+A unica excecao e o aviso **sem setor nenhum**: esse e recado para a empresa
+toda e chega para todo mundo. Quem decide e `minhasNotificacoes`, no
+`DadosContext`.
+
+## Setores do cliente
+
+> Nao confundir com o **setor da equipe** (Comercial, GQ, Excelencia), que e a
+> tabela `cargo` e carrega as permissoes. Este aqui e o ramo do CLIENTE, e nao
+> decide nada alem de filtro e cor de etiqueta.
+
+O ramo em que a empresa atua (Farmaceutico, Alimenticio...). Vive em tabela
+propria (`setor_cliente`) e nao como texto no cliente, porque o setor tem que
+ser o MESMO em todos os cadastros — com texto livre, "Farmaceutico" e
+"farmaceutica" viram dois setores e o filtro deixa de funcionar.
+
+Quem mexe e quem pode mexer em cliente: o botao **Setores** na aba Clientes
+cria, edita e exclui; o cadastro de cada cliente escolhe entre os que existem.
+
+Apagar um setor **nao apaga os clientes dele**. A chave estrangeira e
+`ON DELETE SET NULL`: eles voltam para "sem setor" e aparecem no filtro *Sem
+setor*, para reclassificar com calma.
+
+### O card que abre e fecha
+
+Fechado, o cliente e uma linha: logo, nome e a setinha. Aberto, ele vira o
+cartao de quinas recortadas com a logo no topo.
+
+A passagem entre os dois e animada **nos dois sentidos**: abrindo, o cartao se
+desenrola de cima para baixo, como uma persiana que desce a partir da linha
+fechada; fechando, ele se recolhe de baixo para cima, pelo mesmo caminho. Quem
+faz e um `clip-path` que vai de `inset(0 0 100% 0)` a `inset(0 0 0 0)`, com a
+origem da escala presa no topo.
+
+Fechar precisa do estado `is-fechando` no JSX: a animacao de saida so roda
+enquanto o elemento **ainda esta no DOM**. Sem ele, o React tira o cartao no
+mesmo instante do clique e nao ha o que animar — por isso o clique marca a
+classe, deixa a animacao correr e so entao desmonta.
+
+**Fecha por dois caminhos, e os dois valem**: o botao *Fechar* sobre a foto e o
+proprio cabecalho (a faixa com a logo e o nome). Clicar de novo onde se clicou
+para abrir e o gesto que a mao ja espera.
+
+## Chat da equipe
+
+O botao redondo do canto inferior direito abre a conversa geral da equipe
+(`chat_site`). Ela e separada do chat da obra de proposito: aquele morre com a
+obra e vira historico dela; este e do dia a dia e nao pertence a obra nenhuma.
+
+O botao muda conforme a tela:
+
+| Tela | O botao |
+|---|---|
+| Obras | **+**, com *Adicionar observação* e *Chat da equipe* |
+| Demais | icone de chat, atalho direto |
+| Dentro de uma obra | **nao aparece** — la o chat que vale e o da obra |
+
+Conversar e de todo mundo que entra; nao ha permissao para isso. O que se
+controla e quem apaga: cada um tira so a propria mensagem, e a API confere de
+novo antes de apagar.
+
+## Obra fechada: a tela travada
+
+Clicar numa obra em **Concluidas** abre `/app/concluidas/:id` — a MESMA tela
+da obra, com `somenteLeitura`. A pessoa nao sai da aba de concluidas, ve tudo
+(capa, etapas, checks marcados, observacoes, **chat, etiquetas, anexos**,
+avaliacoes) e nao escreve nada.
+
+A trava e num lugar so — as permissoes da tela caem juntas:
+
+```jsx
+const soLeitura = somenteLeitura || concluida(obra)
+const podeEtapa = !soLeitura && pode('editar_etapa')
+```
+
+Espalhar o `!soLeitura` por quinze condicoes e como se esquece uma.
+
+Repare no `|| concluida(obra)`: a trava e da OBRA, nao do caminho por onde se
+chegou nela. Uma obra fechada aberta por `/app/obras/:id` (um link antigo, o
+botao de voltar do navegador) vem travada do mesmo jeito.
+
+**O que continua a vista, e so para consulta:**
+
+| Onde | O que da para fazer | O que sumiu |
+| ---- | ------------------- | ----------- |
+| Chat | ler a conversa inteira | a caixa de escrever, o responder e o apagar |
+| Etiquetas | ver quais a obra tem | adicionar, editar e reaproveitar |
+| Anexos | **baixar** os documentos | anexar e excluir |
+| Observacoes | ler todas | escrever e editar, mesmo a propria |
+| Checks | ver o que foi marcado, por quem e quando | marcar e desmarcar |
+
+Etiquetas e anexos ficavam de fora antes: os dois botoes sumiam junto com o
+Editar, e tudo o que tinha sido etiquetado ou anexado durante a obra
+desaparecia no dia em que ela era concluida — justo quando esse material vira
+registro e passa a ser o que alguem volta para consultar.
+
+A API repete a trava, e nao depende da tela: o middleware `obraAberta`
+(`server/routes/dados.js`) recusa com 409 qualquer escrita numa obra fechada —
+check, chat, observacao, aviso, etiqueta, anexo e a propria edicao da obra.
+Fora da trava ficam as **avaliacoes**, de proposito: e depois de concluida que
+a obra e avaliada.
+
+Na faixa de carimbos aparecem, **so aqui**, "Concluida em", "Concluida por" e a
+observacao do encerramento. Numa obra em andamento os tres seriam linhas
+vazias.
+
+Abaixo de tudo vem a **Rastreabilidade**: uma linha do tempo unica com quem
+marcou cada check e a que horas, o chat, as observacoes, os avisos, os anexos
+e as notas. Ela aparece em QUALQUER obra, aberta ou fechada: saber quem marcou
+o que serve tanto para conferir o passado quanto para acompanhar o presente.
+
+Os filtros do topo sao:
+
+```
+[Tudo] [1ª Etapa] [2ª Etapa] [3ª Etapa] ... [Chat] [Observações] [Avisos] [Avaliações] [Anexos]
+```
+
+As etapas vem do roteiro DAQUELA obra, e sao quantas ela tiver. Antes havia um
+filtro so, "Checks", que jogava as cinco etapas na mesma pilha e nao respondia
+a pergunta que se faz olhando a ficha: **"o que aconteceu na 3ª?"**.
+
+A engrenagem no fim da fila renomeia a palavra "Etapa" — veja a secao seguinte.
+
+## O nome das etapas
+
+"Etapa" e a palavra da empresa, nao do sistema: amanha o roteiro pode se chamar
+Fase, Marco, Frente ou Entrega. Ela mora na tabela `configuracao`
+(`termo_etapa` e `termo_etapas`), vem junto na carga do quadro e sai do
+`DadosContext`:
+
+```jsx
+const { termoEtapa, termoEtapas, rotuloEtapa } = useDados()
+rotuloEtapa(3) // "3ª Etapa"
+```
+
+Toda tela que escreve a palavra usa esses tres — o cabecalho de cada bloco na
+tela da obra, o card do quadro, os filtros da rastreabilidade, os avisos, o
+pop-up de criar etapa e o de editar. Trocar num lugar troca em todos.
+
+Sao dois campos, e nao um: o portugues precisa do singular ("3ª Etapa") e do
+plural ("Etapas pendentes"). Deduzir o plural com um "s" no fim daria "Fases"
+certo e "Marcoss" errado.
+
+Quem troca: o mesmo setor que pode criar e apagar etapa (`editar_etapa`). Quem
+manda no roteiro e quem decide como o roteiro se chama. O pop-up esta na ficha
+de rastreabilidade, ao lado dos chips — e olhando para eles que se percebe que
+a palavra nao e a certa.
+
+## Confirmações
+
+Quatro acoes pedem confirmacao antes de acontecer, e o `Confirma` tem dois
+tons: `perigo` (vermelho, para apagar) e `acao` (cor do sistema — pintar de
+vermelho um "Criar obra" faz a pessoa hesitar sem motivo).
+
+| Ação | O que a caixa mostra |
+|---|---|
+| Sair | que a sessao fecha |
+| Criar obra | empresa, tipo, prioridade e descricao |
+| Novo colaborador | o cargo e **o que ele libera**, permissao por permissao |
+| Novo/editar cargo | acesso total e a lista de permissoes marcadas |
+
+As duas ultimas sao as que importam: cargo nao e cadastro de uma pessoa, e o
+que um grupo inteiro passa a poder fazer. Uma caixa marcada sem querer libera
+aquilo para todo mundo do cargo, e ninguem percebe na hora.
+
 ## Estrutura
 
 ```
@@ -458,15 +705,19 @@ server/
 ├── sessao.js               # token, "exige sessao" e traducao de erro do Postgres
 ├── roteiro.js              # o roteiro de fabrica; planta sozinho na 1a subida
 ├── routes/auth.js          # login, sessao e troca de senha
-├── routes/equipe.js        # cargos e usuarios
+├── routes/equipe.js        # setores (tabela cargo) e usuarios
 ├── routes/dados.js         # clientes, obras, checks, observacoes, avisos, notas
 ├── routes/roteiro.js       # etapas, cards e checks (o roteiro das obras)
 └── scripts/                # gerar hash de senha, validar o SQL
 
 db/
 ├── usuario.sql.txt         # PARTE 1: banco, tabela usuario, travas
-├── sistema.sql.txt         # PARTE 2: cargos, clientes, obras, avaliacoes
-└── quadro.sql.txt          # PARTE 3: roteiro, obra_check, senha provisoria
+├── sistema.sql.txt         # PARTE 2: setores (tabela cargo), clientes, obras
+├── quadro.sql.txt          # PARTE 3: roteiro, obra_check, senha provisoria
+├── atualizacao.sql.txt     # permissoes, chat, etiquetas, anexos, notas
+├── setores-e-chat.sql.txt  # setor do cliente e o chat da equipe
+├── atualizacao-2.sql.txt   # proposta, conclusao manual, setor x cargo
+└── atualizacao-3.sql.txt   # termos configuraveis, apagar msg para todos/mim
 ```
 
 ## Rotas
@@ -502,10 +753,28 @@ devendo informacao, com um botao por setor e um **Todos** que avisa todos os
 pendentes daquela obra. O `+` do cabecalho dessa coluna avisa todas as obras de
 uma vez.
 
-O card mostra a logo da empresa, o nome, a etapa atual, a descricao, a
-prioridade com a data prevista e as fotos de quem mexeu na obra. As etiquetas
-`[tec] [gq]` no canto superior direito sao os setores que ainda devem
-informacao na etapa atual.
+O card mostra a logo da empresa, **o n. da proposta e o nome do cliente**, a
+etapa atual, a descricao, a prioridade com a data prevista e as fotos de quem
+mexeu na obra. As etiquetas `[tec] [gq]` no canto superior direito sao os
+setores que ainda devem informacao na etapa atual.
+
+O titulo e `"1042/2026 - Acme"`: **o n. da proposta na frente**, porque e por
+ele que a obra e procurada no resto da empresa — quem liga perguntando de uma
+obra tem o numero da proposta na mao, e nao o nome da empresa (que costuma ter
+cinco obras abertas ao mesmo tempo). Obra antiga, sem proposta cadastrada,
+mostra so o nome do cliente. Quem monta e o `tituloDaObra()` de
+`src/domain/obras.js`, para o card, a capa da obra, a lista de Concluidas e o
+titulo do chat escreverem o MESMO nome.
+
+**No cadastro da obra:** o n. da proposta e **obrigatorio** e a **descricao
+virou opcional**. A obra ja e identificada pela dupla proposta + cliente, e
+obrigar um texto livre so fazia aparecer "obra" e "-" no lugar da descricao.
+
+**A prioridade e uma pastilha clara**, e nao texto colorido solto. O motivo e o
+card de emergencia: ele ja e laranja-avermelhado, e o vermelho da prioridade
+alta escrito por cima dele sumia. A saida anterior era desistir da cor ali —
+so que ai a prioridade do card mais urgente do quadro era justamente a unica
+que nao dava para reconhecer pela cor, que e para isso que a cor existe.
 
 ### As cinco etapas
 
@@ -557,6 +826,23 @@ Cada obra tem **uma conversa propria**, gravada no banco. Abre pelo botao
 escrever, anexar arquivo, tirar foto pela camera, responder uma mensagem
 especifica e mencionar alguem com `@`.
 
+**Apagar uma mensagem pergunta para quem**, porque sao dois gestos diferentes:
+
+| | O que acontece | Quem pode |
+| --- | --- | --- |
+| **Apagar para todos** | a mensagem some da conversa de todo mundo. A linha fica, vazia, com a marca *"mensagem apagada"* — o texto e o arquivo viram NULL no banco | so o autor (e o acesso total) |
+| **Apagar para mim** | some so da sua tela; para os outros a conversa continua inteira | qualquer um, em qualquer mensagem |
+
+A marca do "para todos" nao e enfeite: sem ela, quem tivesse respondido a
+mensagem apagada ficaria com uma resposta solta no meio da conversa, sem
+entender a que. O "para mim" e uma linha em `obra_chat_oculta`, filtrada na
+leitura — e por isso ele e o **padrao** da rota: uma chamada sem `escopo` nao
+apaga a mensagem de outras pessoas.
+
+O pop-up de escolha so oferece o "para todos" na propria mensagem. Na de outra
+pessoa ha um caminho so, e perguntar ali seria oferecer uma escolha que nao
+existe.
+
 As **etiquetas** rotulam a obra: o botao *Adicionar etiqueta* fica sempre em
 primeiro, as etiquetas ja postas logo abaixo, e o lapis de cada uma na direita —
 e dentro da edicao que mora o Excluir. A etiqueta e do sistema: a mesma pode
@@ -569,13 +855,14 @@ todas as obras junto.
 
 ### Quem pode editar o que
 
-Cada cargo mexe so nas tarefas do proprio setor: o ADM nao fecha tarefa do
+Cada setor mexe so nas tarefas do proprio setor: o ADM nao fecha tarefa do
 Tecnico. O bloco do outro setor continua visivel (da para acompanhar), mas com
-cadeado e as tarefas desabilitadas.
+cadeado, o check riscado em diagonal, o cursor de bloqueado e o botao
+desabilitado — **nao da nem para clicar**.
 
 Tres saidas dessa regra:
 
-- o cargo com **acesso total** (`cargo.acesso_total`, a diretoria);
+- o setor com **acesso total** (`cargo.acesso_total`, a diretoria);
 - a permissao **check em todas as etapas**;
 - obra de **emergencia** — ali ninguem espera o setor certo.
 
@@ -583,15 +870,61 @@ A regra vive em `podeEditarCheck()` de `src/domain/obras.js` e vale junto com a
 trava de etapa: uma etapa que ainda nao abriu continua travada mesmo para a
 diretoria.
 
-### Cargos
+**A tela e o servidor precisam responder a MESMA coisa.** Havia dois atalhos so
+no cliente — o texto `'todos'` na lista antiga de permissoes e a chave do setor
+ser `diretor` — que o servidor nao conhecia. O efeito era o check que **marcava
+e desmarcava sozinho**: a tela liberava o clique, a gravacao era recusada e o
+recarregamento devolvia o check ao estado anterior, meio segundo depois. Hoje
+`temAcessoTotal()` le so a marca `acessoTotal`, a mesma coluna que o
+`meuCargo()` do servidor consulta.
 
-Cargos sao cadastrados na tela **Usuarios** (botao *Adicionar cargo*): nome,
-sigla, **cor** e a marca de acesso total. A cor escolhida ali pinta as
-etiquetas `[tec] [gq]` do card, os blocos das etapas e as tarjas dos cards de
-usuario — nao ha cor de setor fixa no CSS.
+Alem disso, `alternarCheck()` (no `DadosContext`) faz a pergunta **antes** de
+mexer na tela: check de outro setor nao chega a piscar, e obra concluida nem
+aceita o clique.
 
-Os cinco cargos que as etapas usam (`fixo = true`) mudam de nome e de cor, mas
-nao podem ser apagados. Cargo em uso por algum usuario tambem nao.
+### Membros da obra
+
+**Membro e quem MARCOU algum check nela** — mais ninguem.
+
+Dois gatilhos no banco cuidam disso: `obra_check_entra` poe a pessoa na lista
+quando ela marca, e `obra_check_sai` a tira quando ela desmarca o ultimo check
+dela naquela obra. Sem o segundo, quem marcasse por engano e desmarcasse ficava
+como participante para sempre.
+
+Na tela, obra sem nenhum check marcado mostra "ninguem marcou check ainda". Ela
+mostrava os quatro primeiros da equipe como se fossem os participantes — gente
+que nunca tinha encostado naquela obra aparecendo como responsavel por ela.
+
+### Setor e cargo
+
+Sao duas coisas diferentes, e a confusao entre elas custa caro:
+
+| | **Setor** | **Cargo** |
+| --- | --- | --- |
+| O que e | o grupo da equipe: Comercial, Excelencia, GQ | o titulo da pessoa: "Analista de Qualidade" |
+| De onde vem | uma lista cadastrada (tela Usuarios > **Setores**) | texto livre no cadastro dela |
+| Obrigatorio? | sim | nao |
+| Decide permissao? | **sim — tudo** | nao, nada |
+| Onde mora | `usuario.cargo_id` -> tabela `cargo` | `usuario.cargo_titulo` |
+
+**Todas as permissoes saem do SETOR.** Dois analistas e um coordenador do mesmo
+setor podem exatamente as mesmas coisas — o cargo e informacao, nao poder.
+
+> **Nota para quem le o codigo:** a tabela do banco continua se chamando
+> `cargo`, e no front os campos ainda sao `cargo`, `cargoNome`, `cargoCor`,
+> `cargoPorChave`. Renomear a tabela derrubaria as chaves estrangeiras de meia
+> duzia de outras (`etapa_card_cargo`, `etapa_check_cargo`, `obra_aviso_cargo`)
+> e os trinta pontos do front que leem esses campos — sem mudar nada do que o
+> sistema faz. Na TELA, tudo isso se chama Setor. O cargo especifico e o campo
+> novo, `cargoTitulo`.
+
+Setores sao cadastrados na tela **Usuarios** (botao *Setores*): nome, sigla,
+**cor** e a marca de acesso total. A cor escolhida ali pinta as etiquetas
+`[tec] [gq]` do card, os blocos das etapas e as tarjas dos cards de usuario —
+nao ha cor de setor fixa no CSS.
+
+Os cinco setores que as etapas usam (`fixo = true`) mudam de nome e de cor, mas
+nao podem ser apagados. Setor em uso por algum usuario tambem nao.
 
 ### Avaliacoes
 
@@ -610,21 +943,61 @@ menos uma nota: para zerar tudo existe o *Remover avaliacao*.
 numa obra e 5 em outra dao 6.5. Ela aparece na tela de Usuarios. No banco isso e
 a view `usuario_media`; no front, o `mediaDoUsuario()` do `DadosContext`.
 
+### Concluir a obra
+
+Marcar o ultimo check **nao fecha mais a obra sozinho**. Ele so faz aparecer,
+ao lado do **Progresso**, o botao **Concluir obra** — e o botao so existe com a
+barra em 100%, com todos os checks marcados e para quem pode editar obra.
+
+Sao dois passos depois disso: um formulario com a **observacao do
+encerramento** (opcional) e uma segunda confirmacao, que e onde a obra fecha de
+verdade. Dai ela sai do quadro e passa a viver em Concluidas.
+
+Antes o fechamento era automatico: no instante em que o ultimo check era
+marcado, a obra sumia do quadro sem ninguem decidir nada — e um check marcado
+por engano a levava junto. Agora sao duas perguntas diferentes, e o codigo as
+separa:
+
+```js
+obraConcluida(roteiro, checks) // "marcou tudo?"      -> o botao aparece
+obraFechada(obra)              // "alguem concluiu?"  -> sai do quadro
+```
+
+Quem responde a segunda e a coluna `obra.concluida_em`, carimbada no clique. A
+view `obra_conclusao` continua existindo e agora responde so a primeira.
+
 ### Concluidas
 
-Obra com as cinco etapas fechadas sai do quadro e vai para **Concluidas**,
-agrupada por **ano** (no topo, selecionavel) e por **mes** — cada mes ocupa a
-linha inteira e mostra quantas fecharam, quantas eram emergencia e a nota media.
-Clicando no mes, ele abre e lista as obras.
+Obra concluida vai para **Concluidas**, agrupada por **ano** (no topo,
+selecionavel) e por **mes** — cada mes ocupa a linha inteira e mostra quantas
+fecharam, quantas eram emergencia e a nota media. Clicando no mes, ele abre e
+lista as obras.
 
-A data que agrupa e `obra.concluidaEm`, o carimbo do ultimo check marcado (e ela
-some se alguem reabrir a obra). Quem calcula e a view `obra_conclusao`, no banco.
+A data que agrupa e `obra.concluidaEm`: a hora em que alguem clicou em Concluir
+obra. Cada linha mostra tambem **quem** concluiu.
 
-### Usuarios e cargos
+**Excluir** uma obra concluida tem permissao propria — `excluir_concluidas` — e
+nao sai de `editar_obras`. Nao e a mesma coisa: aqui nao se mexe em trabalho em
+andamento, apaga-se o REGISTRO do que a empresa entregou, com a rastreabilidade,
+o chat, as observacoes, as etiquetas, os anexos e as avaliacoes junto. Sem a
+permissao o lixo nem aparece na linha, e a API recusa do mesmo jeito.
 
-**Adicionar colaborador** pede exatamente o que a tabela `usuario` guarda: foto,
-nome, nascimento, CPF, e-mail, cargo e telefone. Passando o mouse pelo card
-aparecem os botoes de editar e excluir.
+O lixo fica FORA do botao que abre a obra, e nao dentro: um botao dentro de
+outro e onde o clique erra de alvo, e aqui errar significa apagar o registro de
+uma obra entregue.
+
+### Usuarios e setores
+
+**Adicionar colaborador** pede foto, nome, nascimento, CPF, e-mail, telefone,
+**setor** e **cargo**. Passando o mouse pelo card aparecem os botoes de editar
+e excluir.
+
+**Obrigatorios: nome, nascimento, CPF e setor.** E-mail, telefone, cargo e foto
+sao opcionais. E-mail e telefone eram obrigatorios e travavam o cadastro de
+quem trabalha em campo e nao tem e-mail corporativo — quem nao tem e-mail
+**entra pelo CPF**, que o login ja aceita no mesmo campo. Preenchidos, os dois
+continuam sendo validados: o que a validacao deve pegar e o dedo trocado, nao a
+ausencia.
 
 Colaborador novo entra com a **senha padrao 123456** e com `senha_temporaria`
 ligado: em Configuracoes > Senha o sistema cobra a troca. Excluir **desativa** o
@@ -632,17 +1005,17 @@ acesso (`ativo = false`) em vez de apagar, para o historico das obras nao perder
 quem marcou o que.
 
 A lista filtra por **nome** (campo de busca, que tambem acha por e-mail) e por
-**cargo** — e da para marcar mais de um cargo ao mesmo tempo.
+**setor** — e da para marcar mais de um setor ao mesmo tempo.
 
 O **CPF nao muda depois de cadastrado**: na edicao o campo fica travado e a rota
 `PATCH /api/equipe/usuarios/:id` recusa o campo. Para trocar, apaga-se o
 cadastro e faz-se um novo — do jeito que a coluna UNIQUE do banco espera.
 
-**Cargos** abre a lista em uma linha so de etiquetas coloridas — ADM | GQ |
+**Setores** abre a lista em uma linha so de etiquetas coloridas — ADM | GQ |
 EXCELENCIA — que quebra quando chega no fim do pop-up. Clicar em uma delas ja
 abre a edicao em OUTRO pop-up por cima, com **Excluir** ao lado de **Salvar**.
 
-O "acesso total" de um cargo aparece SO no formulario dele. Em nenhuma outra
+O "acesso total" de um setor aparece SO no formulario dele. Em nenhuma outra
 tela — nem no card da pessoa, nem na lista de setores — se diz quem tem.
 
 ### Onde os dados moram

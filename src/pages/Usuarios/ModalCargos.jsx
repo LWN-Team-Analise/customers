@@ -11,8 +11,13 @@ const Mais = () => (
 )
 
 /**
- * Lista dos cargos, em linha unica que quebra quando chega no fim do
+ * Lista dos SETORES, em linha unica que quebra quando chega no fim do
  * pop-up:  ADM | GQ | EXCELENCIA ...
+ *
+ * Setor e o grupo da equipe, de onde saem as permissoes; o cargo de cada
+ * pessoa (Analista, Coordenador) e texto livre no cadastro dela. No
+ * banco o setor continua sendo a tabela `cargo`, e por isso o codigo
+ * daqui ainda usa esse nome.
  *
  * Clicar em um deles ja abre a edicao, em OUTRO pop-up por cima deste —
  * antes o formulario ficava embaixo da lista e os dois disputavam a
@@ -35,8 +40,8 @@ export default function ModalCargos({ aberto, aoFechar }) {
       <Modal
         aberto={aberto}
         aoFechar={aoFechar}
-        titulo="Cargos"
-        subtitulo="Clique em um cargo para editar. A cor dele pinta as etiquetas do card e os blocos das etapas."
+        titulo="Setores"
+        subtitulo="Clique em um setor para editar. A cor dele pinta as etiquetas do card e os blocos das etapas."
         largura={560}
       >
         <div className="cargos">

@@ -6,8 +6,15 @@ import './Barreira.css'
  *
  * Sem ela, um unico componente que estoura derruba a arvore inteira do
  * React e a tela fica BRANCA — parece que o site caiu. Com ela, o erro
- * para aqui: aparece um recado com o motivo e dois caminhos de volta
- * (tentar de novo, sem perder a pagina, ou recarregar).
+ * para aqui e a pessoa ganha dois caminhos de volta: tentar de novo,
+ * sem perder a pagina, ou recarregar.
+ *
+ * O que a tela NAO mostra mais: o titulo alarmante, a explicacao sobre
+ * o banco e a mensagem tecnica do erro ("useDados precisa estar dentro
+ * de <DadosProvider>"). Nenhum dos tres ajudava quem estava usando o
+ * sistema — o texto assustava e a mensagem so faz sentido para quem
+ * escreve o codigo. Ela continua inteira no console do navegador, com
+ * a pilha, que e onde se conserta.
  *
  * Precisa ser classe: hoje so classe tem componentDidCatch.
  */
@@ -33,14 +40,6 @@ export default class Barreira extends Component {
     return (
       <div className="barreira" role="alert">
         <div className="barreira__caixa">
-          <h1 className="barreira__titulo">Algo quebrou nesta tela</h1>
-          <p className="barreira__texto">
-            O resto do sistema continua de pé, e nada do que você já salvou se perdeu — tudo
-            fica no banco na hora em que você faz.
-          </p>
-
-          <pre className="barreira__motivo">{erro.message || String(erro)}</pre>
-
           <div className="barreira__acoes">
             <button
               type="button"

@@ -4,6 +4,7 @@ import Avatar from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import { prepararImagem } from '@/utils/imagem'
+import { tituloDaObra } from '@/domain/obras'
 import { dataHora } from '@/utils/formato'
 import './ModalChat.css'
 
@@ -20,6 +21,12 @@ import './ModalChat.css'
  *   - tirar uma foto na hora, pela camera;
  *   - responder UMA mensagem especifica (ela fica citada em cima);
  *   - mencionar alguem com @ — a lista abre enquanto se digita.
+ *
+ * `somenteLeitura` e o chat da obra CONCLUIDA. A conversa inteira
+ * continua a vista — e ela costuma ser a melhor explicacao do que
+ * aconteceu na obra —, mas a caixa de escrever some, junto com o
+ * responder e o apagar de cada mensagem. Uma obra encerrada nao recebe
+ * mais nada: se recebesse, o registro dela mudaria depois de fechado.
  */
 
 const Icone = {
@@ -82,7 +89,7 @@ function lerArquivo(arquivo) {
   })
 }
 
-export default function ModalChat({ aberto, obra, aoFechar }) {
+export default function ModalChat({ aberto, obra, somenteLeitura = false, aoFechar }) {
   const { user } = useAuth()
   const { equipe, pessoaPorId, clientePorId, carregarChat, enviarMensagem, apagarMensagem } =
     useDados()
@@ -256,10 +263,38 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
     }
   }
 
-  const apagar = async (mensagem) => {
+  /**
+   * Apagar uma mensagem: dois destinos, e a diferença importa.
+   *
+   *   'todos' — some da conversa de TODO MUNDO. A mensagem não
+   *     desaparece: fica no lugar dela a marca "mensagem apagada". Sem
+   *     essa marca, quem tivesse respondido aquela mensagem ficaria com
+   *     uma resposta solta no meio da conversa, sem entender a quê. Só o
+   *     autor pode (e a diretoria, para o caso de alguém deixar algo
+   *     indevido ao sair da empresa).
+   *
+   *   'mim' — some só da MINHA tela; para os outros a conversa continua
+   *     inteira. Vale para qualquer mensagem, minha ou não.
+   *
+   * O pop-up de escolha só aparece quando existem os dois caminhos. Na
+   * mensagem de outra pessoa há um só ("apagar para mim"), e perguntar
+   * ali seria oferecer uma escolha que não existe.
+   */
+  const [apagandoMsg, setApagandoMsg] = useState(null)
+
+  const apagar = async (mensagem, escopo) => {
+    setApagandoMsg(null)
     try {
-      await apagarMensagem(obra.id, mensagem.id)
-      setMensagens((atual) => atual.filter((m) => m.id !== mensagem.id))
+      await apagarMensagem(obra.id, mensagem.id, escopo)
+      setMensagens((atual) =>
+        escopo === 'todos'
+          ? atual.map((m) =>
+              m.id === mensagem.id
+                ? { ...m, apagada: true, texto: '', arquivo: null, editadaEm: null }
+                : m,
+            )
+          : atual.filter((m) => m.id !== mensagem.id),
+      )
     } catch (e) {
       setErro(e.message)
     }
@@ -273,8 +308,12 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
     <Modal
       aberto={aberto}
       aoFechar={aoFechar}
-      titulo={`Chat — ${cliente?.nome ?? 'obra'}`}
-      subtitulo="A conversa fica gravada nesta obra. Cada obra tem a sua."
+      titulo={`Chat — ${tituloDaObra(obra, cliente)}`}
+      subtitulo={
+        somenteLeitura
+          ? 'Obra concluída: a conversa fica para consulta e não recebe mais mensagens.'
+          : 'A conversa fica gravada nesta obra. Cada obra tem a sua.'
+      }
       largura={640}
     >
       <div className="chat">
@@ -284,8 +323,14 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
 
           {!carregando && mensagens.length === 0 && (
             <p className="chat__vazio">
-              Nenhuma mensagem ainda. Escreva a primeira aqui embaixo — dá para anexar arquivo,
-              tirar foto e mencionar alguém com <strong>@</strong>.
+              {somenteLeitura ? (
+                'Esta obra foi concluída sem nenhuma mensagem no chat.'
+              ) : (
+                <>
+                  Nenhuma mensagem ainda. Escreva a primeira aqui embaixo — dá para anexar
+                  arquivo, tirar foto e mencionar alguém com <strong>@</strong>.
+                </>
+              )}
             </p>
           )}
 
@@ -302,7 +347,7 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
               >
                 {!meu && <Avatar nome={m.autorNome} foto={autor?.foto} tamanho={30} titulo={m.autorNome} />}
 
-                <div className="fala__balao">
+                <div className={`fala__balao ${m.apagada ? 'is-apagada' : ''}`.trim()}>
                   {!meu && <p className="fala__quem">{m.autorNome}</p>}
 
                   {/* a mensagem respondida aparece citada em cima */}
@@ -320,29 +365,45 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
 
                   {m.arquivo && <Anexo arquivo={m.arquivo} />}
 
-                  {m.texto && (
-                    <p className="fala__texto">
-                      <ComMencoes texto={m.texto} equipe={mencionaveis} />
+                  {/* apagada para todos: o conteúdo já veio vazio do
+                      servidor, e o que fica no lugar é o rastro */}
+                  {m.apagada ? (
+                    <p className="fala__apagada">
+                      <Icone.lixo />
+                      mensagem apagada
                     </p>
+                  ) : (
+                    m.texto && (
+                      <p className="fala__texto">
+                        <ComMencoes texto={m.texto} equipe={mencionaveis} />
+                      </p>
+                    )
                   )}
 
+                  {/* na obra fechada sobra só a hora: responder e apagar
+                      escreveriam no registro de uma obra encerrada */}
                   <p className="fala__pe">
                     <span>{dataHora(m.enviadaEm)}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRespondendo(m)
-                        campo.current?.focus()
-                      }}
-                      title="Responder esta mensagem"
-                      aria-label={`Responder ${m.autorNome}`}
-                    >
-                      <Icone.responder />
-                    </button>
-                    {meu && (
+                    {!somenteLeitura && !m.apagada && (
                       <button
                         type="button"
-                        onClick={() => apagar(m)}
+                        onClick={() => {
+                          setRespondendo(m)
+                          campo.current?.focus()
+                        }}
+                        title="Responder esta mensagem"
+                        aria-label={`Responder ${m.autorNome}`}
+                      >
+                        <Icone.responder />
+                      </button>
+                    )}
+                    {/* o lixo vale para QUALQUER mensagem: a de outra
+                        pessoa também some da minha tela quando eu peço.
+                        O que muda é o que o pop-up oferece. */}
+                    {!somenteLeitura && (
+                      <button
+                        type="button"
+                        onClick={() => setApagandoMsg(m)}
                         title="Apagar"
                         aria-label="Apagar mensagem"
                       >
@@ -358,8 +419,55 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
           <span ref={fimDaLista} />
         </div>
 
+        {/* ---------------- apagar mensagem ---------------- */}
+        {apagandoMsg && (
+          <div
+            className="chat__apagar"
+            role="dialog"
+            aria-label="Apagar mensagem"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setApagandoMsg(null)
+            }}
+          >
+            <div className="chat__apagarcaixa">
+              <p className="chat__apagartitulo">Apagar mensagem</p>
+
+              {/* "para todos" só existe na própria mensagem: apagar da
+                  conversa a fala de outra pessoa é reescrever o que foi
+                  dito na obra */}
+              {String(apagandoMsg.autorId) === String(user?.id) && !apagandoMsg.apagada && (
+                <button
+                  type="button"
+                  className="chat__apagaropcao chat__apagaropcao--forte"
+                  onClick={() => apagar(apagandoMsg, 'todos')}
+                >
+                  <strong>Apagar para todos</strong>
+                  <span>Some da conversa de todo mundo e fica a marca "mensagem apagada".</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="chat__apagaropcao"
+                onClick={() => apagar(apagandoMsg, 'mim')}
+              >
+                <strong>Apagar para mim</strong>
+                <span>Some só da sua tela. Os outros continuam vendo a conversa inteira.</span>
+              </button>
+
+              <button
+                type="button"
+                className="chat__apagarcancelar"
+                onClick={() => setApagandoMsg(null)}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ---------------- camera ---------------- */}
-        {camera && (
+        {!somenteLeitura && camera && (
           <Camera
             aoFechar={() => setCamera(false)}
             aoTirar={(foto) => {
@@ -376,7 +484,17 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
           />
         )}
 
-        {/* ---------------- escrever ---------------- */}
+        {/* ---------------- escrever ----------------
+            Obra concluída não tem caixa de escrever: no lugar dela fica
+            o aviso de por quê. Esconder o formulário e deixar o resto
+            igual é o que faz a tela dizer "aqui acabou" sem precisar de
+            um cadeado em cada botão. */}
+        {somenteLeitura ? (
+          <p className="chat__encerrado" role="status">
+            Esta obra foi concluída — a conversa continua aqui para consulta, mas não é
+            mais possível enviar mensagens.
+          </p>
+        ) : (
         <form className="chat__escrever" onSubmit={enviar}>
           {respondendo && (
             <p className="chat__respondendo">
@@ -507,6 +625,7 @@ export default function ModalChat({ aberto, obra, aoFechar }) {
             tabIndex={-1}
           />
         </form>
+        )}
       </div>
     </Modal>
   )
