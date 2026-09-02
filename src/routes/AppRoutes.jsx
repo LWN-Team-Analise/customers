@@ -69,6 +69,17 @@ export default function AppRoutes() {
           </Interna>
         }
       />
+      {/* A MESMA tela da obra, so que travada: abre por dentro de Concluidas
+          e volta para la. Obra encerrada e registro — da para ver tudo, mas
+          nao da para mexer em nada. */}
+      <Route
+        path="/app/concluidas/:id"
+        element={
+          <Interna permissao="ver_concluidas">
+            <ObraDetalhe somenteLeitura voltarPara="/app/concluidas" />
+          </Interna>
+        }
+      />
       <Route
         path="/app/avaliacoes"
         element={

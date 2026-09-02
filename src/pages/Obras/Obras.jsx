@@ -37,6 +37,14 @@ const Sino = () => (
   </svg>
 )
 
+/* o icone da opcao "Adicionar observação" no botao flutuante */
+const NotaGlifo = () => (
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+    <path d="M8 11h8M8 15h5" />
+  </svg>
+)
+
 export default function Obras() {
   const {
     obras,
@@ -204,7 +212,19 @@ export default function Obras() {
   }
 
   return (
-    <AppShell>
+    /* Aqui o botao flutuante ganha uma segunda opcao: alem do chat da
+       equipe, a observacao do quadro — que so existe nesta tela. Com duas
+       coisas a acrescentar, ele vira um "+" e pergunta qual. */
+    <AppShell
+      acoesFlutuantes={[
+        {
+          id: 'obs-quadro',
+          rotulo: 'Adicionar observação',
+          Glifo: NotaGlifo,
+          aoClicar: () => setModalObs(true),
+        },
+      ]}
+    >
       <section className="obras">
         {/* ---------------- cabecalho de filtros ---------------- */}
         {filtrosAbertos && (
@@ -441,7 +461,7 @@ export default function Obras() {
             tom="emergencia"
             total={emergencia.length}
             aoAdicionar={podeCriarObra ? () => setModalObra('emergencia') : undefined}
-            vazio="Nenhuma emergência aberta. Ótimo sinal."
+            vazio="Nenhuma emergência aberta."
           >
             {emergencia.map((obra) => (
               <CardObra

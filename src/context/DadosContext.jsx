@@ -28,6 +28,7 @@ const DadosContext = createContext(null)
 
 const INICIAL = {
   clientes: [],
+  setores: [],
   obras: [],
   observacoesQuadro: [],
   etiquetas: [],
@@ -61,6 +62,7 @@ export function DadosProvider({ children }) {
       if (minha !== carga.current) return
       setEstado({
         clientes: quadro.clientes ?? [],
+        setores: quadro.setores ?? [],
         obras: quadro.obras ?? [],
         observacoesQuadro: quadro.observacoesQuadro ?? [],
         etiquetas: quadro.etiquetas ?? [],
@@ -173,6 +175,33 @@ export function DadosProvider({ children }) {
   )
 
   const removerCliente = useCallback((id) => gravar(() => dados.apagarCliente(id)), [gravar])
+
+  /* ---------------- Setores do cliente ---------------- */
+
+  const adicionarSetor = useCallback((campos) => gravar(() => dados.criarSetor(campos)), [gravar])
+
+  const atualizarSetor = useCallback(
+    (id, campos) => gravar(() => dados.editarSetor(id, campos)),
+    [gravar],
+  )
+
+  const removerSetor = useCallback((id) => gravar(() => dados.apagarSetor(id)), [gravar])
+
+  const setorPorId = useCallback(
+    (id) => estado.setores.find((s) => String(s.id) === String(id)) ?? null,
+    [estado.setores],
+  )
+
+  /* ---------------- Chat do site ---------------- */
+
+  const carregarChatDoSite = useCallback(() => dados.carregarChatDoSite(), [])
+
+  const enviarNoChatDoSite = useCallback(
+    (texto) => dados.enviarNoChatDoSite({ texto, autorNome: user?.name }),
+    [user?.name],
+  )
+
+  const apagarDoChatDoSite = useCallback((id) => dados.apagarDoChatDoSite(id), [])
 
   /* ============================================================
      Obras
@@ -643,6 +672,15 @@ export function DadosProvider({ children }) {
       atualizarCliente,
       removerCliente,
 
+      adicionarSetor,
+      atualizarSetor,
+      removerSetor,
+      setorPorId,
+
+      carregarChatDoSite,
+      enviarNoChatDoSite,
+      apagarDoChatDoSite,
+
       adicionarObra,
       atualizarObra,
       removerObra,
@@ -725,6 +763,13 @@ export function DadosProvider({ children }) {
       adicionarCliente,
       atualizarCliente,
       removerCliente,
+      adicionarSetor,
+      atualizarSetor,
+      removerSetor,
+      setorPorId,
+      carregarChatDoSite,
+      enviarNoChatDoSite,
+      apagarDoChatDoSite,
       adicionarObra,
       atualizarObra,
       removerObra,

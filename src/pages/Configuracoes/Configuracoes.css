@@ -8,8 +8,13 @@
   gap: 16px;
 }
 
-/* o titulo e a conta ocupam a linha toda; senha e aparencia dividem */
+/* O título, o Outlook e a conta ocupam a linha toda; o resto divide.
+
+   O bloco do Outlook entrou aqui porque é o primeiro da tela e o único
+   que pede ação: parando no meio, sobrava um vazio grande à direita bem
+   onde a atenção da pessoa está. */
 .config > header,
+.config__bloco--outlook,
 .config__bloco--conta {
   grid-column: 1 / -1;
 }
@@ -240,17 +245,92 @@
   cursor: not-allowed;
 }
 
+/* A logo fica com a cor que a Microsoft usa, igual a do botao do login:
+   pintada de azul do sistema ela virava so mais um icone. */
 .botaooutlook__logo {
   display: block;
   width: 19px;
   height: 19px;
-  background: var(--btn-bg);
-  -webkit-mask-image: var(--logo);
-  mask-image: var(--logo);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+  object-fit: contain;
+}
+
+/* ---------------- Corpo do bloco do Outlook ---------------- */
+
+.config__outlookcorpo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+}
+
+/* o texto cresce e empurra o botão para a ponta direita da linha */
+.config__outlooktexto {
+  flex: 1;
+  min-width: 260px;
+}
+
+.config__outlooktexto > *:last-child {
+  margin-bottom: 0;
+}
+
+.config__outlookacao {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ---------------- Nome + tema na mesma linha ----------------
+
+   Os dois botões de tema pegavam a largura inteira embaixo do nome e
+   ficavam com cara de campo principal, que não são. Ao lado do nome eles
+   voltam ao tamanho de um controle, e o campo Nome ganha o espaço. */
+
+.config__nome {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 16px;
+}
+
+.config__nome > *:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.config__temas {
+  grid-column: 2;
+  grid-row: 1;
+  width: auto;
+}
+
+.config__temas .config__tema {
+  padding-inline: 15px;
+  white-space: nowrap;
+}
+
+.config__semfoto {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: start;
+}
+
+@media (max-width: 860px) {
+  /* não cabem lado a lado: o tema volta para baixo do nome */
+  .config__nome {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .config__temas {
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
+  }
+
+  .config__semfoto {
+    grid-row: auto;
+  }
+
+  .config__outlookacao {
+    margin-left: 0;
+    width: 100%;
+  }
 }

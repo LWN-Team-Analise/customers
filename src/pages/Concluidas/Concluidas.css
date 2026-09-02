@@ -33,138 +33,264 @@
 
 /* ---------------- Ano ---------------- */
 
+/* ---------------- Ano: setas nas pontas, ano no meio ---------------- */
+
 .anos {
   display: flex;
-  gap: 9px;
-  flex-wrap: wrap;
-}
-
-.ano {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 20px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-md);
-  background: var(--control-bg);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-}
-
-.ano:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.ano strong {
-  font-size: 1.15rem;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-}
-
-.ano span {
-  font-size: 0.7rem;
-}
-
-.ano.is-atual {
-  background: var(--accent);
-  border-color: transparent;
-  color: #fff;
-}
-
-/* ---------------- Mes ---------------- */
-
-.meses {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-/* o card do mes ocupa a linha inteira */
-.mes {
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  background: var(--glass-bg);
-  box-shadow: var(--glass-shadow), var(--glass-inner);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  overflow: hidden;
-}
-
-.mes__cabeca {
-  display: flex;
   align-items: center;
-  gap: 14px;
-  width: 100%;
-  padding: 15px 18px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
+  justify-content: center;
+  gap: 18px;
+  margin-bottom: 16px;
 }
 
-.mes__cabeca:hover {
-  background: var(--control-bg);
-}
-
-.mes__seta {
+.anos__seta {
   display: grid;
   place-items: center;
-  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--vidro-borda);
+  border-radius: 50%;
+  background: var(--vidro-fundo);
+  color: var(--text-base);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.anos__seta:hover:not(:disabled) {
+  background: var(--vidro-fundo-forte);
+  color: var(--text-strong);
+}
+
+.anos__seta:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+/* ponta da lista: a seta fica, apagada — sumir mudaria o lugar do ano */
+.anos__seta:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.anos__atual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 130px;
+  text-align: center;
+}
+
+.anos__atual strong {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: var(--text-strong);
+}
+
+.anos__atual span {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+/* ---------------- Calendário: os doze meses do ano ----------------
+
+   Grade de doze, e nao uma lista dos que tem obra: o mes vazio tambem
+   diz alguma coisa, e a grade fixa deixa a leitura sempre no mesmo lugar
+   de um ano para o outro. */
+
+.calendario {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.calmes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 13px 8px 12px;
+  border: 1px solid var(--vidro-borda);
+  border-radius: var(--radius-md);
+  background: var(--vidro-fundo);
+  color: var(--text-base);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.calmes:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--control-border);
+  background: var(--vidro-fundo-forte);
+}
+
+.calmes__nome {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.calmes__quantas {
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-strong);
+}
+
+/* o selo vermelho conta as emergencias do mes */
+.calmes__emerg {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--obra-emerg);
+  color: var(--obra-emerg-fg);
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* mes sem obra: continua na grade, so nao clica */
+.calmes.is-vazio {
+  cursor: default;
+  opacity: 0.4;
+  background: transparent;
+  border-style: dashed;
+}
+
+.calmes.is-vazio .calmes__quantas {
   color: var(--text-faint);
-  transition: transform var(--dur-fast) var(--ease-out);
 }
 
-.mes.is-aberto .mes__seta {
-  transform: rotate(90deg);
-  color: var(--accent);
+/* o :hover acima tem especificidade maior; o mes escolhido precisa vencer
+   dele, senao ficava cinza justamente enquanto o ponteiro estava em cima */
+.calmes.is-atual,
+.calmes.is-atual:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--btn-shadow);
 }
 
-.mes__nome {
-  font-size: 1rem;
+.calmes.is-atual .calmes__nome,
+.calmes.is-atual .calmes__quantas {
+  color: var(--btn-fg);
+}
+
+/* ---------------- O mês aberto ---------------- */
+
+.mesaberto {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: mes-abre var(--dur-base) var(--ease-out);
+}
+
+@keyframes mes-abre {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mesaberto {
+    animation: none;
+  }
+}
+
+.mesaberto__topo {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mesaberto__titulo {
+  margin: 0;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-strong);
-  min-width: 108px;
 }
 
-.mes__info {
+.mesaberto__resumo {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ---------------- Padrão e emergência, separados ----------------
+
+   Sao dois tipos de trabalho diferentes. Na mesma lista, a conta de
+   emergencias do mes se perde no meio das outras. */
+
+.grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.grupo__titulo {
   display: flex;
   align-items: center;
-  gap: 22px;
-  margin-left: auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.mes__dado {
-  font-size: 0.79rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.mes__dado strong {
-  font-size: 0.95rem;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: var(--text-strong);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--grupo-cor, var(--text-muted));
 }
 
-.mes__dado em {
-  font-style: normal;
-  color: var(--text-faint);
+/* a barrinha antes do titulo leva a cor do tipo — a mesma do quadro */
+.grupo__titulo::before {
+  content: '';
+  width: 3px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--grupo-cor, var(--text-faint));
 }
 
-.mes__dado--emerg strong {
-  color: var(--obra-emerg);
+.grupo[data-tipo='padrao'] {
+  --grupo-cor: var(--obra-padrao);
 }
 
-/* ---------------- Obras do mes ---------------- */
+.grupo[data-tipo='emergencia'] {
+  --grupo-cor: var(--obra-emerg);
+}
 
+.grupo__quantas {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--grupo-cor) 18%, transparent);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .calendario {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 460px) {
+  .calendario {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
 .mes__obras {
   display: flex;
   flex-direction: column;

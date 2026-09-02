@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
+import Confirma from '@/components/Confirma/Confirma'
 import Avatar from '@/components/Avatar/Avatar'
 import { CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import { podeEditarCpf } from '@/domain/obras'
+import { ALTERACAO, VISUALIZACAO } from '@/domain/permissoes'
 import { SENHA_PADRAO } from '@/services/equipeService'
 import { validateCPF, validateEmail } from '@/services/authService'
 import { formatarCPF, formatarTelefone, soDigitos } from '@/utils/formato'
@@ -89,7 +91,11 @@ export default function ModalColaborador({
     }
   }
 
-  const enviar = async (evento) => {
+  /* o que se confirma aqui e o CARGO: e ele que decide o que a pessoa
+     nova vai poder fazer no sistema desde o primeiro acesso */
+  const [conferindo, setConferindo] = useState(null)
+
+  const enviar = (evento) => {
     evento.preventDefault()
 
     const novos = {}
@@ -120,9 +126,15 @@ export default function ModalColaborador({
       campos.cpf = soDigitos(form.cpf)
     }
 
+    setConferindo(campos)
+  }
+
+  const gravar = async () => {
+    if (!conferindo) return
     setSalvando(true)
     try {
-      await aoSalvar(campos)
+      await aoSalvar(conferindo)
+      setConferindo(null)
       aoFechar()
     } catch (e) {
       setErros({ geral: e.message })
@@ -137,9 +149,7 @@ export default function ModalColaborador({
       aoFechar={aoFechar}
       titulo={editando ? 'Editar colaborador' : 'Adicionar colaborador'}
       subtitulo={
-        editando
-          ? 'Estes são os mesmos campos da tabela usuario, no banco.'
-          : `Entra com a senha ${SENHA_PADRAO} e troca no primeiro acesso.`
+        editando ? undefined : `Entra com a senha ${SENHA_PADRAO} e troca no primeiro acesso.`
       }
       largura={580}
     >
@@ -201,13 +211,6 @@ export default function ModalColaborador({
             onChange={mudar('cpf')}
             erro={erros.cpf}
             disabled={editando && !cpfLiberado}
-            dica={
-              editando
-                ? cpfLiberado
-                  ? 'Você é da diretoria: pode corrigir o CPF.'
-                  : 'Somente a diretoria altera o CPF.'
-                : undefined
-            }
           />
 
           <CampoTexto
@@ -254,6 +257,69 @@ export default function ModalColaborador({
           </Button>
         </footer>
       </form>
+
+      {/* A conferência é sobre o CARGO.
+
+          Cadastrar uma pessoa e escolher o cargo dela sao a mesma acao aqui,
+          e e o cargo que decide o que ela pode fazer desde o primeiro acesso.
+          Mostrar a lista antes de gravar e o que evita descobrir semana que
+          vem que o novo tecnico tambem apagava obra. */}
+      <Confirma
+        aberto={Boolean(conferindo)}
+        nivel={1}
+        tom="acao"
+        titulo={editando ? 'Salvar as alterações?' : 'Cadastrar este colaborador?'}
+        mensagem={
+          editando
+            ? 'Os dados abaixo passam a valer para esta pessoa.'
+            : `A pessoa entra com a senha ${SENHA_PADRAO} e troca no primeiro acesso.`
+        }
+        detalhes={<ResumoDoCargo campos={conferindo} cargos={cargos} />}
+        rotuloConfirmar={editando ? 'Salvar' : 'Cadastrar'}
+        aoConfirmar={gravar}
+        aoFechar={() => setConferindo(null)}
+      />
     </Modal>
+  )
+}
+
+/**
+ * O resumo que aparece na confirmacao: quem e a pessoa e, principalmente, o
+ * que o cargo escolhido libera para ela.
+ */
+function ResumoDoCargo({ campos, cargos }) {
+  if (!campos) return null
+
+  const cargo = cargos.find((c) => c.chave === campos.cargo)
+  const chaves = cargo?.permissoes ?? []
+  const rotulo = (chave) =>
+    [...VISUALIZACAO, ...ALTERACAO].find((p) => p.chave === chave)?.rotulo ?? chave
+
+  return (
+    <dl>
+      <dt>Nome</dt>
+      <dd>{campos.nome}</dd>
+
+      <dt>E-mail</dt>
+      <dd>{campos.email}</dd>
+
+      <dt>Cargo</dt>
+      <dd>{cargo?.nome ?? campos.cargo}</dd>
+
+      <dt>Pode</dt>
+      <dd>
+        {cargo?.acessoTotal ? (
+          <strong>Acesso total — passa por todas as travas do sistema.</strong>
+        ) : chaves.length === 0 ? (
+          <em>Nenhuma permissão. A pessoa só vê a própria conta.</em>
+        ) : (
+          <ul>
+            {chaves.map((c) => (
+              <li key={c}>{rotulo(c)}</li>
+            ))}
+          </ul>
+        )}
+      </dd>
+    </dl>
   )
 }

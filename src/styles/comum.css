@@ -338,6 +338,28 @@
   border-color: transparent;
 }
 
+/* Prioridade DESLIGADA tambem mostra a cor.
+
+   Vermelho, amarelo e verde sao o codigo da prioridade no sistema
+   inteiro. Se as tres pastilhas do filtro so ficam cinzas ate alguem
+   clicar, esse codigo some justamente onde a pessoa esta escolhendo por
+   ele — entao aqui a cor entra no texto e na borda, e o preenchimento
+   continua sendo o que marca a escolhida. */
+.chip[data-tom='alta']:not(.is-atual),
+.chip[data-tom='media']:not(.is-atual),
+.chip[data-tom='baixa']:not(.is-atual) {
+  color: var(--tom);
+  border-color: color-mix(in srgb, var(--tom) 45%, transparent);
+  background: color-mix(in srgb, var(--tom) 10%, transparent);
+}
+
+.chip[data-tom='alta']:not(.is-atual):hover,
+.chip[data-tom='media']:not(.is-atual):hover,
+.chip[data-tom='baixa']:not(.is-atual):hover {
+  color: var(--tom);
+  background: color-mix(in srgb, var(--tom) 20%, transparent);
+}
+
 .ferramenta.is-ativo,
 .ferramenta.is-ativo:hover {
   border-color: var(--accent);

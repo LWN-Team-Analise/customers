@@ -8,7 +8,7 @@
   align-items: stretch;
   min-height: 100dvh;
   /* abre espaco para a bolha, que e flutuante */
-  padding-left: 106px;
+  padding-left: 86px;
 }
 
 /* ---------------- Logo ----------------
@@ -18,8 +18,8 @@
    conteudo: assim a logo fica no eixo do menu, e nao encostada a esquerda */
 .marca {
   position: fixed;
-  left: 14px;
-  width: 92px;
+  left: 10px;
+  width: 72px;
   top: 22px;
   z-index: 21;
   display: grid;
@@ -46,18 +46,20 @@
 
 .rail {
   position: fixed;
-  left: 14px;
+  left: 10px;
   top: 50%;
   z-index: 20;
   transform: translateY(-50%);
-  width: 92px;
+  /* a bolha encostou nos botoes: a folga lateral que sobrava so
+     empurrava o conteudo da tela para a direita */
+  width: 72px;
   max-height: calc(100dvh - 190px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 12px 8px;
-  border-radius: 30px;
+  padding: 8px 5px;
+  border-radius: 26px;
   /* o vidro vem da classe .vidro; aqui so o desfoque mais forte, que e
      o que faz a bolha do menu parecer mais grossa que o resto */
   backdrop-filter: blur(calc(var(--glass-blur) * 1.7)) saturate(175%);
@@ -65,6 +67,8 @@
 }
 
 .rail__lista {
+  /* a marca do item atual e posicionada por aqui */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -77,12 +81,24 @@
 }
 
 .rail__btn {
+  /* acima da marca, que e irma e passa por baixo */
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
-  padding: 10px 4px 8px;
+  /* ALTURA FIXA, e e o que conserta a animacao.
+
+     "Página inicial" quebra em duas linhas e os outros nao; com altura
+     automatica a marca tinha que MUDAR DE TAMANHO no meio do caminho, e
+     o que se via era a bolha se deformando de um item para o outro em
+     vez de deslizar. Com todos do mesmo tamanho, so sobra o translate —
+     que e uma propriedade de composicao e desliza liso. */
+  height: 56px;
+  padding: 6px 2px;
   border: 0;
   border-radius: 18px;
   background: transparent;
@@ -90,16 +106,16 @@
   cursor: pointer;
   text-align: center;
   text-decoration: none;
-  transition: background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-base) var(--ease-out);
 }
 
 .rail__btn:hover {
-  background: var(--control-bg);
   color: var(--text-strong);
 }
 
 .rail__glifo {
+  position: relative;
+  z-index: 2;
   display: grid;
   place-items: center;
   transition: transform var(--dur-fast) var(--ease-out);
@@ -109,20 +125,123 @@
   transform: scale(0.9);
 }
 
+/* Fonte pequena de proposito: a bolha tem 72px e o rotulo mais longo e
+   "Página inicial". Nesta medida ele quebra em duas linhas curtas e nenhuma
+   passa da largura do botao. */
 .rail__rotulo {
-  font-size: 0.66rem;
-  font-weight: 500;
+  position: relative;
+  z-index: 2;
+  max-width: 100%;
+  font-size: 0.55rem;
+  font-weight: 600;
   line-height: 1.15;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
   hyphens: auto;
+  overflow-wrap: anywhere;
+  /* no maximo duas linhas: e o que cabe na altura fixa do botao */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* item atual: bolha cheia dentro da bolha, como na referencia */
+/* ---- Item atual: a marca que DESLIZA ----
+
+   Sao tres camadas empilhadas, na ordem em que se veem:
+
+     .rail__marca        a cova — o encaixe fundo onde o botao assenta
+     .rail__marca-anel   o anel de gradiente, que gira sem parar
+     .rail__marca::after o miolo, que cobre o anel e deixa so a borda
+
+   O anel e um quadrado bem maior que o botao girando por baixo; quem o
+   transforma em anel e o miolo por cima. Girar um gradiente conico direto no
+   fundo nao daria certo — o fundo nao gira sozinho.
+
+   A peca e UMA SO para a barra inteira. Trocar de aba nao a apaga e recria
+   noutro lugar: ela muda de posicao e de tamanho, e a transicao abaixo faz o
+   caminho — que e o efeito pedido ao passar de um menu para o outro. */
+
+.rail__marca {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  width: var(--marca-l);
+  height: var(--marca-a);
+  border-radius: 18px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(var(--marca-x), var(--marca-y), 0);
+  background: var(--anel-cova);
+  box-shadow: inset 0 2px 6px var(--anel-cova), inset 0 0 4px var(--anel-cova),
+    0 1px 0 var(--glass-edge-a);
+  /* SO o transform anima.
+
+     Largura e altura ficam de fora de proposito: os botoes agora tem o
+     mesmo tamanho, entao elas nao mudam — e animar caixa forcaria o
+     navegador a recalcular layout a cada quadro, que e de onde vinha o
+     tranco. Assim a bolha escorrega numa camada so.
+
+     A curva passa um tiquinho do ponto e volta: e o que da o peso de
+     bolha, em vez de uma caixa que para seco no destino. */
+  transition: transform 520ms cubic-bezier(0.22, 1.12, 0.32, 1),
+    opacity var(--dur-fast) var(--ease-out);
+  will-change: transform;
+}
+
+/* so aparece depois da primeira medida — senao entrava deslizando do
+   canto 0,0 toda vez que a tela carrega */
+.rail__marca.is-pronta {
+  opacity: 1;
+}
+.rail__marca-anel {
+  position: absolute;
+  /* bem maior que o botao: girando, as pontas nunca deixam canto vazio */
+  inset: -60%;
+  background: conic-gradient(
+    from 220deg,
+    var(--anel-1) 0%,
+    var(--anel-2) 18%,
+    var(--anel-3) 36%,
+    var(--anel-4) 50%,
+    var(--anel-3) 64%,
+    var(--anel-2) 82%,
+    var(--anel-1) 100%
+  );
+  animation: anel-gira 4s linear infinite;
+  will-change: transform;
+}
+
+.rail__marca::after {
+  content: '';
+  position: absolute;
+  /* os 3px que sobram por fora sao a espessura do anel */
+  inset: 3px;
+  border-radius: 15px;
+  background: var(--anel-miolo);
+  box-shadow: inset 0 1px 3px var(--anel-cova);
+}
+
+@keyframes anel-gira {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail__marca {
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+
+  .rail__marca-anel {
+    animation: none;
+  }
+}
+
 .rail__btn.is-atual {
-  background: var(--control-bg-hover);
   color: var(--text-strong);
   font-weight: 600;
-  box-shadow: inset 0 1px 0 var(--glass-edge-a), 0 4px 12px -8px rgba(0, 0, 0, 0.6);
 }
 
 .rail__btn.is-atual .rail__glifo {
@@ -138,8 +257,8 @@
 
 .euzinho {
   position: fixed;
-  left: 14px;
-  width: 92px;
+  left: 10px;
+  width: 72px;
   bottom: 22px;
   z-index: 21;
   display: grid;
@@ -301,27 +420,10 @@
   box-shadow: var(--vidro-realce);
 }
 
+/* o orbe e um canvas: o desenho vem do componente, aqui fica so o
+   halo que o assenta dentro do campo de busca */
 .omni__orb {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 0deg,
-    var(--grad-a),
-    #4d8ff0,
-    #a5d2ff,
-    #2f62b4,
-    var(--grad-a)
-  );
-  box-shadow: 0 0 12px -2px rgba(77, 143, 240, 0.6), inset 0 0 6px rgba(255, 255, 255, 0.5);
-  animation: orb-gira 9s linear infinite;
-}
-
-@keyframes orb-gira {
-  to {
-    transform: rotate(360deg);
-  }
+  filter: drop-shadow(0 0 6px rgba(77, 143, 240, 0.45));
 }
 
 .omni__campo {
@@ -381,16 +483,18 @@
 
 @media (max-width: 1000px) {
   .shell {
-    padding-left: 94px;
+    padding-left: 78px;
   }
 
-  .rail {
-    width: 82px;
-    left: 10px;
+  .rail,
+  .marca,
+  .euzinho {
+    width: 66px;
+    left: 8px;
   }
 
   .rail__rotulo {
-    font-size: 0.62rem;
+    font-size: 0.6rem;
   }
 }
 
@@ -409,6 +513,7 @@
     bottom: 8px;
     left: 8px;
     width: calc(100% - 16px);
+    padding: 6px 8px;
     max-height: none;
     transform: none;
     flex-direction: row;
@@ -433,7 +538,7 @@
   }
 
   .rail__btn {
-    min-width: 62px;
+    min-width: 58px;
     padding: 7px 4px 6px;
   }
 
@@ -703,4 +808,102 @@
   border-radius: 50%;
   background: var(--pri-alta);
   vertical-align: middle;
+}
+
+/* ============================================================
+   Botão flutuante do chat
+
+   Fica no canto inferior direito de TODA tela, menos dentro de
+   uma obra — la o chat que vale e o da obra, e dois botoes de
+   chat na mesma tela so confundiriam.
+   ============================================================ */
+
+.bolhachat {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.bolhachat__botao {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--vidro-borda);
+  border-radius: 50%;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  cursor: pointer;
+  box-shadow: var(--btn-shadow), 0 10px 26px -12px rgba(0, 0, 0, 0.55);
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.bolhachat__botao:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--btn-shadow-hover), 0 14px 30px -12px rgba(0, 0, 0, 0.6);
+}
+
+.bolhachat__botao:active {
+  transform: scale(0.94);
+}
+
+/* aberto, o "+" vira "x" sem trocar de icone */
+.bolhachat__botao.is-aberto {
+  transform: rotate(45deg);
+}
+
+.bolhachat__menu {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 210px;
+  padding: 7px;
+  border: 1px solid var(--vidro-borda);
+  border-radius: var(--radius-md);
+  background: var(--vidro-menu);
+  box-shadow: var(--glass-shadow), var(--vidro-realce);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(175%);
+  animation: menu-sobe var(--dur-fast) var(--ease-out);
+}
+
+.bolhachat__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-base);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.bolhachat__item:hover {
+  background: var(--control-bg);
+  color: var(--text-strong);
+}
+
+/* no celular a barra de navegacao ocupa o rodape: o botao sobe acima dela */
+@media (max-width: 860px) {
+  .bolhachat {
+    right: 14px;
+    bottom: 78px;
+  }
+
+  .bolhachat__botao {
+    width: 48px;
+    height: 48px;
+  }
 }

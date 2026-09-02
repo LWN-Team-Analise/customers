@@ -29,11 +29,63 @@
   padding-top: 6px;
 }
 
-.confirma__apagar {
+/* ---- Conferência do que vai ser feito ----
+   Um bloco neutro: aqui nao ha alerta, so o resumo da acao. */
+.confirma__detalhes {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-base);
+}
+
+.confirma__detalhes dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.confirma__detalhes dt {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.confirma__detalhes dd {
+  margin: 0;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.confirma__detalhes ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.confirma__detalhes li {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.confirma__ok {
   padding: 10px 20px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--danger);
   color: #fff;
   font-size: 0.88rem;
   font-weight: 600;
@@ -41,14 +93,26 @@
   transition: filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
-:root[data-theme='dark'] .confirma__apagar {
+/* apagar e vermelho; criar/sair sai na cor do sistema — pintar de
+   vermelho um "Criar obra" faz a pessoa hesitar sem motivo */
+.confirma__ok--perigo {
+  background: var(--danger);
+}
+
+:root[data-theme='dark'] .confirma__ok--perigo {
   color: #2a0906;
 }
 
-.confirma__apagar:hover {
+.confirma__ok--acao {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--btn-shadow);
+}
+
+.confirma__ok:hover {
   filter: brightness(1.08);
 }
 
-.confirma__apagar:active {
+.confirma__ok:active {
   transform: scale(0.98);
 }

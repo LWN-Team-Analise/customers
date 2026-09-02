@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { checarConexao, pool } from './db.js'
 import { plantarRoteiro } from './roteiro.js'
+import { comoEnvia } from './email.js'
 import authRouter from './routes/auth.js'
 import equipeRouter from './routes/equipe.js'
 import dadosRouter from './routes/dados.js'
@@ -45,6 +46,14 @@ app.use((erro, _req, res, _next) => {
 
 app.listen(porta, async () => {
   console.log(`[api] ouvindo em http://localhost:${porta}`)
+  /* saber por onde o e-mail sai poupa meia hora de investigacao quando
+     o "esqueci minha senha" nao chega */
+  const caminho = {
+    'api-microsoft': 'API da Microsoft (Graph)',
+    smtp: 'SMTP',
+    nenhum: 'NAO CONFIGURADO — o "esqueci minha senha" nao envia',
+  }[comoEnvia()]
+  console.log(`[api] envio de e-mail: ${caminho}`)
   try {
     const info = await checarConexao()
     console.log(`[api] banco "${info.banco}" conectado.`)

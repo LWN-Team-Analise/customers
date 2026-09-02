@@ -4,9 +4,9 @@ import './SocialRow.css'
 /**
  * A outra porta de entrada: a conta Microsoft da empresa.
  *
- * A logo nao entra como imagem colorida nem em cinza — ela e usada
- * como RECORTE, e a cor que aparece por dentro dele e a mesma do botao
- * Entrar (--btn-bg). Assim as duas formas de entrar falam a mesma cor.
+ * A logo entra como imagem, nas cores originais da Microsoft. Ela ja e
+ * uma marca conhecida — pintada de azul do sistema virava so mais um
+ * icone, e a pessoa deixava de reconhecer de imediato onde clicar.
  */
 export default function SocialRow({ onSelect, ocupado = false, rotulo = 'Entrar com Outlook' }) {
   return (
@@ -23,12 +23,7 @@ export default function SocialRow({ onSelect, ocupado = false, rotulo = 'Entrar 
           disabled={ocupado}
           onClick={() => onSelect?.('outlook')}
         >
-          {/* a URL vem do bundler (com hash); o CSS a usa como mascara */}
-          <span
-            className="social__logo"
-            style={{ '--logo': `url(${outlookLogo})` }}
-            aria-hidden="true"
-          />
+          <img className="social__logo" src={outlookLogo} alt="" aria-hidden="true" />
         </button>
       </div>
     </div>

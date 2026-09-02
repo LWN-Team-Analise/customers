@@ -7,12 +7,37 @@
 
 const CHAVE_SESSAO = 'customers.session'
 
-export function tokenAtual() {
+function tokenGuardado() {
   try {
     return JSON.parse(localStorage.getItem(CHAVE_SESSAO) ?? 'null')?.token ?? null
   } catch {
     return null
   }
+}
+
+/**
+ * O token tambem vive aqui na memoria — e esta copia e a que vale.
+ *
+ * Quem escreve no localStorage e um efeito do AuthContext, e efeito so
+ * roda DEPOIS que a tela pinta. So que o DadosProvider e filho do
+ * AuthProvider, e efeito de filho roda ANTES do efeito do pai: no
+ * instante em que o login abria a sessao, a primeira carga do quadro ja
+ * saia — e saia SEM token, porque o localStorage ainda estava vazio.
+ * Voltava 401, a sessao recem-aberta era derrubada, e o login dizia
+ * "sua sessao expirou" logo depois de a pessoa acertar a senha.
+ *
+ * Com a copia em memoria o token existe no mesmo instante em que o
+ * login responde, sem depender de quando o efeito roda.
+ */
+let tokenNaMemoria = tokenGuardado()
+
+/** Chamado pelo AuthContext no mesmo passo em que a sessao muda. */
+export function guardarToken(token) {
+  tokenNaMemoria = token ?? null
+}
+
+export function tokenAtual() {
+  return tokenNaMemoria ?? tokenGuardado()
 }
 
 /**
@@ -29,6 +54,7 @@ export function tokenAtual() {
 export const SESSAO_CAIU = 'customers:sessao-caiu'
 
 function derrubarSessao() {
+  tokenNaMemoria = null
   try {
     localStorage.removeItem(CHAVE_SESSAO)
   } catch {

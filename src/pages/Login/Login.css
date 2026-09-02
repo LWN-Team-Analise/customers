@@ -70,93 +70,40 @@
   overflow: hidden;
 }
 
-/* ---- Faixas verticais: janelas sobre a MESMA foto ----
-   .hero__slices e o bloco posicionado; cada .hero__slice-photo se dimensiona
-   por ele (nao pela faixa), entao as janelas mostram pedacos alinhados da
-   mesma imagem. O recorte vem de clip-path — que, ao contrario de overflow,
-   corta filhos posicionados sem virar containing block deles.
-   Por isso nenhuma faixa pode ganhar transform: a animacao usa height.      */
+/* ---- Esfera de fotos ----
+   Ocupa a mesma faixa que as faixas ocupavam (a metade esquerda) e se
+   dissolve na direcao do cartao de login, para nao competir com ele.  */
 
-.hero__slices {
+.hero__esfera {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
+  z-index: 1;
   width: 66%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(8px, 1.1vw, 18px);
-  padding: 0 clamp(12px, 3vw, 44px);
-  /* dissolve para transparente na direcao do login */
-  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 50%, transparent 97%);
-  mask-image: linear-gradient(90deg, #000 0%, #000 50%, transparent 97%);
+  /* Duas mascaras que se cruzam:
+       1. dissolve para transparente na direcao do login;
+       2. abre um claro atras da frase, para a esfera nao brigar com o
+          texto — e o que substitui um retangulo escuro por tras dele. */
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 58%, transparent 99%),
+    radial-gradient(115% 44% at 4% 52%, transparent 0%, rgba(0, 0, 0, 0.35) 42%, #000 72%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 58%, transparent 99%),
+    radial-gradient(115% 44% at 4% 52%, transparent 0%, rgba(0, 0, 0, 0.35) 42%, #000 72%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  animation: esfera-entra 900ms var(--ease-out) both;
 }
 
-.hero__slice {
-  --h: 72%;
-
-  width: clamp(46px, 9.5vw, 132px);
-  height: var(--h);
-  border-radius: var(--radius-pill);
-  clip-path: inset(0 round var(--radius-pill));
-  box-shadow: inset 0 0 0 1px var(--photo-rim);
-  animation: slice-in 800ms var(--ease-out) both,
-    slice-breathe 9s ease-in-out infinite alternate;
-  animation-delay: calc(var(--i) * 110ms), calc(900ms + var(--i) * 280ms);
-}
-
-/* Reflexo de vidro por cima da foto (continuo entre as faixas). */
-.hero__slice::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  /* o veu e cor solida (transiciona entre temas); o reflexo vai por cima */
-  background-color: var(--photo-veil);
-  background-image: var(--photo-sheen);
-}
-
-.hero__slice-photo {
-  position: absolute;
-  inset: 0;
-  background-image: url('/assets/login.webp'), url('/assets/lab-placeholder.svg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-/* Alturas base: arco central. */
-.hero__slice:nth-child(1),
-.hero__slice:nth-child(5) {
-  --h: 52%;
-}
-
-.hero__slice:nth-child(2),
-.hero__slice:nth-child(4) {
-  --h: 72%;
-}
-
-.hero__slice:nth-child(3) {
-  --h: 90%;
-}
-
-@keyframes slice-in {
+@keyframes esfera-entra {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 1;
+    transform: scale(0.94);
   }
 }
 
-/* Respiro discreto: a janela cresce e encolhe ~3% na vertical. */
-@keyframes slice-breathe {
-  from {
-    height: calc(var(--h) * 0.97);
-  }
-  to {
-    height: calc(var(--h) * 1.03);
+@media (prefers-reduced-motion: reduce) {
+  .hero__esfera {
+    animation: none;
   }
 }
 
@@ -167,6 +114,9 @@
   top: clamp(38px, 8vh, 84px);
   left: clamp(24px, 4vw, 64px);
   z-index: 3;
+  /* a esfera fica por baixo e e ela que se arrasta: a logo nao pode
+     roubar o gesto */
+  pointer-events: none;
   width: clamp(112px, 10.5vw, 152px);
   height: auto;
 }
@@ -179,6 +129,12 @@
   /* um pouco acima do meio da tela */
   top: 47%;
   z-index: 2;
+  /* a esfera passa por tras: o halo na cor do fundo e o que segura a
+     leitura quando uma placa clara cruza atras da frase */
+  text-shadow: 0 1px 14px var(--page-bg), 0 0 34px var(--page-bg);
+  /* so texto, nada clicavel: sem isto a frase engolia o arrasto da
+     esfera e o que acontecia era o texto ser selecionado */
+  pointer-events: none;
   max-width: min(460px, 34vw);
   transform: translateY(-50%);
 }
@@ -508,22 +464,15 @@
     padding: 0 22px 30px;
   }
 
-  .hero__slices {
+  /* a esfera vira pano de fundo: quem manda no topo e a logo + "Login" */
+  .hero__esfera {
     width: 100%;
-    padding: 0 14px;
-    gap: 10px;
+    opacity: 0.55;
     /* no mobile o gradiente desce ate sumir sob o formulario */
     -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 99%);
     mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 99%);
-  }
-
-  .hero__slice {
-    width: clamp(34px, 15vw, 74px);
-  }
-
-  /* a foto vira pano de fundo: quem manda no topo e a logo + "Login" */
-  .hero__slices {
-    opacity: 0.5;
+    -webkit-mask-composite: source-over;
+    mask-composite: add;
   }
 
   .hero__logo {

@@ -16,6 +16,43 @@ export function carregarTudo() {
   return get('/dados')
 }
 
+/**
+ * So as logos dos clientes que TEM logo — e a unica leitura que roda
+ * sem sessao, porque quem consome e a esfera da tela de login.
+ */
+export async function carregarVitrine() {
+  const { fotos } = await get('/dados/vitrine')
+  return Array.isArray(fotos) ? fotos.filter(Boolean) : []
+}
+
+/* ---------------- Setores do cliente ---------------- */
+
+export async function criarSetor(campos) {
+  const { setor } = await post('/dados/setores', campos)
+  return setor
+}
+
+export async function editarSetor(id, campos) {
+  const { setor } = await patch(`/dados/setores/${id}`, campos)
+  return setor
+}
+
+export const apagarSetor = (id) => del(`/dados/setores/${id}`)
+
+/* ---------------- Chat do site ---------------- */
+
+export async function carregarChatDoSite() {
+  const { mensagens } = await get('/dados/chat')
+  return mensagens ?? []
+}
+
+export async function enviarNoChatDoSite(campos) {
+  const { mensagem } = await post('/dados/chat', campos)
+  return mensagem
+}
+
+export const apagarDoChatDoSite = (id) => del(`/dados/chat/${id}`)
+
 /* ---------------- Clientes ---------------- */
 
 export async function criarCliente(campos) {

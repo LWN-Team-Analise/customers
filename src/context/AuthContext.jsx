@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as authService from '@/services/authService'
-import { SESSAO_CAIU } from '@/services/api'
+import { guardarToken, SESSAO_CAIU } from '@/services/api'
 
 const STORAGE_KEY = 'customers.session'
 
@@ -21,6 +21,16 @@ export function AuthProvider({ children }) {
   /* true = a sessao caiu sozinha (token vencido), nao foi a pessoa que saiu.
      E o que faz o login explicar o motivo em vez de so aparecer do nada. */
   const [expirou, setExpirou] = useState(false)
+
+  /**
+   * Abre/fecha a sessao. O token vai para a memoria do `api` no MESMO
+   * passo — antes de qualquer efeito rodar — porque a primeira carga do
+   * quadro sai logo depois desta chamada e precisa dele na mao.
+   */
+  const aplicarSessao = useCallback((proxima) => {
+    guardarToken(proxima?.token ?? null)
+    setSession(proxima)
+  }, [])
 
   useEffect(() => {
     try {
@@ -67,7 +77,7 @@ export function AuthProvider({ children }) {
       if (!vivo) return
       if (resultado.expirada) {
         setExpirou(true)
-        setSession(null)
+        aplicarSessao(null)
         return
       }
       // aproveita e atualiza o cadastro: cargo, permissoes e foto de agora
@@ -78,19 +88,19 @@ export function AuthProvider({ children }) {
     return () => {
       vivo = false
     }
-  }, [session?.token])
+  }, [session?.token, aplicarSessao])
 
   const login = useCallback(async (credentials) => {
     setLoading(true)
     try {
       const result = await authService.signIn(credentials)
       setExpirou(false)
-      setSession(result)
+      aplicarSessao(result)
       return result
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [aplicarSessao])
 
   /**
    * Abre a sessao com o que o servidor ja devolveu pronto.
@@ -102,10 +112,10 @@ export function AuthProvider({ children }) {
   const entrarComSessao = useCallback((resultado) => {
     if (resultado?.token) {
       setExpirou(false)
-      setSession(resultado)
+      aplicarSessao(resultado)
     }
     return resultado
-  }, [])
+  }, [aplicarSessao])
 
   /** Atualiza o usuario da sessao (foto, nome, telefone...). */
   const atualizarPerfil = useCallback((campos) => {
@@ -115,8 +125,8 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await authService.signOut()
     setExpirou(false)
-    setSession(null)
-  }, [])
+    aplicarSessao(null)
+  }, [aplicarSessao])
 
   const value = useMemo(
     () => ({

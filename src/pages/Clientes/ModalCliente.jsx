@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import { CampoFoto, CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
+import { useDados } from '@/context/DadosContext'
 import { buscarCEP, listarCidades, listarEstados } from '@/services/enderecoService'
 import { formatarCEP } from '@/utils/formato'
 import './ModalCliente.css'
@@ -9,6 +10,7 @@ import './ModalCliente.css'
 const VAZIO = {
   nome: '',
   logo: null,
+  setorId: '',
   cep: '',
   endereco: '',
   bairro: '',
@@ -22,6 +24,7 @@ const VAZIO = {
  * editaveis na mao — o cadastro nunca fica preso.
  */
 export default function ModalCliente({ aberto, cliente = null, aoFechar, aoSalvar }) {
+  const { setores } = useDados()
   const [form, setForm] = useState(VAZIO)
   const [erros, setErros] = useState({})
   const [estados, setEstados] = useState([])
@@ -32,7 +35,7 @@ export default function ModalCliente({ aberto, cliente = null, aoFechar, aoSalva
   /* abre limpo (ou com o cliente que veio para edicao) */
   useEffect(() => {
     if (aberto) {
-      setForm(cliente ? { ...VAZIO, ...cliente } : VAZIO)
+      setForm(cliente ? { ...VAZIO, ...cliente, setorId: cliente.setorId ?? '' } : VAZIO)
       setErros({})
       setAvisoCEP('')
     }
@@ -142,6 +145,21 @@ export default function ModalCliente({ aberto, cliente = null, aoFechar, aoSalva
           value={form.nome}
           onChange={mudar('nome')}
           erro={erros.nome}
+        />
+
+        {/* O ramo da empresa. A lista sai do botao "Setores" na tela de
+            Clientes — aqui so se escolhe entre o que ja existe, para nao
+            nascer "Farmaceutico" e "farmaceutica" como dois setores. */}
+        <CampoSelecao
+          rotulo="Setor"
+          value={form.setorId ?? ''}
+          onChange={mudar('setorId')}
+          vazio={
+            setores.length === 0
+              ? 'Nenhum setor cadastrado ainda'
+              : 'Sem setor'
+          }
+          opcoes={setores.map((s) => ({ valor: String(s.id), rotulo: s.nome, cor: s.cor }))}
         />
 
         <CampoTexto

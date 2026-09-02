@@ -3,16 +3,25 @@
  *
  * Hoje so serve para uma coisa: mandar o codigo de recuperacao de
  * senha. A conta que assina e a corporativa da LWN — as credenciais
- * ficam no .env (que nao vai para o Git), com o valor de fabrica aqui
- * embaixo so para o ambiente de desenvolvimento subir sem configurar
- * nada.
+ * ficam no .env, que nao vai para o Git.
  *
- * O servidor e o do Microsoft 365 (a conta e @lwnengenharia.com.br).
- * Se a conta tiver verificacao em duas etapas, o SMTP recusa a senha
- * normal: nesse caso gere uma "senha de aplicativo" no portal da
- * Microsoft e ponha ela no MAIL_SENHA.
+ * Ha DOIS caminhos, e o primeiro que estiver configurado ganha:
+ *
+ *   1. API da Microsoft (Graph), em graph.js. E o caminho bom, e o
+ *      unico que funciona no tenant da LWN: o SMTP autenticado esta
+ *      desligado la, e nenhuma senha faz o servidor aceitar
+ *      ("535 5.7.139 ... SmtpClientAuthentication is disabled").
+ *
+ *   2. SMTP comum, com nodemailer. Continua aqui para quem roda o
+ *      sistema em outro provedor (Gmail, Zoho, um SMTP proprio) e
+ *      para o ambiente de desenvolvimento.
+ *
+ * Se a conta do SMTP tiver verificacao em duas etapas, o servidor
+ * recusa a senha normal: nesse caso gere uma "senha de aplicativo" no
+ * portal do provedor e ponha ela no MAIL_SENHA.
  */
 import nodemailer from 'nodemailer'
+import * as graph from './graph.js'
 
 /* As credenciais vem SO do .env — nunca escritas aqui. Este arquivo vai
    para o Git; o .env, nao. Se MAIL_SENHA estiver vazia, `temEmail()`
@@ -38,9 +47,16 @@ function conectar() {
   return carteiro
 }
 
-/** true quando o envio de e-mail esta configurado. */
+/** true quando existe ALGUM caminho de envio configurado. */
 export function temEmail() {
-  return Boolean(REMETENTE && SENHA)
+  return graph.configurado() || Boolean(REMETENTE && SENHA)
+}
+
+/** Qual caminho vai ser usado — aparece no log ao subir a API. */
+export function comoEnvia() {
+  if (graph.configurado()) return 'api-microsoft'
+  if (REMETENTE && SENHA) return 'smtp'
+  return 'nenhum'
 }
 
 const escapar = (texto) =>
@@ -90,17 +106,43 @@ export async function enviarCodigo({ para, nome, codigo, minutos = 3 }) {
       </div>
     </div>`
 
+  const assunto = `Seu código de recuperação: ${codigo}`
+  const simples = `Seu código de recuperação é ${codigo}. Ele vale por ${minutos} minutos.`
+
+  /* a API da Microsoft na frente: no tenant da LWN e a unica que sai */
+  if (graph.configurado()) {
+    return graph.enviar({ para, assunto, html: corpo, texto: simples })
+  }
+
   try {
     await conectar().sendMail({
       from: `"LWN Team Análise" <${REMETENTE}>`,
       to: para,
-      subject: `Seu código de recuperação: ${codigo}`,
-      text: `Seu código de recuperação é ${codigo}. Ele vale por ${minutos} minutos.`,
+      subject: assunto,
+      text: simples,
       html: corpo,
     })
     return { ok: true }
   } catch (erro) {
     console.error('[email/codigo]', erro.message)
+
+    /* Este erro tem nome e sobrenome, e a resposta generica escondia
+       ele: a conta e a senha estao certas, o que esta desligado e o
+       SMTP do tenant inteiro. Sem dizer isso, a diretoria procura o
+       problema no lugar errado. */
+    if (erro.message?.includes('SmtpClientAuthentication is disabled')) {
+      return {
+        ok: false,
+        motivo:
+          'A Microsoft bloqueia o envio por SMTP neste domínio. Configure o envio pela API (GRAPH_TENANT_ID, GRAPH_CLIENT_ID e GRAPH_CLIENT_SECRET no .env) — veja o README.',
+      }
+    }
+    if (erro.responseCode === 535 || erro.code === 'EAUTH') {
+      return {
+        ok: false,
+        motivo: 'O servidor de e-mail recusou a conta configurada. Confira MAIL_USUARIO e MAIL_SENHA.',
+      }
+    }
     return { ok: false, motivo: 'Não foi possível enviar o e-mail agora. Tente de novo.' }
   }
 }

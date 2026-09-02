@@ -20,10 +20,18 @@ const texto = (valor) => String(valor ?? '').trim()
      - o chat (tem rota propria, /obras/:id/chat).
    ============================================================ */
 
+const paraSetor = (l) => ({
+  id: String(l.id),
+  nome: l.nome,
+  cor: l.cor,
+})
 const paraCliente = (l) => ({
   id: String(l.id),
   nome: l.nome,
   logo: l.logo,
+  /* o setor e opcional: cliente antigo, ou ainda nao classificado, vem
+     com null e a tela mostra "sem setor" */
+  setorId: l.setor_id === null || l.setor_id === undefined ? null : String(l.setor_id),
   endereco: l.endereco ?? '',
   bairro: l.bairro ?? '',
   cidade: l.cidade ?? '',
@@ -35,6 +43,7 @@ const paraCliente = (l) => ({
 async function lerTudo(usuarioId) {
   const [
     clientes,
+    setores,
     obras,
     marcados,
     membros,
@@ -49,6 +58,9 @@ async function lerTudo(usuarioId) {
     lidos,
   ] = await Promise.all([
     query('SELECT * FROM cliente ORDER BY lower(nome)'),
+    /* os setores vem junto: sao poucos e a tela de Clientes precisa
+       deles para pintar a etiqueta de cada card */
+    query('SELECT * FROM setor_cliente ORDER BY lower(nome)').catch(() => ({ rows: [] })),
     query(`SELECT o.*, c.concluida_em,
                   autor.name  AS criado_por_nome,
                   editor.name AS atualizado_por_nome
@@ -149,6 +161,7 @@ async function lerTudo(usuarioId) {
 
   return {
     clientes: clientes.rows.map(paraCliente),
+    setores: setores.rows.map(paraSetor),
     etiquetas: etiquetas.rows.map((l) => ({
       id: String(l.id),
       nome: l.nome,
@@ -198,6 +211,42 @@ router.get('/', exigeSessao, async (req, res) => {
 })
 
 /* ============================================================
+   VITRINE — as logos dos clientes que giram na esfera do login
+
+   E a UNICA rota de dados sem sessao, e de proposito: a esfera
+   fica na tela de login, antes de existir token.
+
+   Por isso ela devolve so a imagem, nada mais: nem nome, nem id,
+   nem endereco. Quem abrir a resposta na mao ve um punhado de
+   logos — a mesma coisa que ja ve na tela — e nada que ligue uma
+   logo a um cadastro.
+
+   O filtro `logo IS NOT NULL` e o que atende ao pedido de so
+   aparecer quem TEM foto: cliente cadastrado sem logo (o "teste"
+   da vida) simplesmente nao entra na esfera.
+   ============================================================ */
+
+const LIMITE_VITRINE = 24
+
+router.get('/vitrine', async (_req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT logo FROM cliente
+         WHERE logo IS NOT NULL AND logo <> ''
+         ORDER BY lower(nome)
+         LIMIT $1`,
+      [LIMITE_VITRINE],
+    )
+    return res.json({ fotos: rows.map((l) => l.logo) })
+  } catch (erro) {
+    /* a esfera tem foto de reserva; um banco fora do ar nao pode
+       derrubar a tela de login por causa de enfeite */
+    console.error('[dados/vitrine]', erro.message)
+    return res.json({ fotos: [] })
+  }
+})
+
+/* ============================================================
    CLIENTES
    ============================================================ */
 
@@ -222,9 +271,77 @@ function camposCliente(corpo) {
       cidade,
       estado,
       cep || null,
+      /* setor vazio vira NULL, e nao a string "": a coluna e uma chave
+         estrangeira e so aceita id de verdade ou nada */
+      texto(corpo?.setorId) || null,
     ],
   }
 }
+
+/* ============================================================
+   SETORES DO CLIENTE
+
+   O ramo em que a empresa atua. Quem mexe e quem pode mexer em
+   cliente — e a mesma tela e a mesma decisao.
+
+   Apagar um setor NAO apaga os clientes dele: a chave estrangeira
+   e ON DELETE SET NULL, entao eles voltam para "sem setor" e a
+   pessoa reclassifica com calma.
+   ============================================================ */
+
+
+const SEM_TABELA_SETOR = 'A tabela de setores ainda não existe. Rode o SQL de db/setores-e-chat.sql.txt.'
+
+router.post('/setores', exigeSessao, exige('editar_clientes'), async (req, res) => {
+  const nome = texto(req.body?.nome)
+  const cor = texto(req.body?.cor) || '#3a63e8'
+  if (!nome) return res.status(400).json({ erro: 'Informe o nome do setor.' })
+
+  try {
+    const { rows } = await query(
+      'INSERT INTO setor_cliente (nome, cor) VALUES ($1, $2) RETURNING *',
+      [nome, cor],
+    )
+    return res.status(201).json({ setor: paraSetor(rows[0]) })
+  } catch (e) {
+    if (e.code === '23505') {
+      return res.status(409).json({ erro: 'Já existe um setor com esse nome.' })
+    }
+    if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_SETOR })
+    return tratar(e, res, 'dados/setor-criar')
+  }
+})
+
+router.patch('/setores/:id', exigeSessao, exige('editar_clientes'), async (req, res) => {
+  const nome = texto(req.body?.nome)
+  if (!nome) return res.status(400).json({ erro: 'Informe o nome do setor.' })
+
+  try {
+    const { rows } = await query(
+      'UPDATE setor_cliente SET nome = $1, cor = coalesce($2, cor) WHERE id = $3 RETURNING *',
+      [nome, texto(req.body?.cor) || null, req.params.id],
+    )
+    if (!rows[0]) return res.status(404).json({ erro: 'Setor não encontrado.' })
+    return res.json({ setor: paraSetor(rows[0]) })
+  } catch (e) {
+    if (e.code === '23505') {
+      return res.status(409).json({ erro: 'Já existe um setor com esse nome.' })
+    }
+    if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_SETOR })
+    return tratar(e, res, 'dados/setor-editar')
+  }
+})
+
+router.delete('/setores/:id', exigeSessao, exige('editar_clientes'), async (req, res) => {
+  try {
+    const { rowCount } = await query('DELETE FROM setor_cliente WHERE id = $1', [req.params.id])
+    if (rowCount === 0) return res.status(404).json({ erro: 'Setor não encontrado.' })
+    return res.status(204).end()
+  } catch (e) {
+    if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_SETOR })
+    return tratar(e, res, 'dados/setor-apagar')
+  }
+})
 
 router.post('/clientes', exigeSessao, exige('editar_clientes'), async (req, res) => {
   const { erro, valores } = camposCliente(req.body)
@@ -232,8 +349,8 @@ router.post('/clientes', exigeSessao, exige('editar_clientes'), async (req, res)
 
   try {
     const { rows } = await query(
-      `INSERT INTO cliente (nome, logo, endereco, bairro, cidade, estado, cep)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO cliente (nome, logo, endereco, bairro, cidade, estado, cep, setor_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       valores,
     )
     return res.status(201).json({ cliente: paraCliente(rows[0]) })
@@ -249,8 +366,8 @@ router.patch('/clientes/:id', exigeSessao, exige('editar_clientes'), async (req,
   try {
     const { rows } = await query(
       `UPDATE cliente SET nome = $1, logo = $2, endereco = $3, bairro = $4,
-                          cidade = $5, estado = $6, cep = $7
-        WHERE id = $8 RETURNING *`,
+                          cidade = $5, estado = $6, cep = $7, setor_id = $8
+        WHERE id = $9 RETURNING *`,
       [...valores, req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Cliente não encontrado.' })
@@ -269,6 +386,80 @@ router.delete('/clientes/:id', exigeSessao, exige('editar_clientes'), async (req
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/cliente-apagar')
+  }
+})
+
+/* ============================================================
+   CHAT DO SITE
+
+   A conversa geral da equipe — a que o botao flutuante abre em
+   qualquer tela. E separada do chat da obra de proposito: aquele
+   morre com a obra e vira historico dela; este e do dia a dia e
+   nao pertence a obra nenhuma.
+
+   Nao exige permissao: conversar e de todo mundo que entra. O que
+   se controla e QUEM APAGA — cada um tira so a propria mensagem.
+   ============================================================ */
+
+const SEM_TABELA_CHAT = 'O chat do site ainda não existe no banco. Rode o SQL de db/setores-e-chat.sql.txt.'
+
+const paraMensagemSite = (l) => ({
+  id: String(l.id),
+  autorId: l.usuario_id === null ? null : String(l.usuario_id),
+  autorNome: l.autor_nome,
+  texto: l.texto ?? '',
+  enviadaEm: l.enviada_em,
+  editadaEm: l.editada_em ?? null,
+})
+
+/* As 300 ultimas. E conversa de equipe, nao arquivo: ninguem rola tres
+   mil mensagens para tras, e mandar todas engorda a resposta a toa. */
+const LIMITE_CHAT = 300
+
+router.get('/chat', exigeSessao, async (_req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT * FROM (SELECT * FROM chat_site ORDER BY enviada_em DESC LIMIT $1) t ORDER BY enviada_em',
+      [LIMITE_CHAT],
+    )
+    return res.json({ mensagens: rows.map(paraMensagemSite) })
+  } catch (e) {
+    if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_CHAT })
+    return tratar(e, res, 'dados/chat-site-ler')
+  }
+})
+
+router.post('/chat', exigeSessao, async (req, res) => {
+  const conteudo = texto(req.body?.texto)
+  if (!conteudo) return res.status(400).json({ erro: 'Escreva a mensagem.' })
+
+  try {
+    const { rows } = await query(
+      `INSERT INTO chat_site (usuario_id, autor_nome, texto)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [req.dono.sub, texto(req.body?.autorNome) || 'Usuário', conteudo],
+    )
+    return res.status(201).json({ mensagem: paraMensagemSite(rows[0]) })
+  } catch (e) {
+    if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_CHAT })
+    return tratar(e, res, 'dados/chat-site-criar')
+  }
+})
+
+/* Cada um apaga so a propria mensagem. A conferencia e aqui, e nao na
+   tela: esconder o botao nao impede a chamada na mao. */
+router.delete('/chat/:id', exigeSessao, async (req, res) => {
+  try {
+    const dona = await query('SELECT usuario_id FROM chat_site WHERE id = $1', [req.params.id])
+    if (!dona.rows[0]) return res.status(404).json({ erro: 'Mensagem não encontrada.' })
+    if (String(dona.rows[0].usuario_id) !== String(req.dono.sub)) {
+      return res.status(403).json({ erro: 'Só quem escreveu pode apagar a mensagem.' })
+    }
+    await query('DELETE FROM chat_site WHERE id = $1', [req.params.id])
+    return res.status(204).end()
+  } catch (e) {
+    if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_CHAT })
+    return tratar(e, res, 'dados/chat-site-apagar')
   }
 })
 

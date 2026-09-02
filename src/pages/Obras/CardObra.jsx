@@ -1,11 +1,10 @@
 import Avatar, { PilhaAvatares } from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
+import { rotuloDaPrioridade } from '@/domain/obras'
 import { useTheme } from '@/context/ThemeContext'
 import { textoSobre } from '@/utils/cor'
 import { dataBR } from '@/utils/formato'
 import './CardObra.css'
-
-const ROTULO_PRIORIDADE = { alta: 'alta', media: 'média', baixa: 'baixa' }
 
 /**
  * Card da obra no quadro. A cor de fundo vem do tipo (padrao = azul de
@@ -89,7 +88,11 @@ export default function CardObra({ obra, cliente, pessoas = [], tom, aoAbrir, ro
 
       <footer className="obracard__base">
         <span className="obracard__meta">
-          <span className="obracard__pri">prioridade: {ROTULO_PRIORIDADE[obra.prioridade]}</span>
+          {/* a cor vem do data-pri, e e a mesma em toda tela que fala de
+              prioridade: vermelho alta, amarelo media, verde baixa */}
+          <span className="obracard__pri" data-pri={obra.prioridade}>
+            Prioridade: <strong>{rotuloDaPrioridade(obra.prioridade)}</strong>
+          </span>
           {obra.dataConclusao && (
             <span className="obracard__data">conclusão: {dataBR(obra.dataConclusao)}</span>
           )}
