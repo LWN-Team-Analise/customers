@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
-import Avatar from '@/components/Avatar/Avatar'
+import Avatar, { PilhaAvatares } from '@/components/Avatar/Avatar'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import { CampoArea } from '@/components/Campo/Campo'
@@ -23,6 +23,7 @@ import ModalCard from './ModalCard'
 import ModalCheck from './ModalCheck'
 import ModalEtapa from './ModalEtapa'
 import ModalChat from './ModalChat'
+import Rastreabilidade from './Rastreabilidade'
 import ModalEtiquetas from './ModalEtiquetas'
 import ModalAnexos from './ModalAnexos'
 import ModalObra from './ModalObra'
@@ -98,7 +99,19 @@ const Icone = {
   ),
 }
 
-export default function ObraDetalhe() {
+/**
+ * A tela da obra.
+ *
+ * `somenteLeitura` e o modo que a aba Concluidas usa: a obra aparece
+ * INTEIRA — capa, etapas, checks marcados, observacoes, anexos —, so que
+ * nada aceita clique. Nao e "esconder os botoes": os botoes somem e os
+ * campos ficam desabilitados, porque obra encerrada e registro, e registro
+ * que se pode alterar depois de fechado nao serve de registro.
+ *
+ * `voltarPara` diz de onde a pessoa veio. Aberta pela aba Concluidas, ela
+ * volta para la — nao faria sentido cair no quadro de obras abertas.
+ */
+export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app/obras' }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -122,6 +135,7 @@ export default function ObraDetalhe() {
     etapaDaObra,
     progresso,
     estadoEtapa,
+    concluida,
     carregando,
     pode,
   } = useDados()
@@ -161,13 +175,16 @@ export default function ObraDetalhe() {
   const numeroAtual = etapaDaObra(obra)
   const etapaCorrente = roteiro.find((e) => e.numero === numeroAtual)
   const pct = progresso(obra)
+  const fechada = concluida(obra)
   const membros = obra.membros.map(pessoaPorId).filter(Boolean)
   const marcas = etiquetasDaObra(obra)
 
-  const podeEtapa = pode('editar_etapa')
-  const podeCards = pode('editar_cards')
-  const podeChecks = pode('editar_checks')
-  const podeObra = pode('editar_obras')
+  /* No modo leitura TODA permissao cai junto, num lugar so. Espalhar o
+     `!somenteLeitura` por quinze condicoes e como se esquece uma. */
+  const podeEtapa = !somenteLeitura && pode('editar_etapa')
+  const podeCards = !somenteLeitura && pode('editar_cards')
+  const podeChecks = !somenteLeitura && pode('editar_checks')
+  const podeObra = !somenteLeitura && pode('editar_obras')
   const mexeNoRoteiro = podeEtapa || podeCards || podeChecks
 
   const enviarObservacao = async (evento) => {
@@ -191,7 +208,9 @@ export default function ObraDetalhe() {
   }
 
   return (
-    <AppShell>
+    /* semChat: dentro da obra o chat que vale e o DELA, no botao flutuante
+       proprio desta tela. Dois botoes de chat lado a lado so confundiriam. */
+    <AppShell semChat>
       <section className="detalhe">
         {/* ---------------- faixa da obra ----------------
             A foto do cliente estica para ocupar a faixa inteira e vai
@@ -210,14 +229,15 @@ export default function ObraDetalhe() {
             <button
               type="button"
               className="capa__voltar"
-              onClick={() => navigate('/app/obras')}
-              aria-label="Voltar para as obras"
+              onClick={() => navigate(voltarPara)}
+              aria-label="Voltar"
             >
               <Icone.voltar />
             </button>
 
             <p className="capa__trilha">
-              <Link to="/app/obras">Obras</Link>/{cliente?.nome ?? 'Cliente removido'}
+              <Link to={voltarPara}>{somenteLeitura ? 'Concluídas' : 'Obras'}</Link>/
+              {cliente?.nome ?? 'Cliente removido'}
             </p>
             <h1 className="capa__titulo">{cliente?.nome ?? 'Cliente removido'}</h1>
 
@@ -240,8 +260,12 @@ export default function ObraDetalhe() {
             <span className="capa__selo">{obra.tipo === 'emergencia' ? 'Emergência' : 'Padrão'}</span>
             <p className="capa__desc">{obra.descricao}</p>
 
-            {/* etiqueta, anexo e editar: as tres acoes da obra em si */}
+            {/* etiqueta, anexo e editar: as tres acoes da obra em si.
+                Na obra fechada elas somem — nada aqui e so consulta, todas
+                as tres abrem pop-up que grava. */}
             <span className="capa__acoes">
+              {!somenteLeitura && (
+                <>
               <button
                 type="button"
                 className="capa__acao"
@@ -274,6 +298,8 @@ export default function ObraDetalhe() {
                   <Icone.lapis />
                   Editar
                 </button>
+              )}
+                </>
               )}
             </span>
           </div>
@@ -425,7 +451,9 @@ export default function ObraDetalhe() {
                         key={card.id}
                         card={card}
                         obra={obra}
-                        travado={estado === 'bloqueada'}
+                        /* na obra fechada todo check e so leitura, mesmo
+                           os da etapa que estava aberta */
+                        travado={somenteLeitura || estado === 'bloqueada'}
                         /* a permissao e olhada check a check: um deles
                            pode ter dono proprio, diferente do card */
                         usuario={user}
@@ -465,6 +493,7 @@ export default function ObraDetalhe() {
             <header className="obs__topo">
               <h2 className="obs__titulo">Observações</h2>
               <span className="obs__contagem">{obra.observacoes.length}</span>
+              {!somenteLeitura && (
               <button
                 type="button"
                 className="obs__mais"
@@ -478,18 +507,25 @@ export default function ObraDetalhe() {
               >
                 <Icone.mais tamanho={16} />
               </button>
+              )}
             </header>
 
             <div className="obs__lista">
               {obra.observacoes.length === 0 && (
-                <p className="obs__vazio">Nada registrado ainda. Use o + para escrever a primeira.</p>
+                <p className="obs__vazio">
+                  {somenteLeitura
+                    ? 'Nenhuma observação nesta obra.'
+                    : 'Nada registrado ainda. Use o + para escrever a primeira.'}
+                </p>
               )}
 
               {obra.observacoes.map((o) => {
                 const autor = pessoaPorId(o.autorId)
                 /* cada um mexe so na propria observacao — a API confere
                    de novo antes de gravar */
-                const minha = String(o.autorId) === String(user?.id)
+                /* obra fechada: nem a propria observacao se edita mais */
+                const minha =
+                  !somenteLeitura && String(o.autorId) === String(user?.id)
                 return (
                   <article key={o.id} className="nota">
                     <div className="nota__texto">
@@ -534,9 +570,16 @@ export default function ObraDetalhe() {
             </div>
           </aside>
         </div>
+
+        {/* A ficha vale para QUALQUER obra, aberta ou fechada: saber quem
+            marcou o que e a que horas serve tanto para conferir o passado
+            quanto para acompanhar o que esta acontecendo agora. */}
+        <Rastreabilidade obra={obra} roteiro={roteiro} />
       </section>
 
-      {/* ---------------- botao flutuante ---------------- */}
+      {/* ---------------- botao flutuante ----------------
+          Some na obra fechada: todas as acoes dele gravam. */}
+      {!somenteLeitura && (
       <BotaoFlutuante
         aberto={menuFlutuante}
         aoAlternar={() => setMenuFlutuante((v) => !v)}
@@ -571,6 +614,7 @@ export default function ObraDetalhe() {
           },
         ]}
       />
+      )}
 
       {/* ---------------- pop-ups ---------------- */}
       <Modal
@@ -694,12 +738,33 @@ function CardSetor({
   const fundo = fundoDoCard(card, corDoCargo)
   const titulo = nomeDoCard(card, nomeDoCargo)
 
-  /* quem marcou o ultimo check do card vira o rosto dele */
-  const ultimo = card.checks
-    .map((c) => obra.checks[c.id])
-    .filter(Boolean)
-    .sort((a, b) => String(b.feitoEm).localeCompare(String(a.feitoEm)))[0]
-  const responsavel = ultimo ? pessoaPorId(ultimo.feitoPor) : null
+  /**
+   * Os rostos de quem marcou algum check DESTE card.
+   *
+   * Antes aparecia so o ultimo. Mas um card costuma ser trabalho de mais
+   * de uma pessoa — o tecnico marca um check, o GQ marca outro — e mostrar
+   * so quem chegou por ultimo apagava o outro da tela. Agora aparecem os
+   * dois, do mais recente para o mais antigo.
+   *
+   * Sem repetir: quem marcou tres checks aparece uma vez so.
+   */
+  const responsaveis = useMemo(() => {
+    const marcas = card.checks
+      .map((c) => obra.checks[c.id])
+      .filter(Boolean)
+      .sort((a, b) => String(b.feitoEm).localeCompare(String(a.feitoEm)))
+
+    const vistos = new Set()
+    const gente = []
+    marcas.forEach((marca) => {
+      const id = String(marca.feitoPor ?? "")
+      if (!id || vistos.has(id)) return
+      vistos.add(id)
+      const pessoa = pessoaPorId(id)
+      if (pessoa) gente.push(pessoa)
+    })
+    return gente
+  }, [card.checks, obra.checks, pessoaPorId])
 
   const donos = card.cargos.map((c) => cargoPorChave(c)?.nome ?? c).join(', ')
 
@@ -723,8 +788,8 @@ function CardSetor({
         <span className="setorcard__placar">
           {feitas}/{card.checks.length}
         </span>
-        {responsavel && (
-          <Avatar nome={responsavel.nome} foto={responsavel.foto} tamanho={20} titulo={responsavel.nome} />
+        {responsaveis.length > 0 && (
+          <PilhaAvatares pessoas={responsaveis} tamanho={20} limite={4} />
         )}
 
         {(podeChecks || podeCards) && (

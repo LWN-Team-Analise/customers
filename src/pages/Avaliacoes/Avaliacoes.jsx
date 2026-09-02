@@ -1,43 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
+import Estrelas from '@/components/Estrelas/Estrelas'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
+import {
+  CutoutCard,
+  CutoutCardAction,
+  CutoutCardContent,
+  CutoutCardFooter,
+  CutoutCardImage,
+  CutoutCardInsetLabel,
+  CutoutCardMedia,
+  CutoutCardOverlay,
+  CutoutCardPin,
+} from '@/components/CutoutCard/CutoutCard'
 import { CampoArea } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import useCorDaLogo from '@/hooks/useCorDaLogo'
 import { dataBR, dataHora } from '@/utils/formato'
 import './Avaliacoes.css'
-
-/** Estrelas de 0 a 10, desenhadas como cinco (cada uma vale 2 pontos). */
-export function Estrelas({ nota, tamanho = 15 }) {
-  const cheias = (Number(nota) || 0) / 2
-  return (
-    <span className="estrelas" aria-hidden="true">
-      {[0, 1, 2, 3, 4].map((i) => {
-        const parte = Math.round(Math.max(0, Math.min(1, cheias - i)) * 100)
-        const id = `est${i}-${parte}`
-        return (
-          <svg key={i} viewBox="0 0 24 24" width={tamanho} height={tamanho}>
-            <defs>
-              <linearGradient id={id}>
-                <stop offset={`${parte}%`} stopColor="var(--pri-media)" />
-                <stop offset={`${parte}%`} stopColor="transparent" />
-              </linearGradient>
-            </defs>
-            <path
-              d="m12 3.6 2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.99 6.75 19.75l1-5.85L3.5 9.75l5.9-.85z"
-              fill={`url(#${id})`}
-              stroke="var(--pri-media)"
-              strokeWidth="1.3"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )
-      })}
-    </span>
-  )
-}
 
 const FILTROS = [
   { valor: 'todas', rotulo: 'Todas' },
@@ -146,50 +128,90 @@ export default function Avaliacoes() {
   )
 }
 
+/** Duas letras do nome da empresa, para o card sem logo. */
+function iniciais(nome) {
+  return String(nome ?? '?')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((parte) => parte[0] ?? '')
+    .join('')
+    .toUpperCase()
+}
+
 /**
- * O card da lista.
+ * O card da lista, em cartao de quinas recortadas.
  *
- * A tarja da lateral usa a MESMA cor do card do cliente na aba
- * Clientes: a predominante da logo, com o nome como reserva. Assim a
- * empresa se reconhece de longe nas duas telas.
+ * A logo do cliente ocupa o topo; a nota fica na tarja vazada do canto
+ * de baixo, e o tipo da obra no selo do canto de cima. Cliente sem
+ * logo entra com as iniciais na cor predominante do nome — a MESMA cor
+ * do card dele na aba Clientes, para a empresa se reconhecer de longe
+ * nas duas telas.
  */
 function CardAvaliacao({ obra, cliente, participantes, aoAbrir }) {
   const cor = useCorDaLogo(cliente?.logo, cliente?.nome)
+  const nome = cliente?.nome ?? 'Cliente removido'
 
   return (
     <li>
-      <button
-        type="button"
+      <CutoutCard
         className={`avaobra ${obra.avaliacao ? 'is-avaliada' : ''}`.trim()}
-        style={{ '--cor-empresa': cor }}
+        style={{ '--corte-cor': cor, '--cor-empresa': cor }}
+        destaque={Boolean(obra.avaliacao)}
+        role="button"
+        tabIndex={0}
         onClick={aoAbrir}
+        onKeyDown={(evento) => {
+          if (evento.key === 'Enter' || evento.key === ' ') {
+            evento.preventDefault()
+            aoAbrir()
+          }
+        }}
+        aria-label={`Avaliação de ${nome}`}
       >
-        <header className="avaobra__topo">
-          <strong className="avaobra__empresa">{cliente?.nome ?? 'Cliente removido'}</strong>
-          <span className="avaobra__selo" data-tipo={obra.tipo}>
-            {obra.tipo === 'emergencia' ? 'emergência' : 'padrão'}
-          </span>
-        </header>
+        <CutoutCardMedia altura={150}>
+          <CutoutCardImage
+            src={cliente?.logo}
+            alt=""
+            iniciais={iniciais(nome)}
+            cor={cor}
+          />
+          <CutoutCardOverlay />
 
-        <div className="avaobra__nota">
-          {obra.avaliacao ? (
-            <>
-              <Estrelas nota={obra.avaliacao.nota} tamanho={17} />
-              <strong>{Number(obra.avaliacao.nota).toFixed(1)}</strong>
-              {obra.notas?.length > 1 && (
-                <span className="avaobra__quantas">
-                  média de {obra.notas.length} avaliações
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="avaobra__sem">Sem avaliação</span>
+          <CutoutCardPin>
+            <span className="avaobra__selo" data-tipo={obra.tipo}>
+              {obra.tipo === 'emergencia' ? 'emergência' : 'padrão'}
+            </span>
+          </CutoutCardPin>
+
+          <CutoutCardInsetLabel>
+            {obra.avaliacao ? (
+              <>
+                <Estrelas nota={obra.avaliacao.nota} tamanho={15} />
+                <strong>{Number(obra.avaliacao.nota).toFixed(1)}</strong>
+              </>
+            ) : (
+              <span className="avaobra__sem">Sem avaliação</span>
+            )}
+          </CutoutCardInsetLabel>
+
+          <CutoutCardAction>
+            <span className="avaobra__abrir">
+              {obra.avaliacao ? 'Ver notas' : 'Avaliar'}
+            </span>
+          </CutoutCardAction>
+        </CutoutCardMedia>
+
+        <CutoutCardContent>
+          <strong className="avaobra__empresa">{nome}</strong>
+          {obra.notas?.length > 1 && (
+            <span className="avaobra__quantas">média de {obra.notas.length} avaliações</span>
           )}
-        </div>
+        </CutoutCardContent>
 
         {/* so os rostos: os nomes e o resto aparecem ao abrir */}
         {participantes.length > 0 && (
-          <footer className="avaobra__base">
+          <CutoutCardFooter>
             <span className="avaobra__avatares">
               {participantes.slice(0, 6).map((p) => (
                 <Avatar key={p.id} nome={p.nome} foto={p.foto} tamanho={24} titulo={p.nome} />
@@ -198,9 +220,9 @@ function CardAvaliacao({ obra, cliente, participantes, aoAbrir }) {
             {participantes.length > 6 && (
               <span className="avaobra__resto">+{participantes.length - 6}</span>
             )}
-          </footer>
+          </CutoutCardFooter>
         )}
-      </button>
+      </CutoutCard>
     </li>
   )
 }
@@ -349,7 +371,6 @@ function ModalAvaliar({ obraId, aoFechar }) {
       aberto={Boolean(obraId)}
       aoFechar={aoFechar}
       titulo={`${cliente?.nome ?? 'Obra'} — ${obra.tipo === 'emergencia' ? 'emergência' : 'padrão'}`}
-      subtitulo="A média das notas é a nota da obra, e ela entra na média de cada participante."
       largura={580}
     >
       <form className="formava" onSubmit={salvar}>

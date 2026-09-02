@@ -40,6 +40,17 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  /* cada card cresce sozinho: um cliente aberto nao estica os
+     fechados da mesma linha junto com ele */
+  align-items: start;
+}
+
+.clientes__grade > li {
+  display: flex;
+}
+
+.clientes__grade > li > * {
+  width: 100%;
 }
 
 /* ---------------- Card do cliente ---------------- */
@@ -118,27 +129,6 @@
   transform: rotate(180deg);
 }
 
-/* o que aparece depois de clicar */
-.cliente__corpo {
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-  padding: 0 15px 15px 21px;
-  animation: cliente-abre var(--dur-base) var(--ease-out);
-}
-
-@keyframes cliente-abre {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-.cliente__quem {
-  flex: 1;
-  min-width: 0;
-}
-
 .cliente__nome {
   margin: 0;
   min-width: 0;
@@ -148,15 +138,6 @@
   color: var(--text-strong);
   overflow-wrap: anywhere;
   transition: color var(--dur-fast) var(--ease-out);
-}
-
-.cliente__local {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 3px 0 0;
-  font-size: 0.79rem;
-  color: var(--text-muted);
 }
 
 .cliente__botoes {
@@ -278,4 +259,315 @@
     margin-left: 0;
     flex-basis: 100%;
   }
+}
+
+/* ---------------- Cliente aberto: cartao de quinas recortadas ----------------
+
+   Aberto, o card deixa de ser a ficha de vidro e vira o cartao
+   recortado (components/CutoutCard). O que sobra aqui e so o que e
+   desta tela — o cartao em si se cuida sozinho. */
+
+.cliente--aberto {
+  --corte-raio: var(--radius-lg);
+  --avatar-anel: transparent;
+  /* A abertura: o cartao cresce da linha fechada em vez de aparecer
+     pronto. A escala parte de 0.96 e nao de 0 — vindo de zero pareceria
+     um card NOVO nascendo, e o que ele e, e o mesmo card se abrindo. */
+  animation: cliente-abre 380ms var(--ease-out) both;
+  transform-origin: top center;
+}
+
+@keyframes cliente-abre {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+}
+
+/* a foto entra depois do cartao, escorregando de cima: e o que da a
+   sensacao de que a linha fechada ABRIU e revelou a logo */
+.cliente--aberto .corte__media {
+  animation: cliente-foto 460ms var(--ease-out) both;
+}
+
+@keyframes cliente-foto {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+/* a linha fechada tambem responde ao ponteiro, para o clique parecer
+   um convite e nao um botao escondido */
+.cliente__topo {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.cliente:not(.cliente--aberto) .cliente__topo:active {
+  transform: scale(0.99);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cliente--aberto,
+  .cliente--aberto .corte__media {
+    animation: none;
+  }
+}
+
+/* a tarja lateral nao entra no cartao recortado: quem marca a cor da
+   empresa ali e a borda inteira (is-destaque) */
+.cliente--aberto::before {
+  content: none;
+}
+
+/* o cabecalho encosta na foto: sem a tarja, o recuo da esquerda cai */
+.cliente--aberto .cliente__topo {
+  padding: 13px 15px 4px;
+}
+
+.cliente__pino {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.cliente__fechar {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--btn-shadow);
+}
+
+/* ============================================================
+   Avaliação do cliente
+
+   A média de todas as obras avaliadas dele, e — abrindo — de onde
+   ela veio: obra por obra, com data, estrelas e o que foi
+   comentado. Quando a obra teve mais de uma nota, elas aparecem
+   separadas: a média sozinha esconderia um 5 ao lado de um 9.
+   ============================================================ */
+
+.clinota {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.clinota__sem {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+
+.clinota__topo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 9px;
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.clinota__rotulo {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.clinota__media {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+.clinota__quantas {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.clinota__seta {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.clinota__topo.is-aberto .clinota__seta {
+  transform: rotate(180deg);
+}
+
+/* ---- as obras avaliadas ---- */
+
+.clinota__obras {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+  animation: clinota-abre var(--dur-base) var(--ease-out);
+}
+
+@keyframes clinota-abre {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.clinota__obra {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--obra-cor, var(--obra-padrao));
+  background: var(--control-bg);
+}
+
+.clinota__obra[data-tipo='emergencia'] {
+  --obra-cor: var(--obra-emerg);
+}
+
+.clinota__obratopo {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 5px;
+}
+
+.clinota__obradesc {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.clinota__obradata {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+
+.clinota__obranota {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.clinota__obranota strong {
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+.clinota__obranota em {
+  font-size: 0.68rem;
+  font-style: normal;
+  color: var(--text-faint);
+}
+
+/* ---- cada nota da obra, separada ---- */
+
+.clinota__linhas {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--line);
+  list-style: none;
+}
+
+.clinota__linhas li {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 3px 8px;
+}
+
+.clinota__quem {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-base);
+}
+
+.clinota__valor {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+.clinota__obs {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.clinota__obs--vazia {
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+/* a data cai na linha de baixo, ocupando as tres colunas */
+.clinota__quando {
+  grid-column: 1 / -1;
+  font-size: 0.66rem;
+  color: var(--text-faint);
+}
+
+/* ---- a nota no selo do canto ---- */
+
+.cliente__pino--nota {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+/* ---------------- Setor do cliente ---------------- */
+
+.clientes__setores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: -4px;
+}
+
+/* a etiqueta do setor: fundo translucido da cor, letra do tema — assim
+   ela se le no claro e no escuro sem precisar de duas cores */
+.cliente__setor {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--setor-cor) 50%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--setor-cor) 18%, transparent);
+  color: var(--text-base);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cliente__semsetor {
+  font-style: italic;
+  color: var(--text-faint);
 }

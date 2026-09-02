@@ -181,6 +181,12 @@
 .info__valor--pri[data-pri='media'] { --pri-bg: var(--pri-media); --pri-fg: var(--pri-media-fg); }
 .info__valor--pri[data-pri='baixa'] { --pri-bg: var(--pri-baixa); --pri-fg: var(--pri-baixa-fg); }
 
+/* a alta e a unica das tres que precisa ser vista antes de ser lida;
+   quem faz isso e a cor, com um peso a mais na letra */
+.info__valor--pri[data-pri='alta'] {
+  font-weight: 800;
+}
+
 .info__linha {
   display: flex;
   flex-wrap: wrap;

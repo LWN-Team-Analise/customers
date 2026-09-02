@@ -46,21 +46,13 @@
     box-shadow var(--dur-fast) var(--ease-out);
 }
 
-/* A logo vira um recorte: o que se ve e a cor de dentro, e ela e a
-   mesma do botao Entrar. Trocar --btn-bg troca as duas de uma vez. */
+/* A logo fica com a cor que a Microsoft usa: e por ela que a pessoa
+   reconhece o botao sem precisar ler o rotulo. */
 .social__logo {
   display: block;
   width: 21px;
   height: 21px;
-  background: var(--btn-bg);
-  -webkit-mask-image: var(--logo);
-  mask-image: var(--logo);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+  object-fit: contain;
 }
 
 .social__btn:hover:not(:disabled) {

@@ -95,6 +95,17 @@
   --grad-a: #071a3a;
   --grad-b: #1b4386;
 
+  /* Anel do item atual do menu — azul-marinho correndo para azul claro.
+     Fica igual nos dois temas de proposito: e ele que marca onde a
+     pessoa esta, e trocar de cor com o tema tiraria essa referencia. */
+  --anel-1: #0a2547;
+  --anel-2: #14417f;
+  --anel-3: #3f8bdc;
+  --anel-4: #a5d2ff;
+  /* miolo do botao: cobre o anel e deixa so a borda dele aparecendo */
+  --anel-miolo: rgba(255, 255, 255, 0.94);
+  --anel-cova: rgba(13, 13, 13, 0.09);
+
 
   --danger: #b3261e;
   --danger-bg: rgba(179, 38, 30, 0.08);
@@ -105,9 +116,9 @@
      No branco qualquer cor pesa mais, entao aqui e ainda mais fraco
      que no escuro. Se quiser o efeito mais visivel, e so subir estes
      tres numeros — nada mais depende deles. */
-  --vhs-cor: 0.022;
-  --vhs-linha: 0.028;
-  --vhs-lavagem: 0.03;
+  --vhs-cor: 0.013;
+  --vhs-linha: 0.016;
+  --vhs-lavagem: 0.02;
 }
 
 /* =========================================================
@@ -176,6 +187,11 @@
   --grad-a: #4d8ff0;
   --grad-b: #a5d2ff;
 
+  /* o anel e o mesmo dos dois lados; so o miolo e a cova mudam, porque
+     eles e que precisam sumir contra o fundo de cada tema */
+  --anel-miolo: rgba(14, 18, 28, 0.94);
+  --anel-cova: rgba(0, 0, 0, 0.55);
+
 
   --danger: #ff8a9c;
   --danger-bg: rgba(255, 138, 156, 0.12);
@@ -183,9 +199,9 @@
   --success: #6fe3b4;
 
   /* no preto a cor some facil; um tiquinho a mais para o efeito existir */
-  --vhs-cor: 0.045;
-  --vhs-linha: 0.16;
-  --vhs-lavagem: 0.05;
+  --vhs-cor: 0.026;
+  --vhs-linha: 0.085;
+  --vhs-lavagem: 0.032;
 }
 
 /* =========================================================

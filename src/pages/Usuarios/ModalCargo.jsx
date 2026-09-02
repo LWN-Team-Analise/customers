@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
+import Confirma from '@/components/Confirma/Confirma'
 import { useDados } from '@/context/DadosContext'
 import EscolhaCor from '@/components/EscolhaCor/EscolhaCor'
+import Seletor from '@/components/Seletor/Seletor'
 import { ALTERACAO, CHAVES, VISUALIZACAO, dependentes, normalizar, travada } from '@/domain/permissoes'
 import './ModalCargos.css'
 
@@ -44,6 +46,10 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
+  /* cargo define o que um grupo inteiro pode fazer: confere antes de gravar */
+  const [conferindo, setConferindo] = useState(false)
+  /* de qual cargo a lista foi copiada — so para o seletor mostrar */
+  const [copiado, setCopiado] = useState('')
 
   const editando = Boolean(cargo)
   const emUso = editando ? equipe.filter((p) => p.cargo === cargo.chave).length : 0
@@ -63,6 +69,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
     )
     setErro('')
     setConfirmando(false)
+    setCopiado('')
   }, [aberto, cargo])
 
   const mudar = (campo) => (valor) => {
@@ -97,7 +104,44 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
   const marcarTodas = () => setForm((atual) => ({ ...atual, permissoes: [...CHAVES] }))
   const desmarcarTodas = () => setForm((atual) => ({ ...atual, permissoes: [] }))
 
-  const enviar = async (evento) => {
+  /**
+   * Copia as permissoes de outro cargo.
+   *
+   * Cargo novo costuma nascer "igual ao Tecnico, mais uma coisa" — e
+   * marcar quinze caixas na mao para chegar nisso e onde se erra. Aqui a
+   * pessoa escolhe de quem copiar, a lista inteira e substituida, e dai
+   * ela ajusta o que difere.
+   *
+   * SUBSTITUI, nao soma: "copiar de" tem que deixar o cargo igual ao
+   * outro. Se somasse, uma copia feita por engano nao teria desfazer.
+   *
+   * O acesso total vem junto porque ele TAMBEM e permissao — copiar do
+   * Diretor e nao levar o acesso total daria um cargo que parece o
+   * Diretor na tela e nao age como ele.
+   */
+  const copiarDe = (id) => {
+    setCopiado(id)
+    const fonte = cargos.find((c) => String(c.id) === String(id))
+    if (!fonte) return
+    setForm((atual) => ({
+      ...atual,
+      acessoTotal: Boolean(fonte.acessoTotal),
+      permissoes: normalizar(fonte.permissoes ?? []),
+    }))
+    setErro('')
+  }
+
+  /* nao da para copiar de si mesmo: nao faria nada */
+  const fontes = cargos.filter((c) => c.id !== cargo?.id)
+
+  /**
+   * O submit apenas CONFERE e abre a confirmacao.
+   *
+   * Cargo nao e cadastro de uma pessoa: e o que um grupo inteiro passa a
+   * poder fazer. Marcar uma caixa a mais sem querer libera aquilo para
+   * todo mundo que esta no cargo — e ninguem percebe na hora.
+   */
+  const enviar = (evento) => {
     evento.preventDefault()
     const nome = form.nome.trim()
     if (!nome) {
@@ -113,11 +157,17 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
       return
     }
 
+    setConferindo(true)
+  }
+
+  const gravar = async () => {
+    const nome = form.nome.trim()
     setSalvando(true)
     try {
       const campos = { ...form, nome, permissoes: normalizar(form.permissoes) }
       if (editando) await atualizarCargo(cargo.id, campos)
       else await adicionarCargo(campos)
+      setConferindo(false)
       aoFechar()
     } catch (e) {
       setErro(e.message)
@@ -221,6 +271,25 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
               </button>
             </span>
           </header>
+
+          {/* Atalho para o caso mais comum: o cargo novo comeca igual a um
+              que ja existe. Substitui a lista inteira — inclusive o acesso
+              total, que tambem e permissao. */}
+          {fontes.length > 0 && (
+            <div className="perm__copiar">
+              <span className="perm__copiar-rotulo">Copiar permissões de:</span>
+              <Seletor
+                valor={copiado}
+                aoMudar={copiarDe}
+                vazio="Escolha um cargo"
+                largo
+                opcoes={fontes.map((c) => ({
+                  valor: String(c.id),
+                  rotulo: c.acessoTotal ? `${c.nome} (acesso total)` : c.nome,
+                }))}
+              />
+            </div>
+          )}
 
           {form.acessoTotal && (
             <p className="perm__nota perm__nota--total">
@@ -341,6 +410,56 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
           </p>
         )}
       </form>
+
+      {/* nivel 2: este pop-up ja esta no nivel 1 (aberto por cima da lista
+          de cargos), e a confirmacao precisa vir na frente dele */}
+      <Confirma
+        aberto={conferindo}
+        nivel={2}
+        tom="acao"
+        titulo={editando ? `Salvar ${cargo.nome}?` : 'Criar este cargo?'}
+        mensagem={
+          editando
+            ? `As permissões abaixo passam a valer para as ${emUso} pessoa(s) neste cargo.`
+            : 'Confira o que este cargo vai poder fazer antes de criar.'
+        }
+        detalhes={
+          <dl>
+            <dt>Cargo</dt>
+            <dd>{form.nome.trim() || '—'}</dd>
+
+            <dt>Acesso total</dt>
+            <dd>{form.acessoTotal ? 'Sim — passa por qualquer permissão' : 'Não'}</dd>
+
+            <dt>Permissões</dt>
+            <dd>
+              {form.permissoes.length === 0 ? (
+                <em>Nenhuma marcada</em>
+              ) : (
+                <ul>
+                  {form.permissoes.map((chave) => (
+                    <li key={chave}>{rotuloDaPermissao(chave)}</li>
+                  ))}
+                </ul>
+              )}
+            </dd>
+          </dl>
+        }
+        aviso={
+          form.acessoTotal
+            ? 'Acesso total é permissão de diretoria: quem estiver neste cargo passa por todas as travas do sistema.'
+            : undefined
+        }
+        rotuloConfirmar={editando ? 'Salvar cargo' : 'Criar cargo'}
+        aoConfirmar={gravar}
+        aoFechar={() => setConferindo(false)}
+      />
     </Modal>
   )
+}
+
+/** O nome que a permissao tem na tela — a chave crua nao diz nada. */
+function rotuloDaPermissao(chave) {
+  const achada = [...VISUALIZACAO, ...ALTERACAO].find((p) => p.chave === chave)
+  return achada?.rotulo ?? chave
 }

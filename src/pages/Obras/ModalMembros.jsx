@@ -17,7 +17,6 @@ export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Membros nas obras"
-      subtitulo="Quem está participando e em que etapa cada obra parou."
       largura={620}
     >
       <div className="membros">

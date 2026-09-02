@@ -145,6 +145,50 @@
   opacity: 0.72;
 }
 
+/* ---- Prioridade: a palavra leva a cor dela ----
+
+   Vermelho para alta, amarelo para media, verde para baixa — as mesmas
+   tres cores que o filtro, a tela da obra e o pop-up de cadastro usam.
+   O card ja tem fundo escuro proprio, entao aqui entra a cor cheia; o
+   contorno segura a leitura quando o card e o de emergencia, que ja e
+   avermelhado. */
+.obracard__pri {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  opacity: 0.9;
+}
+
+.obracard__pri strong {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--pri-cor, inherit);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.obracard__pri[data-pri='alta'] {
+  --pri-cor: var(--pri-alta);
+}
+
+.obracard__pri[data-pri='media'] {
+  --pri-cor: var(--pri-media);
+}
+
+.obracard__pri[data-pri='baixa'] {
+  --pri-cor: var(--pri-baixa);
+}
+
+/* Emergência é um caso à parte.
+
+   O card dela já é laranja-avermelhado, e "Alta" em vermelho por cima disso
+   não se lê — duas cores quentes uma na outra. Como a emergência é SEMPRE
+   alta, quem já avisou da urgência foi o card inteiro; aqui a palavra só
+   precisa ser legível. */
+.obracard[data-tom='emergencia'] .obracard__pri strong,
+.obracard[data-tom='aviso-emergencia'] .obracard__pri strong {
+  color: var(--obra-emerg-fg);
+}
+
 /* ============================================================
    O card do quadro NAO leva efeito: cor chapada, sem reflexo e
    sem brilho. So a coluna de aviso tem gradiente, e de proposito.
@@ -182,6 +226,75 @@
   --tom-fg: var(--obra-emerg-fg);
   --tom-borda: var(--obra-emerg-borda);
   --tom-anel: var(--obra-emerg);
+}
+
+/* ---- Moldura metalica amarela ----
+
+   O que faz metal parecer metal e a LUZ CORRENDO nele, nao a cor: um ouro
+   chapado le como plastico amarelo. Entao a borda e um gradiente com dois
+   pontos claros e dois escuros, como se houvesse uma luz em cima e outra
+   embaixo, e o brilho fino por dentro fecha o efeito.
+
+   Feita com `border-image`, e nao com uma borda pintada: assim ela e a
+   propria borda do card e nao empurra nada do conteudo. Como border-image
+   ignora border-radius, o brilho arredondado vai por dentro, num inset.
+
+   So a coluna de aviso leva isso — e o convite para clicar. */
+
+/* ---- Moldura metálica dourada ----
+
+   O que faz metal parecer metal e a LUZ CORRENDO nele, nao a cor: um ouro
+   chapado le como plastico amarelo. Entao a borda e um gradiente com dois
+   pontos claros e dois escuros, como se houvesse uma luz em cima e outra
+   embaixo.
+
+   Pintada com DOIS background-clip empilhados, e nao com border-image: o
+   border-image ignora o border-radius e a moldura saia quadrada em volta de
+   um card arredondado. Aqui o gradiente preenche a area da borda (padding-box
+   para dentro fica a cor do card) e acompanha a curva do raio.
+
+   So a coluna de aviso leva isso — e o convite para clicar. */
+
+.obracard[data-tom^='aviso-'] {
+  --moldura: linear-gradient(
+    145deg,
+    #f7e08a 0%,
+    #c9971f 18%,
+    #fff4c2 34%,
+    #a97d12 52%,
+    #ffe9a3 68%,
+    #c9971f 84%,
+    #8a6510 100%
+  );
+
+  /* 3px: mais encorpada que a borda comum, sem virar quadro de foto */
+  border: 3px solid transparent;
+  background:
+    linear-gradient(var(--tom-bg), var(--tom-bg)) padding-box,
+    var(--moldura) border-box;
+  box-shadow:
+    /* fio claro por dentro: a quina do metal pegando luz */
+    inset 0 0 0 1px rgba(255, 240, 190, 0.3),
+    0 10px 24px -14px rgba(0, 0, 0, 0.8),
+    0 4px 18px -10px rgba(201, 151, 31, 0.45);
+}
+
+/* no hover a luz sobe: a mesma moldura, so que mais acesa */
+.obracard[data-tom^='aviso-'].obracard--clicavel:hover {
+  --moldura: linear-gradient(
+    145deg,
+    #fff6cf 0%,
+    #e0ae2b 18%,
+    #fffdf2 34%,
+    #c2911a 52%,
+    #fff3c9 68%,
+    #e0ae2b 84%,
+    #a2790f 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 245, 210, 0.45),
+    0 16px 30px -16px rgba(0, 0, 0, 0.8),
+    0 6px 24px -10px rgba(224, 174, 43, 0.6);
 }
 
 /* ---- etiquetas da obra, logo abaixo da descricao ---- */

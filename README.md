@@ -33,22 +33,35 @@ O Vite faz proxy de tudo que comeca com `/api` para a API (vale no `dev` e no
 | `npm run db:senha`  | gera o hash bcrypt de uma senha                        |
 | `npm run db:validar`| roda o SQL num banco descartavel e confere tudo        |
 
-## A foto do lado esquerdo
+## A esfera de clientes (tela de login)
 
-O painel esquerdo usa `public/assets/login.webp`. Para trocar a imagem, basta
-substituir esse arquivo (ou editar `.hero__photo` em
-`src/pages/Login/Login.css`). Se o arquivo sumir, entra automaticamente o
-fallback `public/assets/lab-placeholder.svg` — nada quebra.
+O lado esquerdo do login e uma **esfera de fotos** que gira sozinha, obedece ao
+arrasto e se inclina na direcao do cursor (`src/components/SphereGallery`).
 
-As cinco faixas sao **janelas recortadas sobre a mesma foto**: cada
-`.hero__slice-photo` se dimensiona pelo bloco `.hero__slices` (nao pela faixa),
-entao os pedacos ficam alinhados e a imagem se le como uma so, vista atraves de
-frestas. O recorte vem de `clip-path` — que, ao contrario de `overflow`, corta
-filhos posicionados sem virar containing block deles.
+**As placas sao as logos dos clientes cadastrados**, e so as de quem TEM logo:
+cliente sem foto nao vira placa em branco, ele simplesmente nao entra na
+esfera. Enquanto nenhum cliente tiver logo, entra `public/assets/login.webp`
+como reserva — senao a tela abriria com uma bola de retangulos vazios.
 
-**Por isso nenhuma faixa pode receber `transform`**: um transform tornaria a
-faixa o containing block da foto e quebraria o alinhamento. O respiro vertical
-(`slice-breathe`) anima `height`, nao `scaleY`.
+As fotos vem de `GET /api/dados/vitrine`, a **unica rota de dados sem sessao**
+do sistema. Ela e publica por necessidade: a esfera esta na tela de login, onde
+ainda nao existe token. Por isso devolve **so a imagem** — sem nome, sem id, sem
+endereco —, no maximo 24 delas. Quem abrir a resposta na mao ve o mesmo punhado
+de logos que ja ve na tela, e nada que ligue uma logo a um cadastro.
+
+> Vale saber, na hora de cadastrar: a logo de um cliente fica visivel para quem
+> abrir a tela de login, sem precisar entrar. Se alguma nao puder aparecer, e
+> melhor nao subir ela no cadastro.
+
+O desenho e **canvas 2D**, nao WebGL: as placas sempre olham para a camera,
+entao nao ha nada que precise de shader — e a tela de login nao carrega uma
+biblioteca 3D so para o enfeite. Os pontos se espalham pela distribuicao de
+Fibonacci (angulo aureo), o que mantem a casca uniforme com qualquer numero de
+placas, sem polos apinhados.
+
+Duas mascaras que se cruzam (`mask-composite: intersect`) tiram a esfera de onde
+ela atrapalharia: uma dissolve na direcao do cartao de login, a outra abre um
+claro atras da frase "Trajetoria de Clientes".
 
 ## Banco de dados
 
@@ -173,6 +186,7 @@ Senha padrao do sistema: `123456`.
 | `PATCH /api/equipe/usuarios/:id` | edita o cadastro (CPF so pela diretoria)    |
 | `DELETE /api/equipe/usuarios/:id` | desativa o acesso (o historico fica)       |
 | `GET /api/dados`                | clientes, obras, checks, observacoes, avisos |
+| `GET /api/dados/vitrine`        | so as logos dos clientes — **sem sessao**, para a esfera do login |
 | `POST/PATCH/DELETE /api/dados/clientes` | cadastro de cliente                  |
 | `POST/PATCH/DELETE /api/dados/obras` | cadastro de obra                        |
 | `PUT/DELETE /api/dados/obras/:id/checks/:ck` | marca/desmarca um check        |
@@ -195,6 +209,35 @@ Senha padrao do sistema: `123456`.
 As rotas do roteiro aceitam um `obraId` (no corpo, ou na query nos DELETE):
 e ele que diz **a partir de qual obra** a mudanca vale. Ver *As cinco etapas*.
 
+### O token vive na memoria, nao so no localStorage
+
+Em `src/services/api.js` o token tem **duas moradas**: uma variavel de modulo e
+o `localStorage`. A da memoria e a que vale, e ela existe por causa de um bug
+que fazia o login parecer quebrado.
+
+Quem escreve no `localStorage` e um efeito do `AuthContext`, e efeito so roda
+depois que a tela pinta. So que o `DadosProvider` e **filho** do `AuthProvider`,
+e no React o efeito do filho roda **antes** do efeito do pai. Resultado: no
+instante em que o login abria a sessao, a primeira carga do quadro ja saia — e
+saia sem token, porque o `localStorage` ainda estava vazio.
+
+```
+POST /api/auth/login    → 200      a senha estava certa
+GET  /api/dados         → 401      ...mas foi sem Authorization
+GET  /api/equipe/cargos → 401
+GET  /api/roteiro       → 401
+```
+
+O 401 vinha com `sessao: false`, o `api.js` derrubava a sessao recem-aberta e a
+tela voltava para o login dizendo **"sua sessao expirou por tempo"** — logo
+depois de a pessoa acertar a senha.
+
+A correcao e o `guardarToken()`: o `AuthContext` empurra o token para a memoria
+do `api` **no mesmo passo** em que muda a sessao, antes de qualquer efeito. O
+`localStorage` continua sendo escrito pelo efeito, e serve para a proxima vez
+que o site abrir.
+
+
 ### Permissoes
 
 Cada cargo tem uma lista de chaves em `cargo.permissoes`. A lista mora em
@@ -211,13 +254,133 @@ apaga junto tudo o que so faz sentido dentro de Obras, e essas linhas ficam
 travadas ate a visualizacao voltar. Quem tem `acesso_total` (diretoria) passa
 por qualquer uma, marcada ou nao.
 
-### E-mail e Outlook
+### E-mail (esqueci minha senha)
 
 O "esqueci minha senha" manda um codigo de 6 digitos que vale **3 minutos**. So
 o hash do codigo e guardado, e o passo 1 responde a mesma coisa exista ou nao a
-conta — nao entrega quem esta cadastrado. As credenciais do remetente vao no
-`.env` (`MAIL_USUARIO`, `MAIL_SENHA`); se a conta tiver verificacao em duas
-etapas, gere uma **senha de aplicativo** no portal da Microsoft.
+conta — nao entrega quem esta cadastrado.
+
+Existem **dois caminhos de envio**, e o primeiro que estiver configurado ganha:
+
+| | Quando usar | O que preencher no `.env` |
+|---|---|---|
+| **API da Microsoft (Graph)** | Caixa em Microsoft 365 — inclusive a da LWN | `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `MAIL_USUARIO` |
+| **SMTP** | Qualquer outro provedor (Gmail, Zoho, SMTP proprio) | `MAIL_USUARIO`, `MAIL_SENHA`, `MAIL_HOST`, `MAIL_PORT` |
+
+Ao subir a API, o log diz por onde o e-mail vai sair:
+
+```
+[api] envio de e-mail: API da Microsoft (Graph)
+```
+
+#### Por que o SMTP nao funciona neste dominio
+
+O tenant da LWN tem o **SMTP autenticado desligado**. Testando
+`lwnteamanalise@lwnengenharia.com.br` em `smtp.office365.com:587`, o servidor
+responde:
+
+```
+535 5.7.139 Authentication unsuccessful,
+SmtpClientAuthentication is disabled for the Tenant.
+```
+
+**A senha esta certa.** O que a Microsoft nao aceita mais e login por SMTP — ela
+desligou isso por padrao em todo tenant novo. Nenhuma senha de aplicativo
+resolve, porque o bloqueio e do tenant, nao da conta.
+
+O caminho que a Microsoft deixou aberto e a **API (Graph)**: em vez de conectar
+na caixa e mandar, o servidor pede um token ao Entra ID e chama `/sendMail`.
+Quem se autentica e o **aplicativo**, nao uma pessoa — nao ha senha de caixa nem
+MFA para atrapalhar.
+
+#### Passo a passo: ligar o envio pela API da Microsoft
+
+Precisa de uma conta com papel de **Administrador global** (ou Administrador de
+aplicativos, mais alguem que possa dar o consentimento) no tenant.
+
+**1. Registrar o aplicativo**
+
+1. Abra <https://entra.microsoft.com> e entre com a conta de administrador.
+2. **Identidade → Aplicativos → Registros de aplicativo → Novo registro**.
+3. Nome: `Trajetoria de Clientes — envio de e-mail`.
+4. Tipos de conta com suporte: **Somente contas neste diretorio organizacional**.
+5. URI de redirecionamento: **deixe em branco** — este aplicativo nao tem tela de
+   login, ele fala sozinho com a API.
+6. **Registrar**.
+
+**2. Copiar os dois IDs**
+
+Na tela **Visao geral** do aplicativo recem-criado, copie:
+
+- **ID do aplicativo (cliente)** → vai em `GRAPH_CLIENT_ID`
+- **ID do diretorio (locatario)** → vai em `GRAPH_TENANT_ID`
+
+**3. Criar o segredo do cliente**
+
+1. **Certificados e segredos → Segredos do cliente → Novo segredo do cliente**.
+2. Descricao: `api-customers`. Expiracao: 24 meses.
+3. **Adicionar**, e copie a coluna **Valor** (nao a "ID do segredo").
+
+> O valor so aparece uma vez. Saiu da tela, nao tem como ver de novo — e preciso
+> criar outro. E ele **vence**: anote a data, porque quando vencer o e-mail para
+> de sair, com erro 401.
+
+**4. Dar a permissao de enviar**
+
+1. **Permissoes de API → Adicionar uma permissao → Microsoft Graph**.
+2. Escolha **Permissoes de aplicativo** (nao "delegadas" — nao ha usuario logado
+   neste fluxo).
+3. Procure `Mail.Send` e marque.
+4. **Adicionar permissoes**.
+5. Clique em **Conceder consentimento do administrador para \<empresa\>** e
+   confirme. A linha do `Mail.Send` tem que ficar com o **visto verde** — sem
+   esse passo o envio volta 403.
+
+**5. (Recomendado) Limitar a quais caixas o aplicativo pode enviar**
+
+Do jeito que esta, o aplicativo pode enviar como **qualquer caixa do tenant**.
+Para prende-lo so na caixa do sistema, rode no PowerShell (modulo
+`ExchangeOnlineManagement`):
+
+```powershell
+Connect-ExchangeOnline
+New-DistributionGroup -Name "App Envio Customers" -Alias app-envio-customers -Type Security -Members lwnteamanalise@lwnengenharia.com.br
+New-ApplicationAccessPolicy -AppId <GRAPH_CLIENT_ID> -PolicyScopeGroupId app-envio-customers@lwnengenharia.com.br -AccessRight RestrictAccess -Description "So a caixa do Trajetoria de Clientes"
+```
+
+**6. Preencher o `.env` e reiniciar a API**
+
+```
+MAIL_USUARIO=lwnteamanalise@lwnengenharia.com.br
+GRAPH_TENANT_ID=<ID do diretorio (locatario)>
+GRAPH_CLIENT_ID=<ID do aplicativo (cliente)>
+GRAPH_CLIENT_SECRET=<o Valor do segredo>
+```
+
+```bash
+npm run api
+```
+
+O log tem que dizer `[api] envio de e-mail: API da Microsoft (Graph)`. Feito
+isso, teste o "Esqueci minha senha" na tela de login: o codigo chega, e uma
+copia fica em **Itens Enviados** da caixa.
+
+#### Quando nao chegar
+
+| O que a tela diz | O que e |
+|---|---|
+| "Falta a permissao Mail.Send..." (403) | O passo 4 nao foi concluido — falta o consentimento do administrador, ou a permissao foi marcada como *delegada* em vez de *de aplicativo* |
+| "O aplicativo nao esta autorizado..." (401) | O segredo esta errado ou **venceu**. Crie outro no passo 3 |
+| "A caixa ... nao foi encontrada" (404) | O `MAIL_USUARIO` nao existe nesse tenant, ou nao tem caixa do Exchange |
+| "A Microsoft bloqueia o envio por SMTP..." | Os `GRAPH_*` estao vazios e o sistema caiu no SMTP. Volte ao passo 6 |
+
+> **Se preferir nao mexer no Entra ID**, a outra saida e ligar o SMTP: no
+> Microsoft 365 admin center, **Usuarios → a conta → Email → Gerenciar
+> aplicativos de email → Autenticacao SMTP**, e desligar o bloqueio no nivel do
+> tenant pelo Exchange admin center. E menos recomendavel: a Microsoft esta
+> descontinuando esse caminho.
+
+### Login com Outlook
 
 O login com Outlook usa o fluxo padrao da Microsoft e precisa de um aplicativo
 registrado no Entra ID (`OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET`,

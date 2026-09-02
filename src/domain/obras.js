@@ -23,6 +23,24 @@ export const PRIORIDADES = [
   { id: 'alta', rotulo: 'Alta' },
 ]
 
+/**
+ * Como a prioridade se escreve na tela.
+ *
+ * As tres so com a inicial maiuscula. Quem faz a alta saltar da lista e a
+ * COR (vermelho), nao a caixa alta — que gritava no meio de um card ja
+ * cheio de informacao.
+ *
+ * Vive aqui, e nao em cada tela, porque o card do quadro, a tela da obra,
+ * o filtro e o pop-up de cadastro escrevem a MESMA palavra — e ja houve
+ * o dia em que um deles dizia "média" e o outro "Media".
+ */
+export const PRIORIDADE_ROTULO = { alta: 'Alta', media: 'Média', baixa: 'Baixa' }
+
+/** O rotulo de uma prioridade, com reserva para valor desconhecido. */
+export function rotuloDaPrioridade(id) {
+  return PRIORIDADE_ROTULO[id] ?? id ?? "—"
+}
+
 export const PRIORIDADE_PESO = { alta: 3, media: 2, baixa: 1 }
 
 export const TIPOS = [

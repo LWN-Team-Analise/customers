@@ -2,8 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
+import Confirma from '@/components/Confirma/Confirma'
 import { CampoArea, CampoPastilhas, CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
-import { PRIORIDADES, prioridadeDaObra, prioridadeTravada } from '@/domain/obras'
+import {
+  PRIORIDADES,
+  prioridadeDaObra,
+  prioridadeTravada,
+  rotuloDaPrioridade,
+} from '@/domain/obras'
 import { hojeISO } from '@/utils/formato'
 import './ModalObra.css'
 
@@ -73,7 +79,11 @@ export default function ModalObra({
     setErros((atual) => ({ ...atual, [campo]: undefined }))
   }
 
-  const enviar = async (evento) => {
+  /* obra criada entra no quadro de todo mundo e comeca a cobrar setor:
+     vale conferir a empresa e o tipo antes de soltar */
+  const [conferindo, setConferindo] = useState(false)
+
+  const enviar = (evento) => {
     evento.preventDefault()
 
     const novosErros = {}
@@ -90,9 +100,20 @@ export default function ModalObra({
       return
     }
 
+    /* editar nao precisa de conferencia: a obra ja existe e o que muda
+       aparece na hora. A pergunta e so para a que esta NASCENDO. */
+    if (editando) {
+      gravar()
+      return
+    }
+    setConferindo(true)
+  }
+
+  const gravar = async () => {
     setSalvando(true)
     try {
       await aoSalvar({ ...form, prioridade, tipo: tipoAtual })
+      setConferindo(false)
       aoFechar()
     } catch (e) {
       setErros({ geral: e.message })
@@ -204,6 +225,39 @@ export default function ModalObra({
           </Button>
         </footer>
       </form>
+
+      {/* Conferência antes de soltar a obra no quadro: ela passa a aparecer
+          para a equipe inteira e a cobrar setor da primeira etapa. */}
+      <Confirma
+        aberto={conferindo}
+        nivel={1}
+        tom="acao"
+        titulo={emergencia ? 'Abrir esta emergência?' : 'Criar esta obra?'}
+        mensagem="Ela entra no quadro e passa a cobrar os setores da primeira etapa."
+        detalhes={
+          <dl>
+            <dt>Empresa</dt>
+            <dd>{clientes.find((c) => String(c.id) === String(form.clienteId))?.nome ?? '—'}</dd>
+
+            <dt>Tipo</dt>
+            <dd>{emergencia ? 'Emergência' : 'Padrão'}</dd>
+
+            <dt>Prioridade</dt>
+            <dd>{rotuloDaPrioridade(prioridade)}</dd>
+
+            <dt>Descrição</dt>
+            <dd>{form.descricao.trim() || '—'}</dd>
+          </dl>
+        }
+        aviso={
+          emergencia
+            ? 'Emergência nasce com prioridade alta e vai para o topo do quadro de todo mundo.'
+            : undefined
+        }
+        rotuloConfirmar={emergencia ? 'Abrir emergência' : 'Criar obra'}
+        aoConfirmar={gravar}
+        aoFechar={() => setConferindo(false)}
+      />
     </Modal>
   )
 }

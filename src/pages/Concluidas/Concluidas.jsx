@@ -11,11 +11,29 @@ const MESES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ]
 
-const Seta = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+/* a grade do calendario mostra os doze o ano inteiro, entao o nome curto */
+const MESES_CURTOS = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+]
+
+const SetaEsq = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15 6-6 6 6 6" />
+  </svg>
+)
+
+const SetaDir = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m9 6 6 6-6 6" />
   </svg>
 )
+
+/* os dois tipos de obra, na ordem em que se leem no quadro */
+const GRUPOS = [
+  { id: 'padrao', rotulo: 'Obras padrão' },
+  { id: 'emergencia', rotulo: 'Obras emergência' },
+]
 
 /**
  * Quando a obra fechou. Vale o carimbo do banco (view obra_conclusao:
@@ -55,8 +73,18 @@ export default function Concluidas() {
 
   const anoAtual = ano ?? anos[0] ?? new Date().getFullYear()
   const meses = porAno[anoAtual] ?? {}
-  /* so os meses que tem obra, do mais recente para o mais antigo */
-  const mesesComObra = Object.keys(meses).map(Number).sort((x, y) => y - x)
+
+  /* `anos` esta do mais novo para o mais antigo, entao andar +1 na lista e
+     ir para TRAS no tempo — dai o sinal invertido aqui dentro. */
+  const indiceDoAno = Math.max(0, anos.indexOf(anoAtual))
+  const quantasNoAno = Object.values(meses).reduce((n, l) => n + l.length, 0)
+
+  const trocarAno = (passo) => {
+    const destino = anos[indiceDoAno - passo]
+    if (destino === undefined) return
+    setAno(destino)
+    setMesAberto(null)
+  }
 
   const total = obras.filter(concluida).length
 
@@ -74,79 +102,116 @@ export default function Concluidas() {
           <p className="concluidas__vazio">Nenhuma obra concluída</p>
         ) : (
           <>
-            {/* ano no topo */}
+            {/* ---------------- Ano ----------------
+
+                Uma seta de cada lado e o ano no meio, como num calendario de
+                parede. Antes era uma fila de botoes: com dois anos ela ficava
+                perdida na esquerda, e com oito nao caberia.
+
+                As setas andam pelos anos QUE TEM OBRA, e nao de um em um: um
+                ano vazio nao tem o que mostrar, e passar por ele so faria a
+                pessoa clicar duas vezes. */}
             <div className="anos">
-              {anos.map((a) => {
-                const quantas = Object.values(porAno[a]).reduce((n, l) => n + l.length, 0)
+              <button
+                type="button"
+                className="anos__seta"
+                onClick={() => trocarAno(-1)}
+                disabled={indiceDoAno >= anos.length - 1}
+                aria-label="Ano anterior"
+                title="Ano anterior"
+              >
+                <SetaEsq />
+              </button>
+
+              <span className="anos__atual">
+                <strong>{anoAtual}</strong>
+                <span>
+                  {quantasNoAno} obra{quantasNoAno === 1 ? '' : 's'}
+                </span>
+              </span>
+
+              <button
+                type="button"
+                className="anos__seta"
+                onClick={() => trocarAno(1)}
+                disabled={indiceDoAno <= 0}
+                aria-label="Próximo ano"
+                title="Próximo ano"
+              >
+                <SetaDir />
+              </button>
+            </div>
+            {/* ---------------- calendario: os doze meses do ano ----------------
+
+                Os doze aparecem sempre, e nao so os que tem obra: e assim que
+                se le um calendario, e o mes vazio tambem informa — foi um mes
+                em que nada fechou. O mes sem obra nao abre.  */}
+            <div className="calendario">
+              {MESES_CURTOS.map((nome, m) => {
+                const doMes = meses[m] ?? []
+                const aberto = mesAberto === m
+                const vazio = doMes.length === 0
+                const emergencias = doMes.filter((o) => o.tipo === "emergencia").length
                 return (
                   <button
-                    key={a}
+                    key={nome}
                     type="button"
-                    className={`ano ${a === anoAtual ? 'is-atual' : ''}`.trim()}
-                    onClick={() => {
-                      setAno(a)
-                      setMesAberto(null)
-                    }}
+                    className={`calmes ${aberto ? "is-atual" : ""} ${vazio ? "is-vazio" : ""}`.trim()}
+                    onClick={() => setMesAberto(aberto ? null : m)}
+                    disabled={vazio}
+                    aria-pressed={aberto}
+                    title={vazio ? `Nenhuma obra fechou em ${MESES[m]}` : `${doMes.length} obra(s) em ${MESES[m]}`}
                   >
-                    <strong>{a}</strong>
-                    <span>
-                      {quantas} obra{quantas === 1 ? '' : 's'}
-                    </span>
+                    <span className="calmes__nome">{nome}</span>
+                    <span className="calmes__quantas">{doMes.length}</span>
+                    {emergencias > 0 && (
+                      <span className="calmes__emerg" title={`${emergencias} emergência(s)`}>
+                        {emergencias}
+                      </span>
+                    )}
                   </button>
                 )
               })}
             </div>
 
-            {/* meses do ano escolhido, cada um ocupando a linha inteira */}
-            <div className="meses">
-              {mesesComObra.map((m) => {
-                const doMes = meses[m]
-                const aberto = mesAberto === m
-                const emergencias = doMes.filter((o) => o.tipo === 'emergencia').length
-                const avaliadas = doMes.filter((o) => o.avaliacao)
-                const media =
-                  avaliadas.length > 0
-                    ? avaliadas.reduce((s, o) => s + Number(o.avaliacao.nota), 0) / avaliadas.length
-                    : null
+            {/* ---------------- o mes escolhido, aberto ---------------- */}
+            {mesAberto !== null && meses[mesAberto]?.length > 0 && (
+              <section className="mesaberto">
+                <header className="mesaberto__topo">
+                  <h2 className="mesaberto__titulo">
+                    {MESES[mesAberto]} de {anoAtual}
+                  </h2>
+                  <span className="mesaberto__resumo">
+                    {(() => {
+                      const doMes = meses[mesAberto]
+                      const avaliadas = doMes.filter((o) => o.avaliacao)
+                      const media =
+                        avaliadas.length > 0
+                          ? avaliadas.reduce((sm, o) => sm + Number(o.avaliacao.nota), 0) /
+                            avaliadas.length
+                          : null
+                      return media === null
+                        ? "sem avaliação"
+                        : `nota média ${media.toFixed(1)}`
+                    })()}
+                  </span>
+                </header>
 
-                return (
-                  <section key={m} className={`mes ${aberto ? 'is-aberto' : ''}`.trim()}>
-                    <button
-                      type="button"
-                      className="mes__cabeca"
-                      onClick={() => setMesAberto(aberto ? null : m)}
-                      aria-expanded={aberto}
-                    >
-                      <span className="mes__seta">
-                        <Seta />
-                      </span>
+                {/* Padrao e emergencia em blocos separados: sao dois tipos de
+                    trabalho diferentes, e misturados na mesma lista a conta de
+                    emergencias do mes se perde. */}
+                {GRUPOS.map((grupo) => {
+                  const doGrupo = meses[mesAberto].filter((o) => o.tipo === grupo.id)
+                  if (doGrupo.length === 0) return null
+                  return (
+                    <div key={grupo.id} className="grupo" data-tipo={grupo.id}>
+                      <h3 className="grupo__titulo">
+                        {grupo.rotulo}
+                        <span className="grupo__quantas">{doGrupo.length}</span>
+                      </h3>
 
-                      <span className="mes__nome">{MESES[m]}</span>
-
-                      <span className="mes__info">
-                        <span className="mes__dado">
-                          <strong>{doMes.length}</strong> concluída{doMes.length === 1 ? '' : 's'}
-                        </span>
-                        {emergencias > 0 && (
-                          <span className="mes__dado mes__dado--emerg">
-                            <strong>{emergencias}</strong> emergência{emergencias === 1 ? '' : 's'}
-                          </span>
-                        )}
-                        <span className="mes__dado">
-                          {media === null ? (
-                            <em>sem avaliação</em>
-                          ) : (
-                            <>
-                              nota média <strong>{media.toFixed(1)}</strong>
-                            </>
-                          )}
-                        </span>
-                      </span>
-                    </button>
-
-                    {aberto && (
                       <ul className="mes__obras">
-                        {doMes.map((obra) => {
+                        {doGrupo.map((obra) => {
                           const cliente = clientePorId(obra.clienteId)
                           const pessoas = obra.membros.map(pessoaPorId).filter(Boolean)
                           return (
@@ -155,7 +220,8 @@ export default function Concluidas() {
                                 type="button"
                                 className="fechada"
                                 data-tipo={obra.tipo}
-                                onClick={() => navigate(`/app/obras/${obra.id}`)}
+                                onClick={() => navigate(`/app/concluidas/${obra.id}`)}
+                                title="Abrir a obra com a rastreabilidade completa"
                               >
                                 <Avatar
                                   nome={cliente?.nome}
@@ -164,7 +230,7 @@ export default function Concluidas() {
                                   quadrado
                                 />
                                 <span className="fechada__quem">
-                                  <strong>{cliente?.nome ?? 'Cliente removido'}</strong>
+                                  <strong>{cliente?.nome ?? "Cliente removido"}</strong>
                                   <span>{obra.descricao}</span>
                                 </span>
 
@@ -181,8 +247,8 @@ export default function Concluidas() {
                                 </span>
 
                                 <span className="fechada__avatares">
-                                  {pessoas.slice(0, 3).map((p) => (
-                                    <Avatar key={p.id} nome={p.nome} foto={p.foto} tamanho={22} />
+                                  {pessoas.slice(0, 3).map((pe) => (
+                                    <Avatar key={pe.id} nome={pe.nome} foto={pe.foto} tamanho={22} />
                                   ))}
                                 </span>
                               </button>
@@ -190,11 +256,11 @@ export default function Concluidas() {
                           )
                         })}
                       </ul>
-                    )}
-                  </section>
-                )
-              })}
-            </div>
+                    </div>
+                  )
+                })}
+              </section>
+            )}
           </>
         )}
       </section>

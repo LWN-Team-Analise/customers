@@ -124,7 +124,8 @@ export default function Configuracoes() {
       nome: form.nome.trim(),
       telefone: soDigitos(form.telefone),
       nascimento: form.nascimento || null,
-      cargo: form.cargo || undefined,
+      /* o cargo NÃO vai: o campo é só informativo nesta tela, e mandá-lo
+         daqui abriria caminho para a pessoa trocar o próprio cargo */
       foto: form.foto,
     }
     /* o CPF so vai quando pode mudar E mudou */
@@ -243,7 +244,6 @@ export default function Configuracoes() {
               value={form.email}
               readOnly
               disabled
-              dica="O e-mail do acesso não muda por aqui. Fale com a diretoria."
             />
 
             <CampoTexto
@@ -271,19 +271,23 @@ export default function Configuracoes() {
               erro={erros.cpf}
               disabled={!cpfLiberado}
               readOnly={!cpfLiberado}
-              dica={
-                cpfLiberado
-                  ? 'Você é da diretoria: pode corrigir o CPF.'
-                  : 'Somente a diretoria altera o CPF.'
-              }
             />
 
+            {/* Travado aqui, e de propósito.
+
+                O cargo é o que decide o que a pessoa PODE fazer no sistema.
+                Deixá-lo aberto na tela da própria conta dá a qualquer um a
+                chance de se promover à diretoria — a API já recusava, mas o
+                campo aberto na tela é um convite a tentar.
+
+                Quem muda cargo é quem tem permissão para isso, na aba
+                Usuários. Aqui ele só informa em que cargo a pessoa está. */}
             <CampoSelecao
               rotulo="Cargo"
               largo
               value={form.cargo}
-              onChange={mudar('cargo')}
               vazio="Sem cargo"
+              disabled
               opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
             />
           </div>
@@ -359,6 +363,11 @@ function BlocoOutlook() {
     >
       <h2 className="config__titulo">Conta Microsoft (Outlook)</h2>
 
+      {/* O bloco ocupa a linha inteira, entao o texto fica de um lado e o
+          botao do outro — em vez de o botao cair sozinho numa linha nova
+          com meia tela vazia ao lado. */}
+      <div className="config__outlookcorpo">
+        <div className="config__outlooktexto">
       {vinculado ? (
         <p className="config__nota">
           Vinculada a <strong>{user.outlookEmail ?? user.email}</strong>. Você pode entrar no
@@ -391,24 +400,25 @@ function BlocoOutlook() {
         </p>
       )}
 
-      <div className="config__salvar">
+        </div>
+
+      <div className="config__outlookacao">
         <button
           type="button"
           className="botaooutlook"
           onClick={vincular}
           disabled={ocupado || outlook.conferindo || !outlook.disponivel}
         >
-          <span
-            className="botaooutlook__logo"
-            style={{ '--logo': `url(${outlookLogo})` }}
-            aria-hidden="true"
-          />
+          {/* nas cores da Microsoft, como no botao da tela de login: e por
+              elas que a pessoa reconhece o botao sem ler o rotulo */}
+          <img className="botaooutlook__logo" src={outlookLogo} alt="" aria-hidden="true" />
           {ocupado
             ? 'Abrindo a Microsoft...'
             : vinculado
               ? 'Vincular outra conta'
               : 'Entrar com o Outlook'}
         </button>
+      </div>
       </div>
     </article>
   )

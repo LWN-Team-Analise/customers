@@ -4,9 +4,11 @@ import GlassCard from '@/components/GlassCard/GlassCard'
 import TextField from '@/components/TextField/TextField'
 import Button from '@/components/Button/Button'
 import SocialRow from '@/components/SocialRow/SocialRow'
+import SphereGallery from '@/components/SphereGallery/SphereGallery'
 import ThemeToggle from '@/components/ThemeToggle/ThemeToggle'
 import useMediaQuery from '@/hooks/useMediaQuery'
 import useOutlook from '@/hooks/useOutlook'
+import useVitrine from '@/hooks/useVitrine'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { entrarComOutlook } from '@/services/authService'
@@ -15,10 +17,30 @@ import logoLight from '@/assets/LogoLWN.png'
 import logoDark from '@/assets/LogoLWNWhite.png'
 import './Login.css'
 
-/** Faixas verticais: cada uma e uma janela sobre a mesma foto. */
-const SLICES = [0, 1, 2, 3, 4]
-
 const SERVICES = ['Venda', 'Agendamento', 'Elaboração']
+
+/* O nucleo da esfera puxa a cor do sistema, nao um azul solto.
+   O alfa de cada cor E o brilho: coreColor manda no halo, lineColor na
+   opacidade dos fios. */
+const NUCLEO = {
+  coreSize: 14,
+  coreColor: '#7db4ffc4',
+  lineColor: '#6aa2f042',
+}
+
+/**
+ * Placa maior quando ha poucas logos.
+ *
+ * A esfera tem uma placa por cliente com foto. Com trinta elas se tocam e o
+ * tamanho de fabrica serve; com duas, o mesmo tamanho deixa dois selinhos
+ * perdidos em volta do nucleo. Entao o tamanho acompanha a contagem.
+ */
+function tamanhoDaPlaca(quantas) {
+  if (quantas <= 3) return 52
+  if (quantas <= 6) return 44
+  if (quantas <= 12) return 36
+  return 28
+}
 
 export default function Login() {
   const { login, entrarComSessao, loading, expirou } = useAuth()
@@ -27,6 +49,8 @@ export default function Login() {
   const location = useLocation()
   const isMobile = useMediaQuery('(max-width: 768px)')
   const outlook = useOutlook()
+  /* as placas da esfera sao as logos dos clientes cadastrados */
+  const { fotos } = useVitrine()
 
   const [form, setForm] = useState({ identifier: '', password: '' })
   const [remember, setRemember] = useState(true)
@@ -94,13 +118,17 @@ export default function Login() {
             nao depende da pasta public */}
         <img className="hero__logo" src={isDark ? logoDark : logoLight} alt="LWN" />
 
-        <div className="hero__slices" aria-hidden="true">
-          {SLICES.map((index) => (
-            <span key={index} className="hero__slice" style={{ '--i': index }}>
-              {/* a foto e uma so: cada faixa e uma janela recortada sobre ela */}
-              <span className="hero__slice-photo" />
-            </span>
-          ))}
+        {/* esfera de fotos: gira sozinha, obedece ao arrasto e se
+            inclina na direcao do cursor */}
+        <div className="hero__esfera">
+          {/* uma placa por logo cadastrada, ate 34 — quem conta e a lista */}
+          <SphereGallery
+            images={fotos}
+            size={tamanhoDaPlaca(fotos.length)}
+            scale={82}
+            core={NUCLEO}
+            rotulo="Clientes atendidos pela LWN"
+          />
         </div>
 
         {/* alinhado verticalmente com o meio do cartao de login */}

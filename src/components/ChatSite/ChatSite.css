@@ -1,0 +1,168 @@
+/* ============================================================
+   Chat da equipe
+
+   Balao a esquerda para os outros, a direita para as minhas —
+   a mesma leitura de qualquer aplicativo de conversa, para
+   ninguem precisar aprender nada aqui.
+   ============================================================ */
+
+.chatsite {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* altura fixa: a lista rola por dentro e o campo de escrever fica
+     sempre visivel, em vez de descer com a conversa */
+  height: min(62dvh, 460px);
+}
+
+.chatsite__lista {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.chatsite__vazio {
+  margin: auto;
+  padding: 20px;
+  text-align: center;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.chatsite__msg {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 86%;
+}
+
+.chatsite__msg.is-minha {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.chatsite__balao {
+  padding: 8px 12px 6px;
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+  background: var(--control-bg);
+  border: 1px solid var(--line);
+}
+
+.chatsite__msg.is-minha .chatsite__balao {
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 5px;
+  background: color-mix(in srgb, var(--btn-bg) 20%, transparent);
+  border-color: color-mix(in srgb, var(--btn-bg) 35%, transparent);
+}
+
+.chatsite__autor {
+  margin: 0 0 2px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.chatsite__texto {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-base);
+  /* mensagem com quebra de linha continua quebrada */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chatsite__pe {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 3px 0 0;
+  font-size: 0.64rem;
+  color: var(--text-faint);
+}
+
+.chatsite__apagar {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.chatsite__apagar:hover {
+  color: var(--danger);
+}
+
+.chatsite__erro {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+
+/* ---------------- Escrever ---------------- */
+
+.chatsite__envio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.chatsite__campo {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 16px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  color: var(--text-strong);
+  font-size: 0.86rem;
+}
+
+.chatsite__campo:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.chatsite__campo::placeholder {
+  color: var(--text-faint);
+}
+
+.chatsite__botao {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  cursor: pointer;
+  box-shadow: var(--btn-shadow);
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.chatsite__botao:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+.chatsite__botao:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

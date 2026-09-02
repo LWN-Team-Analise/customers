@@ -403,3 +403,31 @@
 .perm__trava {
   color: var(--pri-media);
 }
+
+/* ---------------- Copiar permissões de outro cargo ----------------
+
+   Fica entre o cabecalho e as duas listas, que e onde a pessoa olha
+   antes de comecar a marcar caixa por caixa. */
+
+.perm__copiar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+}
+
+.perm__copiar-rotulo {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-base);
+}
+
+.perm__copiar > *:last-child {
+  flex: 1;
+  min-width: 180px;
+}

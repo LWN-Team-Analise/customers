@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { useDados } from '@/context/DadosContext'
 import Avatar from '@/components/Avatar/Avatar'
+import ParticleInterlock from '@/components/ParticleInterlock/ParticleInterlock'
+import ChatSite from '@/components/ChatSite/ChatSite'
+import Confirma from '@/components/Confirma/Confirma'
 import { primeiroNome, saudacao } from '@/utils/pessoa'
 import { dataHora } from '@/utils/formato'
 /* O nome do arquivo diz para QUAL FUNDO a logo foi feita:
@@ -71,6 +74,27 @@ const Icone = {
       <path d="m17 15 3-3-3-3M20 12H10" />
     </svg>
   ),
+  chat: () => (
+    <svg viewBox="0 0 24 24" width="21" height="21" {...traco}>
+      <path d="M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
+  mais: () => (
+    <svg viewBox="0 0 24 24" width="22" height="22" {...traco} strokeWidth="2.2">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  nota: () => (
+    <svg viewBox="0 0 24 24" width="17" height="17" {...traco}>
+      <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+      <path d="M8 11h8M8 15h5" />
+    </svg>
+  ),
+  chatPequeno: () => (
+    <svg viewBox="0 0 24 24" width="17" height="17" {...traco}>
+      <path d="M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
   sino: () => (
     <svg viewBox="0 0 24 24" width="19" height="19" {...traco}>
       <path d="M18 15V10a6 6 0 1 0-12 0v5l-1.5 2.5h15z" />
@@ -100,32 +124,13 @@ const MENU = [
   },
 ]
 
-/* ------------------------------------------------------------
-   O orbe que gira no campo de busca
-
-   Cada tela monta o seu proprio <AppShell>, entao trocar de aba
-   remonta o header — e uma animacao CSS recomeca do zero quando o
-   elemento nasce. Era isso que fazia o orbe "resetar".
-
-   A correcao e simples: guardamos a hora em que a pagina abriu e
-   entramos na animacao com um atraso NEGATIVO do tanto que ja se
-   passou. O elemento nasce no meio da volta, exatamente onde o
-   anterior tinha parado.
-   ------------------------------------------------------------ */
-
-const ABERTURA = Date.now()
-const VOLTA = 9 // segundos, igual ao @keyframes orb-gira
-
-function atrasoDoOrbe() {
-  const decorrido = (Date.now() - ABERTURA) / 1000
-  return `${-(decorrido % VOLTA)}s`
-}
-
 /** Avatar do rodape: abre o menu de Configuracoes / Sair. */
 function MenuUsuario() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [aberto, setAberto] = useState(false)
+  /* sair fecha a sessao e leva embora o que estiver aberto: pergunta antes */
+  const [saindo, setSaindo] = useState(false)
   const caixa = useRef(null)
 
   /* fecha ao clicar fora ou no Esc */
@@ -148,7 +153,6 @@ function MenuUsuario() {
   }, [aberto])
 
   const sair = async () => {
-    setAberto(false)
     await logout()
     navigate('/login', { replace: true })
   }
@@ -177,7 +181,10 @@ function MenuUsuario() {
             type="button"
             role="menuitem"
             className="euzinho__item euzinho__item--sair"
-            onClick={sair}
+            onClick={() => {
+              setAberto(false)
+              setSaindo(true)
+            }}
           >
             <Icone.sair />
             Sair
@@ -196,6 +203,16 @@ function MenuUsuario() {
       >
         <Avatar nome={user?.name} foto={user?.foto} tamanho={40} />
       </button>
+
+      <Confirma
+        aberto={saindo}
+        titulo="Sair do sistema?"
+        mensagem="Você volta para a tela de login e precisa entrar de novo."
+        tom="acao"
+        rotuloConfirmar="Sair"
+        aoConfirmar={sair}
+        aoFechar={() => setSaindo(false)}
+      />
     </div>
   )
 }
@@ -270,10 +287,7 @@ function Notificacoes() {
           </header>
 
           {lista.length === 0 ? (
-            <p className="sininho__vazio">
-              Nada por aqui. Quando alguém avisar o seu setor sobre uma obra, o recado aparece
-              nesta lista.
-            </p>
+            <p className="sininho__vazio">Nenhuma notificação pendente.</p>
           ) : (
             <ul className="sininho__lista">
               {lista.map((aviso) => {
@@ -315,11 +329,105 @@ function Notificacoes() {
   )
 }
 
-export default function AppShell({ children, busca, aoBuscar, placeholderBusca }) {
+/**
+ * O botao redondo do canto inferior direito.
+ *
+ * Na maioria das telas ele e so o chat da equipe: um clique abre. Na tela
+ * de Obras ele vira um "+" com duas opcoes, porque la existe uma segunda
+ * coisa a acrescentar (a observacao do quadro) — e um botao que faz duas
+ * coisas precisa perguntar qual.
+ *
+ * Dentro de uma obra ele nao aparece: la o chat que vale e o da obra, e
+ * dois botoes de chat na mesma tela so confundiriam.
+ */
+function BotaoChat({ acoes = [], aoAbrirChat }) {
+  const [aberto, setAberto] = useState(false)
+  const caixa = useRef(null)
+
+  /* com opcoes extras o botao vira menu; sem elas, atalho direto */
+  const temMenu = acoes.length > 0
+
+  useEffect(() => {
+    if (!aberto) return undefined
+    const fora = (e) => {
+      if (!caixa.current?.contains(e.target)) setAberto(false)
+    }
+    const tecla = (e) => e.key === 'Escape' && setAberto(false)
+    document.addEventListener('mousedown', fora)
+    document.addEventListener('keydown', tecla)
+    return () => {
+      document.removeEventListener('mousedown', fora)
+      document.removeEventListener('keydown', tecla)
+    }
+  }, [aberto])
+
+  const itens = [
+    ...acoes,
+    {
+      id: 'chat',
+      rotulo: 'Chat da equipe',
+      Glifo: Icone.chatPequeno,
+      aoClicar: aoAbrirChat,
+    },
+  ]
+
+  return (
+    <div className="bolhachat" ref={caixa}>
+      {temMenu && aberto && (
+        <div className="bolhachat__menu" role="menu">
+          {itens.map(({ id, rotulo, Glifo, aoClicar }) => (
+            <button
+              key={id}
+              type="button"
+              role="menuitem"
+              className="bolhachat__item"
+              onClick={() => {
+                setAberto(false)
+                aoClicar()
+              }}
+            >
+              <Glifo />
+              {rotulo}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className={`bolhachat__botao ${aberto ? 'is-aberto' : ''}`.trim()}
+        onClick={() => (temMenu ? setAberto((v) => !v) : aoAbrirChat())}
+        aria-haspopup={temMenu ? 'menu' : undefined}
+        aria-expanded={temMenu ? aberto : undefined}
+        aria-label={temMenu ? 'Adicionar observação ou abrir o chat' : 'Abrir o chat da equipe'}
+        title={temMenu ? 'Adicionar' : 'Chat da equipe'}
+      >
+        {temMenu ? <Icone.mais /> : <Icone.chat />}
+      </button>
+    </div>
+  )
+}
+
+/**
+ * `semChat` tira o botao flutuante da tela — e o que a tela da obra usa,
+ * porque la o chat que vale e o da obra.
+ *
+ * `acoesFlutuantes` acrescenta opcoes ao botao; com elas ele vira um "+"
+ * com menu, sem elas continua sendo o atalho do chat.
+ */
+export default function AppShell({
+  children,
+  busca,
+  aoBuscar,
+  placeholderBusca,
+  semChat = false,
+  acoesFlutuantes = [],
+}) {
   const { user } = useAuth()
   const { isDark } = useTheme()
   const { erro, limparErro, pode } = useDados()
   const [buscaLocal, setBuscaLocal] = useState('')
+  const [chatAberto, setChatAberto] = useState(false)
 
   /* a tela pode assumir o campo de busca; se nao assumir, ele fica local */
   const controlada = typeof busca === 'string'
@@ -335,6 +443,53 @@ export default function AppShell({ children, busca, aoBuscar, placeholderBusca }
     [pode],
   )
 
+  /* ------------------------------------------------------------
+     Onde a marca do item atual tem que estar
+
+     A posicao e medida do proprio botao, nao calculada de indice
+     vezes altura: no celular a barra deita e os itens rolam por
+     dentro dela, entao a conta daria errado. Ler o offset resolve
+     os dois sentidos com o mesmo codigo.
+
+     `pronta` so vira true depois da PRIMEIRA medida. Sem isso a
+     marca entrava deslizando do canto 0,0 a cada carga de tela.
+     ------------------------------------------------------------ */
+  const lista = useRef(null)
+  const local = useLocation()
+  const [marca, setMarca] = useState({ x: 0, y: 0, l: 0, a: 0, pronta: false })
+
+  useLayoutEffect(() => {
+    const caixa = lista.current
+    if (!caixa) return undefined
+
+    const medir = () => {
+      const atual = caixa.querySelector('.rail__btn.is-atual')
+      if (!atual) {
+        setMarca((m) => ({ ...m, pronta: false }))
+        return
+      }
+      setMarca({
+        x: atual.offsetLeft,
+        y: atual.offsetTop,
+        l: atual.offsetWidth,
+        a: atual.offsetHeight,
+        pronta: true,
+      })
+    }
+
+    medir()
+
+    /* a barra muda de forma na virada para o celular, e a lista rola;
+       nos dois casos a marca tem que reencontrar o botao */
+    const observador = new ResizeObserver(medir)
+    observador.observe(caixa)
+    caixa.addEventListener('scroll', medir)
+    return () => {
+      observador.disconnect()
+      caixa.removeEventListener('scroll', medir)
+    }
+  }, [local.pathname, abas])
+
   return (
     <div className="shell">
       {/* logo e avatar vivem fora da bolha, mas alinhados ao centro dela */}
@@ -343,7 +498,24 @@ export default function AppShell({ children, busca, aoBuscar, placeholderBusca }
       </Link>
 
       <nav className="rail vidro" aria-label="Navegação principal">
-        <ul className="rail__lista">
+        <ul className="rail__lista" ref={lista}>
+          {/* Uma peca so, que MUDA DE LUGAR — e o que faz o anel deslizar de
+              um item para o outro em vez de piscar no destino. Ela e irma dos
+              botoes, nao filha: se cada botao tivesse o seu, nao haveria o
+              que animar entre eles. */}
+          <span
+            className={`rail__marca ${marca.pronta ? 'is-pronta' : ''}`.trim()}
+            style={{
+              '--marca-x': `${marca.x}px`,
+              '--marca-y': `${marca.y}px`,
+              '--marca-l': `${marca.l}px`,
+              '--marca-a': `${marca.a}px`,
+            }}
+            aria-hidden="true"
+          >
+            <span className="rail__marca-anel" />
+          </span>
+
           {abas.map((item) => {
             const Glifo = Icone[item.id]
             return (
@@ -374,12 +546,16 @@ export default function AppShell({ children, busca, aoBuscar, placeholderBusca }
           </p>
 
           <form className="omni" onSubmit={(evento) => evento.preventDefault()} role="search">
-            {/* o atraso negativo entra na volta ja em andamento: trocar de
-                aba nao faz o orbe voltar para o comeco */}
-            <span
+            {/* o orbe se anima pelo relogio, nao pelo nascimento do
+                elemento: trocar de aba remonta o header e a volta
+                continua de onde estava */}
+            <ParticleInterlock
               className="omni__orb"
-              style={{ animationDelay: atrasoDoOrbe() }}
-              aria-hidden="true"
+              tamanho={26}
+              cor={isDark ? '#e8f0ff' : '#1b4386'}
+              destaque={isDark ? '#7db4ff' : '#4d8ff0'}
+              densidade={96}
+              pontoTamanho={112}
             />
             <input
               className="omni__campo"
@@ -408,6 +584,12 @@ export default function AppShell({ children, busca, aoBuscar, placeholderBusca }
 
         <main className="shell__conteudo">{children}</main>
       </div>
+
+      {!semChat && (
+        <BotaoChat acoes={acoesFlutuantes} aoAbrirChat={() => setChatAberto(true)} />
+      )}
+
+      <ChatSite aberto={chatAberto} aoFechar={() => setChatAberto(false)} />
     </div>
   )
 }
