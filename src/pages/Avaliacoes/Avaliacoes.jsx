@@ -17,6 +17,7 @@ import {
 } from '@/components/CutoutCard/CutoutCard'
 import { CampoArea } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
+import { tituloDaObra } from '@/domain/obras'
 import useCorDaLogo from '@/hooks/useCorDaLogo'
 import { dataBR, dataHora } from '@/utils/formato'
 import './Avaliacoes.css'
@@ -370,13 +371,15 @@ function ModalAvaliar({ obraId, aoFechar }) {
     <Modal
       aberto={Boolean(obraId)}
       aoFechar={aoFechar}
-      titulo={`${cliente?.nome ?? 'Obra'} — ${obra.tipo === 'emergencia' ? 'emergência' : 'padrão'}`}
+      titulo={`${tituloDaObra(obra, cliente)} — ${obra.tipo === 'emergencia' ? 'emergência' : 'padrão'}`}
       largura={580}
     >
       <form className="formava" onSubmit={salvar}>
         {/* o que o card nao mostra: descricao e datas */}
         <div className="formava__cabeca">
-          <p className="formava__obra">{obra.descricao}</p>
+          <p className="formava__obra">
+            {obra.descricao || <em>obra sem descrição</em>}
+          </p>
           <p className="formava__datas">
             <span>
               Obra criada em <strong>{dataBR(String(obra.criadoEm).slice(0, 10))}</strong>
@@ -497,7 +500,7 @@ function ModalAvaliar({ obraId, aoFechar }) {
                         className="formava__cargo"
                         style={{ '--cargo-cor': cargo?.cor ?? '#6b7280' }}
                       >
-                        {cargo?.nome ?? p.cargoNome ?? 'Sem cargo'}
+                        {cargo?.nome ?? p.cargoNome ?? 'Sem setor'}
                       </span>
                     </span>
                     <span className="formava__media">

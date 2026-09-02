@@ -68,7 +68,10 @@ export default function Configuracoes() {
       email: user.email ?? '',
       telefone: formatarTelefone(user.telefone ?? ''),
       nascimento: user.dataNascimento ?? '',
+      /* `cargo` aqui é a chave do SETOR (travado); `cargoTitulo` é o
+         cargo específico da pessoa, que ela mesma edita */
       cargo: user.cargoChave ?? '',
+      cargoTitulo: user.cargoTitulo ?? '',
       cpf: formatarCPF(user.cpf ?? ''),
       foto: user.foto ?? null,
     })
@@ -124,8 +127,12 @@ export default function Configuracoes() {
       nome: form.nome.trim(),
       telefone: soDigitos(form.telefone),
       nascimento: form.nascimento || null,
-      /* o cargo NÃO vai: o campo é só informativo nesta tela, e mandá-lo
-         daqui abriria caminho para a pessoa trocar o próprio cargo */
+      /* o SETOR não vai: o campo é só informativo nesta tela, e mandá-lo
+         daqui abriria caminho para a pessoa trocar o próprio setor — que
+         é o mesmo que trocar as próprias permissões.
+         O CARGO vai: ele é o título dela, não decide nada, e é ela quem
+         sabe quando mudou. */
+      cargoTitulo: form.cargoTitulo.trim(),
       foto: form.foto,
     }
     /* o CPF so vai quando pode mudar E mudou */
@@ -145,8 +152,9 @@ export default function Configuracoes() {
         cpf: salvo?.cpf ?? user.cpf,
         dataNascimento: salvo?.nascimento ?? campos.nascimento,
         foto: campos.foto,
-        cargoChave: campos.cargo ?? user.cargoChave,
-        cargoNome: cargos.find((c) => c.chave === campos.cargo)?.nome ?? user.cargoNome,
+        cargoChave: user.cargoChave,
+        cargoNome: user.cargoNome,
+        cargoTitulo: salvo?.cargoTitulo ?? campos.cargoTitulo,
       })
       await recarregar()
 
@@ -275,20 +283,32 @@ export default function Configuracoes() {
 
             {/* Travado aqui, e de propósito.
 
-                O cargo é o que decide o que a pessoa PODE fazer no sistema.
+                O setor é o que decide o que a pessoa PODE fazer no sistema.
                 Deixá-lo aberto na tela da própria conta dá a qualquer um a
                 chance de se promover à diretoria — a API já recusava, mas o
                 campo aberto na tela é um convite a tentar.
 
-                Quem muda cargo é quem tem permissão para isso, na aba
-                Usuários. Aqui ele só informa em que cargo a pessoa está. */}
+                Quem muda setor é quem tem permissão para isso, na aba
+                Usuários. Aqui ele só informa em que setor a pessoa está. */}
             <CampoSelecao
-              rotulo="Cargo"
+              rotulo="Setor"
               largo
               value={form.cargo}
-              vazio="Sem cargo"
+              vazio="Sem setor"
               disabled
               opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
+              dica="É o setor que define as suas permissões. Só a administração altera."
+            />
+
+            {/* O cargo específico é da pessoa e não decide permissão
+                nenhuma, então ela mesma mantém o dele atualizado. */}
+            <CampoTexto
+              rotulo="Cargo"
+              largo
+              placeholder="Ex.: Analista de Qualidade"
+              value={form.cargoTitulo}
+              onChange={mudar('cargoTitulo')}
+              dica="Opcional — o seu cargo dentro do setor."
             />
           </div>
 

@@ -45,7 +45,9 @@ export function exigeSessao(req, res, next) {
 export function tratar(erro, res, onde) {
   if (erro.code === '42P01' || erro.code === '42703') {
     return res.status(503).json({
-      erro: 'O banco ainda não tem as tabelas novas. Rode o SQL de db/atualizacao.sql.txt.',
+      erro:
+        'O banco ainda não tem as tabelas novas. Rode, na ordem, os arquivos de db/: ' +
+        'atualizacao.sql.txt, atualizacao-2.sql.txt e atualizacao-3.sql.txt.',
     })
   }
   console.error(`[${onde}]`, erro)
@@ -87,7 +89,7 @@ export async function meuCargo(usuarioId) {
   }
 }
 
-/** Cargo com acesso total (diretoria) passa por qualquer permissao. */
+/** Setor com acesso total (diretoria) passa por qualquer permissao. */
 export function cargoPode(cargo, chave) {
   if (!cargo) return false
   if (cargo.acessoTotal) return true
@@ -105,7 +107,7 @@ export function exige(chave) {
     try {
       const cargo = await meuCargo(req.dono.sub)
       if (!cargoPode(cargo, chave)) {
-        return res.status(403).json({ erro: 'Seu cargo não tem permissão para esta ação.' })
+        return res.status(403).json({ erro: 'Seu setor não tem permissão para esta ação.' })
       }
       req.cargo = cargo
       return next()
@@ -123,7 +125,7 @@ export async function exigeAcessoTotal(req, res, next) {
   try {
     const { acessoTotal } = await meuCargo(req.dono.sub)
     if (!acessoTotal) {
-      return res.status(403).json({ erro: 'Seu cargo não tem permissão para esta alteração.' })
+      return res.status(403).json({ erro: 'Seu setor não tem permissão para esta alteração.' })
     }
     return next()
   } catch (erro) {

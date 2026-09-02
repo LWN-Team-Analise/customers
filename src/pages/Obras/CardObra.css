@@ -149,44 +149,45 @@
 
    Vermelho para alta, amarelo para media, verde para baixa — as mesmas
    tres cores que o filtro, a tela da obra e o pop-up de cadastro usam.
-   O card ja tem fundo escuro proprio, entao aqui entra a cor cheia; o
-   contorno segura a leitura quando o card e o de emergencia, que ja e
-   avermelhado. */
+
+   A prioridade virou uma PASTILHA, e não texto colorido solto. O motivo
+   é o card de emergência: ele já é laranja-avermelhado, e o vermelho da
+   alta escrito por cima dele sumia. A saída anterior era desistir da cor
+   ali (pintar de branco, como o resto do card) — só que aí a prioridade
+   do card mais urgente do quadro era justamente a única que não dava
+   para reconhecer pela cor, que é para isso que a cor existe.
+
+   Com fundo claro próprio, a mesma pastilha se lê em cima do azul do
+   card padrão, do laranja da emergência e do amarelo do aviso — e o tom
+   dos três textos foi escurecido na mesma medida, porque agora eles
+   correm sobre claro, não sobre o card. */
 .obracard__pri {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 4px;
-  opacity: 0.9;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.93);
+  color: rgba(20, 24, 32, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.07);
 }
 
 .obracard__pri strong {
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--pri-cor, inherit);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 .obracard__pri[data-pri='alta'] {
-  --pri-cor: var(--pri-alta);
+  --pri-cor: #c1271f;
 }
 
 .obracard__pri[data-pri='media'] {
-  --pri-cor: var(--pri-media);
+  --pri-cor: #a4620d;
 }
 
 .obracard__pri[data-pri='baixa'] {
-  --pri-cor: var(--pri-baixa);
-}
-
-/* Emergência é um caso à parte.
-
-   O card dela já é laranja-avermelhado, e "Alta" em vermelho por cima disso
-   não se lê — duas cores quentes uma na outra. Como a emergência é SEMPRE
-   alta, quem já avisou da urgência foi o card inteiro; aqui a palavra só
-   precisa ser legível. */
-.obracard[data-tom='emergencia'] .obracard__pri strong,
-.obracard[data-tom='aviso-emergencia'] .obracard__pri strong {
-  color: var(--obra-emerg-fg);
+  --pri-cor: #1f6e42;
 }
 
 /* ============================================================

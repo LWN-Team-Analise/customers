@@ -49,8 +49,12 @@ const semAcento = (texto) =>
     .toLowerCase()
 
 /**
- * A equipe por cargo, com a nota de cada um — que e a media das obras
+ * A equipe por SETOR, com a nota de cada um — que e a media das obras
  * avaliadas em que a pessoa participou (tela de Avaliacoes).
+ *
+ * Cada card mostra os dois: o SETOR (a etiqueta colorida, de onde saem
+ * as permissoes) e, abaixo dele, o CARGO da pessoa dentro do setor
+ * ("Analista de Qualidade") quando ela tem um cadastrado.
  */
 export default function Usuarios() {
   const {
@@ -77,7 +81,7 @@ export default function Usuarios() {
   const [apagando, setApagando] = useState(null)
   const [recado, setRecado] = useState('')
 
-  /* dois filtros que se somam: o nome digitado e os cargos marcados */
+  /* dois filtros que se somam: o nome digitado e os setores marcados */
   const [busca, setBusca] = useState('')
   const [filtros, setFiltros] = useState([])
 
@@ -89,7 +93,7 @@ export default function Usuarios() {
   const lista = useMemo(() => {
     const alvo = semAcento(busca.trim())
     const filtrada = equipe.filter((p) => {
-      // sem cargo marcado, passam todos; com varios, basta bater um
+      // sem setor marcado, passam todos; com varios, basta bater um
       if (filtros.length > 0 && !filtros.includes(p.cargo)) return false
       if (!alvo) return true
       // procura tambem no e-mail: e por ele que se acha quem tem nome repetido
@@ -134,7 +138,7 @@ export default function Usuarios() {
                 onClick={() => setModalCargos(true)}
               >
                 <Icone.etiqueta />
-                Cargos
+                Setores
               </button>
             )}
             {podeUsuarios && (
@@ -175,7 +179,7 @@ export default function Usuarios() {
             >
               Todos
             </button>
-            {/* da para marcar mais de um cargo: os filtros se somam */}
+            {/* da para marcar mais de um setor: os filtros se somam */}
             {cargos.map((c) => {
               const ativo = filtros.includes(c.chave)
               return (
@@ -211,7 +215,7 @@ export default function Usuarios() {
           <p className="usuarios__vazio">
             {busca.trim()
               ? 'Ninguém encontrado com esse nome.'
-              : 'Nenhum usuário com esse cargo.'}
+              : 'Nenhum usuário nesse setor.'}
           </p>
         ) : (
           <ul className="usuarios__grade">
@@ -233,11 +237,17 @@ export default function Usuarios() {
                         {pessoa.nome}
                         {pessoa.souEu && <span className="pessoa__eu">você</span>}
                       </h2>
-                      {/* so o cargo: o acesso total do cargo nao aparece
-                          em lugar nenhum da tela, de proposito */}
+                      {/* O SETOR na etiqueta colorida — o acesso total dele
+                          não aparece em lugar nenhum da tela, de propósito —
+                          e, abaixo, o CARGO da pessoa dentro do setor. Sem
+                          cargo cadastrado, a linha simplesmente não existe:
+                          é campo opcional. */}
                       <span className="pessoa__cargo">
-                        {cargo?.nome ?? pessoa.cargoNome ?? 'Sem cargo'}
+                        {cargo?.nome ?? pessoa.cargoNome ?? 'Sem setor'}
                       </span>
+                      {pessoa.cargoTitulo && (
+                        <span className="pessoa__titulo">{pessoa.cargoTitulo}</span>
+                      )}
                     </div>
 
                     {/* aparecem ao passar o mouse pelo card.

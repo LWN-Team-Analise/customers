@@ -10,8 +10,10 @@ import {
   chaveDoCargo,
   estadoDaEtapa,
   etapaAtual,
-  obraConcluida,
+  obraFechada,
+  podeEditarCheck,
   progressoDaObra,
+  prontaParaConcluir as roteiroCompleto,
   roteiroVigente,
   setoresPendentes,
 } from '@/domain/obras'
@@ -26,6 +28,12 @@ import {
  */
 const DadosContext = createContext(null)
 
+/* Os termos que a empresa troca pela tela. Os valores daqui são a
+   reserva de enquanto a carga não voltou (e de quem ainda não rodou
+   db/atualizacao-3.sql.txt): o sistema diz "Etapa" em vez de piscar
+   um campo vazio. */
+const TERMOS_PADRAO = { termo_etapa: 'Etapa', termo_etapas: 'Etapas' }
+
 const INICIAL = {
   clientes: [],
   setores: [],
@@ -35,6 +43,7 @@ const INICIAL = {
   cargos: [],
   equipe: [],
   roteiro: [],
+  termos: TERMOS_PADRAO,
 }
 
 export function DadosProvider({ children }) {
@@ -66,6 +75,7 @@ export function DadosProvider({ children }) {
         obras: quadro.obras ?? [],
         observacoesQuadro: quadro.observacoesQuadro ?? [],
         etiquetas: quadro.etiquetas ?? [],
+        termos: { ...TERMOS_PADRAO, ...(quadro.termos ?? {}) },
         cargos: equipe.cargos ?? [],
         equipe: equipe.usuarios ?? [],
         roteiro: roteiro ?? [],
@@ -217,16 +227,53 @@ export function DadosProvider({ children }) {
   const removerObra = useCallback((id) => gravar(() => dados.apagarObra(id)), [gravar])
 
   /**
+   * Encerra a obra: e o clique em "Concluir obra".
+   *
+   * Marcar o ultimo check NAO fecha mais a obra sozinho — so faz o botao
+   * aparecer. Fechar e uma decisao, com dupla confirmacao na tela, e o
+   * que carimba quem fechou, quando e a observacao (opcional).
+   */
+  const concluirObra = useCallback(
+    (id, observacao) => gravar(() => dados.concluirObra(id, observacao)),
+    [gravar],
+  )
+
+  /**
    * Marca/desmarca um check.
    *
    * Este e o clique mais repetido do sistema, entao a tela muda na hora
-   * e a gravacao vai atras. Se o servidor recusar (check de outro setor,
-   * rede fora), recarrega e o check volta como estava.
+   * e a gravacao vai atras. Se o servidor recusar (rede fora), recarrega
+   * e o check volta como estava.
+   *
+   * Antes de mexer em qualquer coisa, porem, a mesma pergunta que o
+   * servidor vai fazer: este check e seu? Sem esta guarda, um check de
+   * outro setor MARCAVA na tela e desmarcava sozinho meio segundo
+   * depois, quando a recusa chegava — que era exatamente o piscar que
+   * fazia parecer defeito. Agora nao chega a piscar: nem sai do lugar.
    */
   const alternarCheck = useCallback(
     async (obraId, checkId) => {
       const obra = estado.obras.find((o) => o.id === obraId)
       if (!obra) return
+
+      // obra encerrada e registro: nada mais entra nela
+      if (obraFechada(obra)) {
+        setErro('Esta obra foi concluída. O conteúdo dela fica só para consulta.')
+        return
+      }
+
+      /* o roteiro que ESTA obra enxerga — o mesmo que a tela desenhou */
+      const meuRoteiro = roteiroVigente(estado.roteiro, obra.criadoEm)
+      const card = meuRoteiro
+        .flatMap((e) => e.cards)
+        .find((c) => c.checks.some((k) => String(k.id) === String(checkId)))
+      const check = card?.checks.find((k) => String(k.id) === String(checkId))
+
+      if (check && !podeEditarCheck(user, check, card, obra)) {
+        setErro('Este check é de outro setor.')
+        return
+      }
+
       const marcando = !obra.checks[checkId]
 
       setEstado((atual) => ({
@@ -251,7 +298,7 @@ export function DadosProvider({ children }) {
         await recarregar()
       }
     },
-    [estado.obras, user?.id, recarregar],
+    [estado.obras, estado.roteiro, user, recarregar],
   )
 
   /* ---------------- Observacoes da obra ---------------- */
@@ -305,22 +352,38 @@ export function DadosProvider({ children }) {
   )
 
   /**
-   * Os avisos que chegaram para o CARGO de quem esta logado, do mais
+   * Os avisos que chegaram para o SETOR de quem esta logado, do mais
    * novo para o mais antigo. E o que o sininho mostra.
+   *
+   * A regra e estrita: chega so o que foi endereçado ao seu setor. Quem
+   * e da Excelencia nao recebe a cobranca de um check pendente do
+   * Comercial — nao ha nada que essa pessoa possa fazer a respeito, e
+   * um sininho cheio de aviso de outro setor e um sininho que ninguem
+   * mais abre.
+   *
+   * Isso vale INCLUSIVE para a diretoria. Antes o acesso total trazia
+   * tudo, e o sino dela virava o despejo do quadro inteiro; quem quer
+   * ver o que falta em cada setor tem a coluna de pendencias na tela de
+   * Obras, que mostra a mesma coisa organizada.
+   *
+   * A unica excecao e o aviso sem setor nenhum: esse e recado para a
+   * empresa toda e chega para todo mundo.
    */
   const minhasNotificacoes = useMemo(() => {
-    const meuCargo = chaveDoCargo(user)
+    const meuSetor = chaveDoCargo(user)
     const lista = []
 
     estado.obras.forEach((obra) => {
       obra.avisos?.forEach((aviso) => {
-        const paraMim = user?.acessoTotal || aviso.setores.includes(meuCargo)
+        const alvos = aviso.setores ?? []
+        const paraMim = alvos.length === 0 || alvos.includes(meuSetor)
         if (!paraMim) return
         lista.push({
           ...aviso,
           obraId: obra.id,
           obraTipo: obra.tipo,
           clienteId: obra.clienteId,
+          proposta: obra.proposta,
           descricao: obra.descricao,
         })
       })
@@ -434,13 +497,43 @@ export function DadosProvider({ children }) {
     [user?.name],
   )
 
+  /**
+   * Apaga uma mensagem do chat.
+   *
+   * `escopo` diz para quem: 'todos' tira da conversa de todo mundo e
+   * deixa "mensagem apagada" no lugar dela; 'mim' some só da tela de
+   * quem pediu e não muda nada para os outros.
+   */
   const apagarMensagem = useCallback(
-    (obraId, mensagemId) =>
-      dados.apagarMensagem(obraId, mensagemId).catch((e) => {
+    (obraId, mensagemId, escopo = 'mim') =>
+      dados.apagarMensagem(obraId, mensagemId, escopo).catch((e) => {
         setErro(e.message)
         throw e
       }),
     [],
+  )
+
+  /* ============================================================
+     Termos da empresa
+
+     Hoje e so um: como se chama "Etapa". Amanha o roteiro pode
+     virar Fase, Marco ou Frente, e e daqui que TODA tela que
+     escreve "3ª Etapa" vai buscar a palavra.
+
+     `rotuloEtapa(3)` -> "3ª Etapa" e o que as telas usam; ele
+     existe para que a concordancia (o "ª") fique num lugar so.
+     ============================================================ */
+
+  const termos = estado.termos ?? TERMOS_PADRAO
+
+  const termoEtapa = termos.termo_etapa || TERMOS_PADRAO.termo_etapa
+  const termoEtapas = termos.termo_etapas || TERMOS_PADRAO.termo_etapas
+
+  const rotuloEtapa = useCallback((numero) => `${numero}ª ${termoEtapa}`, [termoEtapa])
+
+  const salvarTermos = useCallback(
+    (campos) => gravar(() => dados.salvarTermos(campos)),
+    [gravar],
   )
 
   /* ============================================================
@@ -561,8 +654,26 @@ export function DadosProvider({ children }) {
   /** O roteiro que vale HOJE — para telas que nao falam de uma obra so. */
   const roteiro = useMemo(() => roteiroVigente(roteiroBruto), [roteiroBruto])
 
-  const concluida = useCallback(
-    (obra) => obraConcluida(roteiroDaObra(obra), obra?.checks),
+  /**
+   * A obra esta ENCERRADA?
+   *
+   * Le o carimbo do banco (obra.concluidaEm), nao a contagem de checks.
+   * Sao perguntas diferentes desde que a conclusao virou um clique:
+   * marcar tudo apenas libera o botao "Concluir obra"; quem tira a obra
+   * do quadro e o clique nele.
+   */
+  const concluida = useCallback((obra) => obraFechada(obra), [])
+
+  /**
+   * Ja da para concluir? E o que faz o botao aparecer ao lado do
+   * Progresso: obra aberta, com roteiro, e sem nenhum check em aberto.
+   *
+   * A conta em si mora no dominio; aqui ela so ganha o roteiro que ESTA
+   * obra enxerga — uma obra de marco nao e cobrada pelo check criado em
+   * maio, e continua podendo ser concluida.
+   */
+  const prontaParaConcluir = useCallback(
+    (obra) => roteiroCompleto(roteiroDaObra(obra), obra),
     [roteiroDaObra],
   )
 
@@ -684,6 +795,7 @@ export function DadosProvider({ children }) {
       adicionarObra,
       atualizarObra,
       removerObra,
+      concluirObra,
       alternarCheck,
 
       adicionarObservacao,
@@ -717,6 +829,11 @@ export function DadosProvider({ children }) {
       enviarMensagem,
       apagarMensagem,
 
+      termoEtapa,
+      termoEtapas,
+      rotuloEtapa,
+      salvarTermos,
+
       adicionarPessoa,
       atualizarPessoa,
       removerPessoa,
@@ -732,6 +849,7 @@ export function DadosProvider({ children }) {
       removerCheck,
 
       concluida,
+      prontaParaConcluir,
       etapaDaObra,
       progresso,
       pendentesDaObra,
@@ -773,6 +891,7 @@ export function DadosProvider({ children }) {
       adicionarObra,
       atualizarObra,
       removerObra,
+      concluirObra,
       alternarCheck,
       adicionarObservacao,
       editarObservacao,
@@ -799,6 +918,10 @@ export function DadosProvider({ children }) {
       carregarChat,
       enviarMensagem,
       apagarMensagem,
+      termoEtapa,
+      termoEtapas,
+      rotuloEtapa,
+      salvarTermos,
       adicionarPessoa,
       atualizarPessoa,
       removerPessoa,
@@ -812,6 +935,7 @@ export function DadosProvider({ children }) {
       atualizarCheck,
       removerCheck,
       concluida,
+      prontaParaConcluir,
       etapaDaObra,
       progresso,
       pendentesDaObra,

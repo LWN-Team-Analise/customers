@@ -136,6 +136,7 @@ router.delete('/cargos/:id', exigeSessao, exige('editar_cargo'), async (req, res
         .status(409)
         .json({ erro: `"${alvo.rows[0].nome}" é usado pelas etapas da obra e não pode ser apagado.` })
     }
+    /* daqui para baixo "cargo" e a TABELA: na tela ela se chama Setor */
 
     const emUso = await query('SELECT count(*)::int AS n FROM usuario WHERE cargo_id = $1', [
       req.params.id,
@@ -143,7 +144,7 @@ router.delete('/cargos/:id', exigeSessao, exige('editar_cargo'), async (req, res
     if (emUso.rows[0].n > 0) {
       return res
         .status(409)
-        .json({ erro: `Há ${emUso.rows[0].n} usuário(s) com esse cargo. Troque o cargo deles antes.` })
+        .json({ erro: `Há ${emUso.rows[0].n} usuário(s) nesse setor. Troque o setor deles antes.` })
     }
 
     await query('DELETE FROM cargo WHERE id = $1', [req.params.id])
@@ -160,9 +161,20 @@ router.delete('/cargos/:id', exigeSessao, exige('editar_cargo'), async (req, res
    Usuarios — com o cargo e a media das obras avaliadas
    ------------------------------------------------------------ */
 
+/* SETOR x CARGO, para nao se perder na leitura daqui:
+
+     c.* (tabela cargo) = o SETOR da pessoa. E dele que saem as
+                          permissoes, a cor e os cards da obra;
+     u.cargo_titulo     = o CARGO dela ("Analista de Qualidade").
+                          Texto livre, opcional, sem efeito nenhum
+                          em permissao.
+
+   A tabela do banco continua se chamando `cargo` de proposito:
+   renomea-la derrubaria as chaves estrangeiras de meia duzia de
+   outras tabelas sem mudar nada do que o sistema faz. */
 const CONSULTA_USUARIOS = `
   SELECT u.id, u.name, u.email, u.telefone, u.cpf, u.foto, u.data_nascimento,
-         u.senha_temporaria,
+         u.senha_temporaria, u.cargo_titulo,
          u.outlook, u.outlook_email,
          c.id AS cargo_id, c.chave AS cargo_chave, c.nome AS cargo_nome,
          c.cor AS cargo_cor, c.curto AS cargo_curto, c.acesso_total, c.permissoes,
@@ -181,11 +193,16 @@ const paraUsuario = (l) => ({
   cpf: l.cpf,
   nascimento: l.data_nascimento,
   foto: l.foto,
+  /* `cargo`/`cargoNome`/`cargoCor` continuam sendo o SETOR: e assim que
+     umas trinta telas os leem, e trocar o nome do campo aqui nao mudaria
+     nada alem de quebrar todas elas de uma vez */
   cargoId: l.cargo_id ? String(l.cargo_id) : null,
   cargo: l.cargo_chave,
   cargoNome: l.cargo_nome,
   cargoCor: l.cargo_cor,
   cargoCurto: l.cargo_curto,
+  // o cargo especifico da pessoa; '' quando ninguem preencheu
+  cargoTitulo: l.cargo_titulo ?? '',
   acessoTotal: l.acesso_total ?? false,
   cargoPermissoes: normalizar(l.permissoes ?? []),
   outlook: l.outlook ?? false,
@@ -216,7 +233,7 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
   try {
     const meu = await meuCargo(req.dono.sub)
     if (!cargoPode(meu, 'editar_usuario')) {
-      return res.status(403).json({ erro: 'Seu cargo não pode cadastrar colaboradores.' })
+      return res.status(403).json({ erro: 'Seu setor não pode cadastrar colaboradores.' })
     }
 
     const nome = texto(req.body?.nome)
@@ -225,32 +242,42 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
     const nascimento = req.body?.nascimento || null
     const telefone = soDigitos(req.body?.telefone)
     const chaveCargo = texto(req.body?.cargo)
+    const cargoTitulo = texto(req.body?.cargoTitulo)
 
+    /* Obrigatorios: nome, nascimento, CPF e SETOR. E-mail e telefone
+       sao opcionais — nem todo colaborador tem e-mail corporativo, e o
+       cadastro nao pode parar por causa disso. Vindo preenchido,
+       continua tendo de ser valido. */
     if (!nome) return res.status(400).json({ erro: 'Informe o nome completo.' })
-    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+    if (email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
       return res.status(400).json({ erro: 'E-mail inválido.' })
+    }
+    if (telefone && telefone.length < 10) {
+      return res.status(400).json({ erro: 'Telefone incompleto: informe o DDD e o número.' })
     }
     if (cpf.length !== 11) return res.status(400).json({ erro: 'O CPF precisa ter 11 dígitos.' })
     if (!nascimento) return res.status(400).json({ erro: 'Informe a data de nascimento.' })
 
     const cargo = await query('SELECT id, nome FROM cargo WHERE chave = $1', [chaveCargo])
-    if (!cargo.rows[0]) return res.status(400).json({ erro: 'Escolha o cargo.' })
+    if (!cargo.rows[0]) return res.status(400).json({ erro: 'Escolha o setor.' })
 
     const hash = await bcrypt.hash(SENHA_PADRAO, 12)
 
     const { rows } = await query(
       `INSERT INTO usuario (name, email, cpf, data_nascimento, telefone,
-                            cargo, cargo_id, foto, senha_hash, senha_temporaria)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+                            cargo, cargo_id, cargo_titulo, foto, senha_hash, senha_temporaria)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
        RETURNING id`,
       [
         nome,
-        email,
+        // '' seria um e-mail repetido em todo mundo sem e-mail: guarda NULL
+        email || null,
         cpf,
         nascimento,
         telefone || null,
         cargo.rows[0].nome,
         cargo.rows[0].id,
+        cargoTitulo || null,
         req.body?.foto || null,
         hash,
       ],
@@ -306,14 +333,30 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
           erro: 'O e-mail do seu acesso não pode ser alterado. Fale com a diretoria.',
         })
       }
-      por('email', texto(req.body.email))
+      const email = texto(req.body.email)
+      if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+        return res.status(400).json({ erro: 'E-mail inválido.' })
+      }
+      por('email', email)
     }
-    if (req.body?.telefone !== undefined) por('telefone', soDigitos(req.body.telefone))
+    if (req.body?.telefone !== undefined) {
+      const telefone = soDigitos(req.body.telefone)
+      if (telefone && telefone.length < 10) {
+        return res.status(400).json({ erro: 'Telefone incompleto: informe o DDD e o número.' })
+      }
+      // opcional: apagado vira NULL, nao string vazia
+      por('telefone', telefone || null)
+    }
     if (req.body?.foto !== undefined) por('foto', req.body.foto || null)
     if (req.body?.nascimento !== undefined) por('data_nascimento', req.body.nascimento || null)
+    /* o CARGO especifico ("Coordenador de Obras"). Nao confundir com o
+       campo `cargo` logo abaixo, que e o SETOR e vem por chave. */
+    if (req.body?.cargoTitulo !== undefined) {
+      por('cargo_titulo', texto(req.body.cargoTitulo) || null)
+    }
     if (req.body?.cargo !== undefined) {
       const cargo = await query('SELECT id, nome FROM cargo WHERE chave = $1', [req.body.cargo])
-      if (!cargo.rows[0]) return res.status(400).json({ erro: 'Cargo não encontrado.' })
+      if (!cargo.rows[0]) return res.status(400).json({ erro: 'Setor não encontrado.' })
       por('cargo_id', cargo.rows[0].id)
       por('cargo', cargo.rows[0].nome)
     }
@@ -363,7 +406,7 @@ router.delete('/usuarios/:id', exigeSessao, async (req, res) => {
   try {
     const meu = await meuCargo(req.dono.sub)
     if (!cargoPode(meu, 'editar_usuario') && String(req.dono.sub) !== String(req.params.id)) {
-      return res.status(403).json({ erro: 'Seu cargo não pode excluir colaboradores.' })
+      return res.status(403).json({ erro: 'Seu setor não pode excluir colaboradores.' })
     }
 
     const { rows } = await query(

@@ -267,20 +267,58 @@
    recortado (components/CutoutCard). O que sobra aqui e so o que e
    desta tela — o cartao em si se cuida sozinho. */
 
+/* ---- Abre para baixo, fecha para cima ----
+
+   O cartão se desenrola a partir da linha fechada, como uma persiana
+   que desce: o `clip-path` começa cobrindo tudo pela base e vai
+   liberando o conteúdo de cima para baixo, com a origem da escala
+   presa no topo. Fechar é o mesmo caminho ao contrário — a base sobe
+   até o topo e o cartão se recolhe na linha de onde saiu.
+
+   A escala parte de 0.98, e não de zero: vindo de zero pareceria um
+   card NOVO nascendo, e o que ele é, é o mesmo card se abrindo.
+
+   Fechar depende do estado `is-fechando` (Clientes.jsx): a animação de
+   saída só roda enquanto o elemento ainda está no DOM, então o clique
+   marca a classe, espera a animação e só então desmonta. */
 .cliente--aberto {
   --corte-raio: var(--radius-lg);
   --avatar-anel: transparent;
-  /* A abertura: o cartao cresce da linha fechada em vez de aparecer
-     pronto. A escala parte de 0.96 e nao de 0 — vindo de zero pareceria
-     um card NOVO nascendo, e o que ele e, e o mesmo card se abrindo. */
-  animation: cliente-abre 380ms var(--ease-out) both;
+  animation: cliente-abre 340ms var(--ease-out) both;
   transform-origin: top center;
 }
 
 @keyframes cliente-abre {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.96);
+    transform: translateY(-8px) scale(0.98);
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* de baixo para cima: a base sobe e o cartão se recolhe */
+.cliente--aberto.is-fechando {
+  animation: cliente-fecha 300ms var(--ease-out) both;
+  /* durante o recolhimento nada mais responde ao clique: um segundo
+     clique no meio da animação só faria o card piscar */
+  pointer-events: none;
+}
+
+@keyframes cliente-fecha {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+    clip-path: inset(0 0 100% 0);
   }
 }
 
@@ -288,6 +326,12 @@
    sensacao de que a linha fechada ABRIU e revelou a logo */
 .cliente--aberto .corte__media {
   animation: cliente-foto 460ms var(--ease-out) both;
+}
+
+/* fechando, a foto sai junto com o cartão e não sozinha, senão ela
+   continuaria descendo enquanto o resto sobe */
+.cliente--aberto.is-fechando .corte__media {
+  animation: none;
 }
 
 @keyframes cliente-foto {
@@ -309,6 +353,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cliente--aberto,
+  .cliente--aberto.is-fechando,
   .cliente--aberto .corte__media {
     animation: none;
   }

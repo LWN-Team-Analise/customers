@@ -220,14 +220,27 @@ function MenuUsuario() {
 /**
  * Sininho das notificacoes.
  *
- * O selo vermelho conta os avisos que chegaram para o CARGO de quem
+ * O selo vermelho conta os avisos que chegaram para o SETOR de quem
  * esta logado e que ainda nao foram abertos. Abrir o painel marca
  * todos como lidos — que e o gesto que a pessoa espera.
+ *
+ * "Para o setor" e literal: quem e da Excelencia nao recebe a cobranca
+ * de um check pendente do Comercial. Nao ha nada que essa pessoa possa
+ * fazer a respeito, e um sino cheio de aviso de outro setor e um sino
+ * que ninguem mais abre. Quem quiser a visao geral tem a coluna de
+ * pendencias na tela de Obras. Quem decide isso e `minhasNotificacoes`,
+ * no contexto.
  */
 function Notificacoes() {
   const navigate = useNavigate()
-  const { minhasNotificacoes, naoLidas, marcarNotificacoesLidas, clientePorId, cargoPorChave } =
-    useDados()
+  const {
+    minhasNotificacoes,
+    naoLidas,
+    marcarNotificacoesLidas,
+    clientePorId,
+    cargoPorChave,
+    rotuloEtapa,
+  } = useDados()
 
   const [aberto, setAberto] = useState(false)
   const caixa = useRef(null)
@@ -309,7 +322,7 @@ function Notificacoes() {
                       <span className="sininho__corpo">
                         <strong>{cliente?.nome ?? 'Obra'}</strong>
                         <span className="sininho__texto">
-                          {aviso.mensagem || `Pendência na ${aviso.etapa}ª etapa.`}
+                          {aviso.mensagem || `Pendência na ${rotuloEtapa(aviso.etapa)}.`}
                         </span>
                         <span className="sininho__meta">
                           {setores && <em>para {setores}</em>}

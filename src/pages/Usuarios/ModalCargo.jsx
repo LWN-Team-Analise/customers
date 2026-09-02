@@ -23,9 +23,16 @@ const VAZIO = {
 }
 
 /**
- * Um cargo: cria ou edita, com Excluir ao lado de Salvar.
+ * Um SETOR: cria ou edita, com Excluir ao lado de Salvar.
  *
- * O que o cargo PODE fazer mora aqui embaixo, em duas listas:
+ * Setor e o grupo da equipe (Comercial, Excelência, GQ) — e nao o cargo
+ * de cada pessoa, que e texto livre no cadastro dela e nao decide
+ * permissao nenhuma. No banco o setor continua sendo a tabela `cargo`,
+ * e por isso o codigo daqui ainda diz "cargo": renomear a tabela
+ * derrubaria as chaves estrangeiras de meia duzia de outras sem mudar
+ * nada do que o sistema faz.
+ *
+ * O que o setor PODE fazer mora aqui embaixo, em duas listas:
  *
  *   Visualizacao — que abas ele enxerga no menu;
  *   Alteracao    — o que ele mexe dentro delas.
@@ -33,7 +40,7 @@ const VAZIO = {
  * As duas sao amarradas: alteracao depende da visualizacao
  * correspondente. Desmarcar "Obras" apaga junto tudo o que so faz
  * sentido dentro de Obras — e essas linhas ficam travadas ate a
- * visualizacao voltar. Sem isso daria para ter um cargo que edita obra
+ * visualizacao voltar. Sem isso daria para ter um setor que edita obra
  * e nao consegue abrir a aba de obras.
  *
  * "Acesso total" (diretoria) passa por cima de tudo: com ele marcado,
@@ -145,7 +152,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
     evento.preventDefault()
     const nome = form.nome.trim()
     if (!nome) {
-      setErro('Informe o nome do cargo.')
+      setErro('Informe o nome do setor.')
       return
     }
 
@@ -153,7 +160,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
       (c) => c.id !== cargo?.id && c.nome.toLowerCase() === nome.toLowerCase(),
     )
     if (repetido) {
-      setErro('Já existe um cargo com esse nome.')
+      setErro('Já existe um setor com esse nome.')
       return
     }
 
@@ -196,10 +203,10 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
       aberto={aberto}
       aoFechar={aoFechar}
       nivel={1}
-      titulo={editando ? `Editar ${cargo.nome}` : 'Novo cargo'}
+      titulo={editando ? `Editar ${cargo.nome}` : 'Novo setor'}
       subtitulo={
         editando
-          ? `${emUso} pessoa${emUso === 1 ? '' : 's'} neste cargo.`
+          ? `${emUso} pessoa${emUso === 1 ? '' : 's'} neste setor.`
           : 'A cor escolhida pinta as etiquetas do card e os blocos das etapas.'
       }
       largura={620}
@@ -281,7 +288,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
               <Seletor
                 valor={copiado}
                 aoMudar={copiarDe}
-                vazio="Escolha um cargo"
+                vazio="Escolha um setor"
                 largo
                 opcoes={fontes.map((c) => ({
                   valor: String(c.id),
@@ -293,7 +300,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
 
           {form.acessoTotal && (
             <p className="perm__nota perm__nota--total">
-              Este cargo tem <strong>acesso total</strong>: ele passa por qualquer permissão,
+              Este setor tem <strong>acesso total</strong>: ele passa por qualquer permissão,
               marcada ou não. A lista abaixo continua valendo se o acesso total for desligado.
             </p>
           )}
@@ -301,7 +308,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
           <div className="perm__grupos">
             <div className="perm__grupo">
               <h4>Visualização</h4>
-              <p className="perm__nota">O que aparece no menu para este cargo.</p>
+              <p className="perm__nota">O que aparece no menu para este setor.</p>
               <ul>
                 {VISUALIZACAO.map((p) => (
                   <li key={p.chave}>
@@ -364,7 +371,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
         <div className="cargos__previa">
           <span className="cargos__previanome">Como a etiqueta fica</span>
           <span className="cargos__etiqueta is-previa" style={{ '--cargo-cor': form.cor }}>
-            {form.nome.trim() || 'Nome do cargo'}
+            {form.nome.trim() || 'Nome do setor'}
           </span>
         </div>
 
@@ -391,7 +398,7 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
                 className="formrot__apagar"
                 onClick={() => setConfirmando(true)}
                 disabled={salvando || cargo.fixo}
-                title={cargo.fixo ? 'Cargo usado pelas etapas da obra' : undefined}
+                title={cargo.fixo ? 'Setor usado pelas etapas da obra' : undefined}
               >
                 Excluir
               </button>
@@ -417,15 +424,15 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
         aberto={conferindo}
         nivel={2}
         tom="acao"
-        titulo={editando ? `Salvar ${cargo.nome}?` : 'Criar este cargo?'}
+        titulo={editando ? `Salvar ${cargo.nome}?` : 'Criar este setor?'}
         mensagem={
           editando
             ? `As permissões abaixo passam a valer para as ${emUso} pessoa(s) neste cargo.`
-            : 'Confira o que este cargo vai poder fazer antes de criar.'
+            : 'Confira o que este setor vai poder fazer antes de criar.'
         }
         detalhes={
           <dl>
-            <dt>Cargo</dt>
+            <dt>Setor</dt>
             <dd>{form.nome.trim() || '—'}</dd>
 
             <dt>Acesso total</dt>
@@ -447,10 +454,10 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
         }
         aviso={
           form.acessoTotal
-            ? 'Acesso total é permissão de diretoria: quem estiver neste cargo passa por todas as travas do sistema.'
+            ? 'Acesso total é permissão de diretoria: quem estiver neste setor passa por todas as travas do sistema.'
             : undefined
         }
-        rotuloConfirmar={editando ? 'Salvar cargo' : 'Criar cargo'}
+        rotuloConfirmar={editando ? 'Salvar setor' : 'Criar setor'}
         aoConfirmar={gravar}
         aoFechar={() => setConferindo(false)}
       />

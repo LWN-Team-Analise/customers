@@ -16,6 +16,11 @@ import './ModalEtiquetas.css'
  * A etiqueta e do sistema, nao desta obra: o mesmo "Urgente" pode
  * estar em varias. Excluir aqui tira a etiqueta DESTA obra — se ela
  * ficar sem nenhuma, o servidor a remove da lista.
+ *
+ * `somenteLeitura` e a obra CONCLUIDA. As etiquetas continuam a vista
+ * (elas sao parte do que a obra foi, e e para consultar isso que
+ * alguem abre uma obra fechada), so que sem o "Adicionar", sem o lapis
+ * e sem a lista de reaproveitar — tudo aquilo grava.
  */
 
 const CORES = [
@@ -36,7 +41,7 @@ const Icone = {
   ),
 }
 
-export default function ModalEtiquetas({ aberto, obra, aoFechar }) {
+export default function ModalEtiquetas({ aberto, obra, somenteLeitura = false, aoFechar }) {
   const { etiquetas, etiquetasDaObra, marcarEtiqueta, atualizarEtiqueta, tirarEtiqueta } = useDados()
   const { isDark } = useTheme()
 
@@ -127,18 +132,28 @@ export default function ModalEtiquetas({ aberto, obra, aoFechar }) {
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Etiquetas"
-      subtitulo="Rótulos desta obra. A mesma etiqueta pode marcar várias obras."
+      subtitulo={
+        somenteLeitura
+          ? 'Obra concluída: as etiquetas ficam para consulta.'
+          : 'Rótulos desta obra. A mesma etiqueta pode marcar várias obras.'
+      }
       largura={470}
     >
       <div className="etiq">
         {/* o botao de adicionar vem SEMPRE primeiro, e a lista abaixo dele */}
-        <button type="button" className="etiq__novo" onClick={abrirNova}>
-          <Icone.mais />
-          Adicionar etiqueta
-        </button>
+        {!somenteLeitura && (
+          <button type="button" className="etiq__novo" onClick={abrirNova}>
+            <Icone.mais />
+            Adicionar etiqueta
+          </button>
+        )}
 
         {minhas.length === 0 ? (
-          <p className="etiq__vazio">Esta obra ainda não tem etiqueta.</p>
+          <p className="etiq__vazio">
+            {somenteLeitura
+              ? 'Esta obra foi concluída sem nenhuma etiqueta.'
+              : 'Esta obra ainda não tem etiqueta.'}
+          </p>
         ) : (
           <ul className="etiq__lista">
             {minhas.map((e) => (
@@ -149,22 +164,24 @@ export default function ModalEtiquetas({ aberto, obra, aoFechar }) {
                 >
                   {e.nome}
                 </span>
-                <button
-                  type="button"
-                  className="etiq__editar"
-                  onClick={() => abrirEdicao(e)}
-                  title={`Editar ${e.nome}`}
-                  aria-label={`Editar a etiqueta ${e.nome}`}
-                >
-                  <Icone.lapis />
-                </button>
+                {!somenteLeitura && (
+                  <button
+                    type="button"
+                    className="etiq__editar"
+                    onClick={() => abrirEdicao(e)}
+                    title={`Editar ${e.nome}`}
+                    aria-label={`Editar a etiqueta ${e.nome}`}
+                  >
+                    <Icone.lapis />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
         )}
 
         {/* ---------------- formulario ---------------- */}
-        {modo && (
+        {!somenteLeitura && modo && (
           <form className="etiq__form" onSubmit={salvar} noValidate>
             <label className="etiq__campo">
               <span>Nome</span>
@@ -247,7 +264,7 @@ export default function ModalEtiquetas({ aberto, obra, aoFechar }) {
         )}
 
         {/* ---------------- reaproveitar ---------------- */}
-        {!modo && sugestoes.length > 0 && (
+        {!somenteLeitura && !modo && sugestoes.length > 0 && (
           <div className="etiq__jaexistem">
             <span className="etiq__titulo">Já usadas em outras obras</span>
             <ul className="etiq__sugestoes">

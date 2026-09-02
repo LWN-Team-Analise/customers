@@ -1,18 +1,31 @@
 /* ============================================================
-   Permissoes do cargo.
+   Permissoes do SETOR.
 
-   Sao dois grupos:
+   O vocabulario desta versao, porque os dois se parecem:
 
-     VISUALIZACAO — que abas o cargo enxerga no menu;
+     SETOR — o grupo da equipe (Comercial, Excelência, GQ...).
+             E ele que carrega as permissoes, a cor e os cards
+             da obra. No banco continua sendo a tabela `cargo`,
+             e no codigo continua com esse nome: renomear a
+             tabela derrubaria as chaves estrangeiras de meia
+             duzia de outras sem mudar nada do que o sistema
+             faz. Na TELA, ele se chama Setor.
+     CARGO — o que a pessoa e dentro do setor (Analista,
+             Coordenador). Texto livre no cadastro; nao decide
+             permissao nenhuma.
+
+   Sao dois grupos de permissao:
+
+     VISUALIZACAO — que abas o setor enxerga no menu;
      ALTERACAO    — o que ele pode mexer dentro delas.
 
    A regra que amarra os dois: alteracao SEMPRE depende da
-   visualizacao correspondente. Se o cargo nao ve Obras, ele
+   visualizacao correspondente. Se o setor nao ve Obras, ele
    nao edita obra, nem etapa, nem card, nem check — a tela
    trava sozinha (`dependeDe`) e o servidor recusa igual.
 
-   Cargo novo nasce com a lista VAZIA: quem administra marca
-   uma a uma. A unica excecao e o cargo com `acessoTotal`
+   Setor novo nasce com a lista VAZIA: quem administra marca
+   uma a uma. A unica excecao e o setor com `acessoTotal`
    (diretoria), que passa por tudo sem depender da lista.
    ============================================================ */
 
@@ -41,19 +54,25 @@ export const ALTERACAO = [
     dependeDe: null,
     nota: 'Sem esta, a pessoa só edita o próprio cadastro em Configurações (e nunca o CPF).',
   },
-  { chave: 'editar_cargo', rotulo: 'Adicionar / editar cargo', dependeDe: null },
+  { chave: 'editar_cargo', rotulo: 'Adicionar / editar setor', dependeDe: null },
   { chave: 'editar_avaliacoes', rotulo: 'Adicionar / editar avaliações', dependeDe: 'ver_avaliacoes' },
   { chave: 'editar_clientes', rotulo: 'Adicionar / editar clientes', dependeDe: 'ver_clientes' },
   { chave: 'editar_obras', rotulo: 'Adicionar / editar obras', dependeDe: 'ver_obras' },
   {
+    chave: 'excluir_concluidas',
+    rotulo: 'Excluir obra concluída',
+    dependeDe: 'ver_concluidas',
+    nota: 'Apagar uma obra fechada apaga o registro do que foi feito. Fica separada de "editar obras" de propósito.',
+  },
+  {
     chave: 'check_todas_etapas',
     rotulo: 'Check em todas as etapas',
     dependeDe: 'ver_obras',
-    nota: 'Sem esta, a pessoa só marca os checks do próprio cargo — exceto em obra de emergência.',
+    nota: 'Sem esta, a pessoa só marca os checks do próprio setor — exceto em obra de emergência.',
   },
   { chave: 'editar_etapa', rotulo: 'Adicionar / alterar etapa', dependeDe: 'ver_obras' },
   { chave: 'editar_cards', rotulo: 'Adicionar / alterar cards', dependeDe: 'ver_obras' },
-  { chave: 'editar_cargos_card', rotulo: 'Adicionar / alterar cargos no card', dependeDe: 'ver_obras' },
+  { chave: 'editar_cargos_card', rotulo: 'Adicionar / alterar setores no card', dependeDe: 'ver_obras' },
   { chave: 'editar_checks', rotulo: 'Adicionar / alterar checks', dependeDe: 'ver_obras' },
   {
     chave: 'enviar_avisos',
@@ -112,9 +131,9 @@ export function dependentes(chaveVisualizacao) {
 /**
  * O usuario pode?
  *
- * Cargo com acesso total passa sempre — e a diretoria, e ela nao
+ * Setor com acesso total passa sempre — e a diretoria, e ela nao
  * fica travada por lista. Fora isso, vale o que esta marcado no
- * cargo. Sem cargo nenhum, nao pode nada.
+ * setor. Sem setor nenhum, nao pode nada.
  */
 export function podeFazer(usuario, chave) {
   if (!usuario) return false

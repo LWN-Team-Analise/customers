@@ -3,8 +3,8 @@ import { useDados } from '@/context/DadosContext'
 import './ModalSetores.css'
 
 /**
- * O que cada cargo esta devendo. Abre pelo botao "+N" da linha de
- * setores, quando ha mais cargos do que cabem no filtro.
+ * O que cada SETOR esta devendo. Abre pelo botao "+N" da linha de
+ * setores, quando ha mais deles do que cabem no filtro.
  *
  * `obras` sao as que estao em exibicao no quadro — a conta e sobre elas,
  * nao sobre o sistema inteiro.
@@ -12,7 +12,7 @@ import './ModalSetores.css'
 export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, selecionados = [] }) {
   const { cargos, clientePorId, roteiroDaObra, etapaDaObra, pendentesDaObra } = useDados()
 
-  /* para cada cargo, as obras em que ele ainda deve algo na etapa atual */
+  /* para cada setor, as obras em que ele ainda deve algo na etapa atual */
   const pendencias = cargos.map((cargo) => {
     const devendo = obras
       .filter((o) => pendentesDaObra(o).includes(cargo.chave))
@@ -29,7 +29,7 @@ export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, 
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Setores pendentes"
-      subtitulo="O que cada cargo ainda deve nas obras em exibição."
+      subtitulo="O que cada setor ainda deve nas obras em exibição."
       largura={600}
     >
       <div className="setores">
@@ -45,7 +45,7 @@ export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, 
                 />
                 <span className="setores__quem">
                   <strong>{cargo.nome}</strong>
-                  {/* o acesso total do cargo nao aparece: quem tem, tem */}
+                  {/* o acesso total do setor nao aparece: quem tem, tem */}
                   <span>sigla {cargo.curto}</span>
                 </span>
 
@@ -78,7 +78,7 @@ export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, 
                       <span className="setores__tipo" data-tipo={obra.tipo} aria-hidden="true" />
                       <span className="setores__obra">
                         {cliente?.nome ?? 'Cliente removido'}
-                        <em>{obra.descricao}</em>
+                        {obra.descricao && <em>{obra.descricao}</em>}
                       </span>
                       <span className="setores__etapa">
                         {etapa}ª —{' '}
