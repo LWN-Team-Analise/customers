@@ -86,18 +86,79 @@ async function pegarToken() {
 }
 
 /**
+ * Confere se o aplicativo REALMENTE pode mandar e-mail.
+ *
+ * Autenticar e uma coisa; ter permissao e outra. O registro pode estar
+ * certinho, o segredo valido, o token sair na hora — e o envio falhar
+ * com 403 porque ninguem concedeu Mail.Send.
+ *
+ * A resposta esta dentro do proprio token: as permissoes de aplicativo
+ * concedidas vem na lista `roles`. Sem Mail.Send ali, nao adianta
+ * tentar. Ler isso ao subir a API poupa a investigacao de "por que o
+ * e-mail nao chega" — o log ja diz o que falta e onde clicar.
+ */
+export async function diagnostico() {
+  if (!configurado()) return { ok: false, motivo: 'não configurado' }
+  try {
+    const token = await pegarToken()
+    const corpo = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
+    const papeis = corpo.roles ?? []
+    if (!papeis.includes('Mail.Send')) {
+      return {
+        ok: false,
+        motivo:
+          'o aplicativo autentica, mas NAO tem a permissao Mail.Send. No Entra ID: ' +
+          'Permissoes de API > Adicionar > Microsoft Graph > Permissoes de APLICATIVO > ' +
+          'Mail.Send > e depois "Conceder consentimento do administrador".',
+      }
+    }
+    return { ok: true, motivo: `Mail.Send concedida; caixa ${CAIXA}` }
+  } catch (erro) {
+    return { ok: false, motivo: erro.message }
+  }
+}
+
+/** Uma ou varias pessoas, no formato que o Graph espera. */
+const destinatarios = (para) =>
+  (Array.isArray(para) ? para : [para])
+    .filter(Boolean)
+    .map((endereco) => ({ emailAddress: { address: endereco } }))
+
+/**
  * Manda a mensagem pela caixa configurada.
+ *
+ * `para` aceita um endereco ou uma lista deles.
+ *
+ * `embutidas` sao as imagens que aparecem DENTRO do corpo — a logo do
+ * cliente no aviso, por exemplo. Elas viajam como anexo com um
+ * `contentId`, e o HTML aponta para `cid:aquele-id`. Nao da para
+ * simplesmente por a data URL no `src`: Gmail, Outlook Web e a maioria
+ * dos clientes descartam `src="data:..."` e a imagem chega quebrada.
+ *
+ * Cada embutida e { id, tipo, base64 }.
  *
  * Devolve { ok: true } ou { ok: false, motivo } — nunca estoura, para
  * a rota poder decidir o que contar na tela.
  */
-export async function enviar({ para, assunto, html, texto }) {
+export async function enviar({ para, assunto, html, texto, embutidas = [] }) {
   if (!configurado()) {
     return { ok: false, motivo: 'O envio pela API da Microsoft não está configurado.' }
   }
 
+  const alvos = destinatarios(para)
+  if (alvos.length === 0) return { ok: false, motivo: 'Nenhum destinatário informado.' }
+
   try {
     const token = await pegarToken()
+
+    const anexos = embutidas.map((img) => ({
+      '@odata.type': '#microsoft.graph.fileAttachment',
+      name: `${img.id}.png`,
+      contentType: img.tipo || 'image/png',
+      contentBytes: img.base64,
+      contentId: img.id,
+      isInline: true,
+    }))
 
     const resposta = await fetch(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(CAIXA)}/sendMail`,
@@ -111,7 +172,8 @@ export async function enviar({ para, assunto, html, texto }) {
           message: {
             subject: assunto,
             body: { contentType: 'HTML', content: html },
-            toRecipients: [{ emailAddress: { address: para } }],
+            toRecipients: alvos,
+            ...(anexos.length > 0 ? { attachments: anexos } : {}),
           },
           /* false = a copia fica em "Itens Enviados" da caixa. E o que
              deixa rastro de que o codigo saiu mesmo. */

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { query } from '../db.js'
 import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
+import { enviarAviso, temEmail } from '../email.js'
 
 const router = Router()
 
@@ -60,10 +61,40 @@ const paraSetor = (l) => ({
   nome: l.nome,
   cor: l.cor,
 })
+/**
+ * 'AAAA-MM-DD' a partir do que o Postgres devolveu para uma coluna DATE.
+ *
+ * O driver entrega um Date em meia-noite LOCAL. Formatar isso com
+ * toISOString() faria a data pular um dia para tras em qualquer fuso a
+ * oeste de Greenwich — que e o nosso caso. Por isso as tres partes saem
+ * do proprio calendario local, sem passar por UTC.
+ */
+function soData(valor) {
+  if (!valor) return null
+  if (typeof valor === 'string') return valor.slice(0, 10)
+  const mes = String(valor.getMonth() + 1).padStart(2, '0')
+  const dia = String(valor.getDate()).padStart(2, '0')
+  return `${valor.getFullYear()}-${mes}-${dia}`
+}
+
 const paraCliente = (l) => ({
   id: String(l.id),
   nome: l.nome,
   logo: l.logo,
+  /* A MESMA imagem, em dois enquadramentos: `logo` e o quadrado do
+     card, `capa` e a faixa larga do header da obra.
+
+     Cliente cadastrado antes disto so tem `logo`: a capa cai nela e a
+     tela continua igual ao que era.
+
+     A imagem INTEIRA (logo_original) fica de fora de proposito. Ela so
+     serve para reabrir o editor, e mandar uma copia dela por cliente em
+     toda carga do quadro dobraria o peso da lista para uma coisa que a
+     tela nem desenha. Quem precisa dela busca em /clientes/:id/imagem,
+     no clique. */
+  recorteLogo: l.recorte_logo ?? null,
+  capa: l.capa ?? null,
+  recorteCapa: l.recorte_capa ?? null,
   /* o setor e opcional: cliente antigo, ou ainda nao classificado, vem
      com null e a tela mostra "sem setor" */
   setorId: l.setor_id === null || l.setor_id === undefined ? null : String(l.setor_id),
@@ -279,6 +310,11 @@ async function lerTudo(usuarioId) {
       texto: l.texto,
       enviadaEm: l.enviada_em,
       editadaEm: l.editada_em ?? null,
+      /* A janela de validade, quando tem. Vai como 'AAAA-MM-DD' seco:
+         a data e a mesma em qualquer fuso, e mandar um timestamp faria
+         "ate 05/09" virar 04/09 para quem esta a oeste de Greenwich. */
+      inicioEm: soData(l.inicio_em),
+      fimEm: soData(l.fim_em),
     })),
   }
 }
@@ -387,7 +423,6 @@ function camposCliente(corpo) {
   return {
     valores: [
       nome,
-      corpo?.logo || null,
       texto(corpo?.endereco) || null,
       texto(corpo?.bairro) || null,
       cidade,
@@ -397,6 +432,31 @@ function camposCliente(corpo) {
          estrangeira e so aceita id de verdade ou nada */
       texto(corpo?.setorId) || null,
     ],
+  }
+}
+
+/**
+ * As cinco colunas da imagem, ou null quando a tela NAO mexeu nela.
+ *
+ * Elas andam juntas de proposito: a logo, o header e os dois recortes
+ * saem todos do mesmo gesto no editor, e gravar um sem os outros
+ * deixaria o cliente com um recorte que nao corresponde a imagem.
+ *
+ * O null tem funcao: editar o endereco de um cliente nao pode apagar a
+ * logo dele. A tela so manda `imagem` quando alguem realmente trocou,
+ * reenquadrou ou removeu — e nos outros casos as colunas ficam como
+ * estao, em vez de receberem o nada que veio no corpo.
+ */
+function camposImagem(corpo) {
+  const imagem = corpo?.imagem
+  if (!imagem) return null
+
+  return {
+    logo: imagem.logo || null,
+    logo_original: imagem.logoOriginal || null,
+    recorte_logo: imagem.recorteLogo ? JSON.stringify(imagem.recorteLogo) : null,
+    capa: imagem.capa || null,
+    recorte_capa: imagem.recorteCapa ? JSON.stringify(imagem.recorteCapa) : null,
   }
 }
 
@@ -469,11 +529,16 @@ router.post('/clientes', exigeSessao, exige('editar_clientes'), async (req, res)
   const { erro, valores } = camposCliente(req.body)
   if (erro) return res.status(400).json({ erro })
 
+  const imagem = camposImagem(req.body) ?? {}
+  const colunas = Object.keys(imagem)
+
   try {
+    const todos = [...valores, ...Object.values(imagem)]
     const { rows } = await query(
-      `INSERT INTO cliente (nome, logo, endereco, bairro, cidade, estado, cep, setor_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      valores,
+      `INSERT INTO cliente (nome, endereco, bairro, cidade, estado, cep, setor_id
+                            ${colunas.map((c) => `, ${c}`).join('')})
+       VALUES (${todos.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
+      todos,
     )
     return res.status(201).json({ cliente: paraCliente(rows[0]) })
   } catch (e) {
@@ -485,17 +550,46 @@ router.patch('/clientes/:id', exigeSessao, exige('editar_clientes'), async (req,
   const { erro, valores } = camposCliente(req.body)
   if (erro) return res.status(400).json({ erro })
 
+  /* a imagem so entra no UPDATE quando a tela mexeu nela; sem isso,
+     salvar um endereco novo apagaria a logo do cliente */
+  const imagem = camposImagem(req.body) ?? {}
+  const todos = [...valores, ...Object.values(imagem)]
+  const extras = Object.keys(imagem)
+    .map((coluna, i) => `, ${coluna} = $${valores.length + i + 1}`)
+    .join('')
+
   try {
     const { rows } = await query(
-      `UPDATE cliente SET nome = $1, logo = $2, endereco = $3, bairro = $4,
-                          cidade = $5, estado = $6, cep = $7, setor_id = $8
-        WHERE id = $9 RETURNING *`,
-      [...valores, req.params.id],
+      `UPDATE cliente SET nome = $1, endereco = $2, bairro = $3,
+                          cidade = $4, estado = $5, cep = $6, setor_id = $7${extras}
+        WHERE id = $${todos.length + 1} RETURNING *`,
+      [...todos, req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Cliente não encontrado.' })
     return res.json({ cliente: paraCliente(rows[0]) })
   } catch (e) {
     return tratar(e, res, 'dados/cliente-editar')
+  }
+})
+
+/**
+ * A imagem INTEIRA do cliente — a que o editor precisa para
+ * reenquadrar sem recortar o recorte anterior.
+ *
+ * Rota propria porque ela e pesada e serve a um clique so. Cliente
+ * cadastrado antes do editor nao tem original: volta a logo mesmo, que
+ * e o melhor que existe ali.
+ */
+router.get('/clientes/:id/imagem', exigeSessao, async (req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT coalesce(logo_original, logo) AS original FROM cliente WHERE id = $1',
+      [req.params.id],
+    )
+    if (!rows[0]) return res.status(404).json({ erro: 'Cliente não encontrado.' })
+    return res.json({ logoOriginal: rows[0].original })
+  } catch (e) {
+    return tratar(e, res, 'dados/cliente-imagem')
   }
 })
 
@@ -525,26 +619,82 @@ router.delete('/clientes/:id', exigeSessao, exige('editar_clientes'), async (req
 
 const SEM_TABELA_CHAT = 'O chat do site ainda não existe no banco. Rode o SQL de db/setores-e-chat.sql.txt.'
 
-const paraMensagemSite = (l) => ({
-  id: String(l.id),
-  autorId: l.usuario_id === null ? null : String(l.usuario_id),
-  autorNome: l.autor_nome,
-  texto: l.texto ?? '',
-  enviadaEm: l.enviada_em,
-  editadaEm: l.editada_em ?? null,
-})
+/**
+ * Uma linha de chat_site como a tela consome.
+ *
+ * O formato e o MESMO do chat da obra (`paraMensagem`, mais abaixo), de
+ * proposito: as duas conversas sao lidas pelo mesmo componente, e um
+ * campo com nome diferente para a mesma coisa seria o comeco de dois
+ * jeitos de tratar a mesma coisa.
+ */
+const paraMensagemSite = (l) => {
+  const apagada = Boolean(l.apagada_em)
+  return {
+    id: String(l.id),
+    autorId: l.usuario_id === null ? null : String(l.usuario_id),
+    autorNome: l.autor_nome,
+    texto: apagada ? '' : (l.texto ?? ''),
+    respondeA: l.responde_a === null || l.responde_a === undefined ? null : String(l.responde_a),
+    arquivo:
+      !apagada && l.arquivo_nome
+        ? { nome: l.arquivo_nome, tipo: l.arquivo_tipo ?? '', conteudo: l.arquivo_conteudo }
+        : null,
+    enviadaEm: l.enviada_em,
+    editadaEm: apagada ? null : (l.editada_em ?? null),
+    apagada,
+    apagadaEm: l.apagada_em ?? null,
+    mencoes: [],
+  }
+}
 
 /* As 300 ultimas. E conversa de equipe, nao arquivo: ninguem rola tres
    mil mensagens para tras, e mandar todas engorda a resposta a toa. */
 const LIMITE_CHAT = 300
 
-router.get('/chat', exigeSessao, async (_req, res) => {
+router.get('/chat', exigeSessao, async (req, res) => {
   try {
-    const { rows } = await query(
-      'SELECT * FROM (SELECT * FROM chat_site ORDER BY enviada_em DESC LIMIT $1) t ORDER BY enviada_em',
-      [LIMITE_CHAT],
-    )
-    return res.json({ mensagens: rows.map(paraMensagemSite) })
+    const [mensagens, mencoes] = await Promise.all([
+      /* o "apagar para mim" e por pessoa: a mensagem escondida por
+         alguem continua inteira na conversa de todos os outros, e por
+         isso ela sai aqui, na leitura, e nao do banco */
+      query(
+        `SELECT * FROM (
+           SELECT c.* FROM chat_site c
+            WHERE NOT EXISTS (
+                  SELECT 1 FROM chat_site_oculta o
+                   WHERE o.mensagem_id = c.id AND o.usuario_id = $2
+              )
+            ORDER BY c.enviada_em DESC LIMIT $1
+         ) t ORDER BY enviada_em`,
+        [LIMITE_CHAT, req.dono.sub],
+      ).catch((e) =>
+        /* banco sem as tabelas novas ainda: le a conversa inteira, sem
+           esconder nada. O chat continua funcionando como antes. */
+        e.code === '42P01'
+          ? query(
+              'SELECT * FROM (SELECT * FROM chat_site ORDER BY enviada_em DESC LIMIT $1) t ORDER BY enviada_em',
+              [LIMITE_CHAT],
+            )
+          : Promise.reject(e),
+      ),
+      query('SELECT mensagem_id, usuario_id FROM chat_site_mencao').catch((e) =>
+        e.code === '42P01' ? { rows: [] } : Promise.reject(e),
+      ),
+    ])
+
+    const porMensagem = {}
+    mencoes.rows.forEach((l) => {
+      const lista = porMensagem[l.mensagem_id] ?? []
+      lista.push(String(l.usuario_id))
+      porMensagem[l.mensagem_id] = lista
+    })
+
+    return res.json({
+      mensagens: mensagens.rows.map((l) => ({
+        ...paraMensagemSite(l),
+        mencoes: porMensagem[l.id] ?? [],
+      })),
+    })
   } catch (e) {
     if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_CHAT })
     return tratar(e, res, 'dados/chat-site-ler')
@@ -553,31 +703,103 @@ router.get('/chat', exigeSessao, async (_req, res) => {
 
 router.post('/chat', exigeSessao, async (req, res) => {
   const conteudo = texto(req.body?.texto)
-  if (!conteudo) return res.status(400).json({ erro: 'Escreva a mensagem.' })
+  const arquivo = req.body?.arquivo ?? null
+
+  if (!conteudo && !arquivo?.conteudo) {
+    return res.status(400).json({ erro: 'Escreva uma mensagem ou anexe um arquivo.' })
+  }
+  if (arquivo?.conteudo && !String(arquivo.conteudo).startsWith('data:')) {
+    return res.status(400).json({ erro: 'Arquivo inválido.' })
+  }
 
   try {
     const { rows } = await query(
-      `INSERT INTO chat_site (usuario_id, autor_nome, texto)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [req.dono.sub, texto(req.body?.autorNome) || 'Usuário', conteudo],
+      `INSERT INTO chat_site (usuario_id, autor_nome, texto, responde_a,
+                              arquivo_nome, arquivo_tipo, arquivo_conteudo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        req.dono.sub,
+        texto(req.body?.autorNome) || 'Usuário',
+        conteudo || null,
+        req.body?.respondeA || null,
+        arquivo?.nome ? texto(arquivo.nome) : null,
+        arquivo?.tipo ? texto(arquivo.tipo) : null,
+        arquivo?.conteudo ?? null,
+      ],
     )
-    return res.status(201).json({ mensagem: paraMensagemSite(rows[0]) })
+
+    const mencoes = [
+      ...new Set((req.body?.mencoes ?? []).map((n) => Number(n)).filter(Number.isFinite)),
+    ]
+    if (mencoes.length > 0) {
+      await query(
+        `INSERT INTO chat_site_mencao (mensagem_id, usuario_id)
+         SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`,
+        [rows[0].id, mencoes],
+      )
+    }
+
+    return res.status(201).json({
+      mensagem: { ...paraMensagemSite(rows[0]), mencoes: mencoes.map(String) },
+    })
   } catch (e) {
     if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_CHAT })
     return tratar(e, res, 'dados/chat-site-criar')
   }
 })
 
-/* Cada um apaga so a propria mensagem. A conferencia e aqui, e nao na
-   tela: esconder o botao nao impede a chamada na mao. */
+/**
+ * DELETE /chat/:id?escopo=todos|mim
+ *
+ * Os mesmos dois gestos do chat da obra, e a diferenca importa:
+ *
+ *   escopo=todos — sai da conversa de TODO MUNDO. A linha fica, mas
+ *     vazia: texto e arquivo viram NULL e a tela mostra "mensagem
+ *     apagada". O rastro evita o buraco — quem respondeu aquela
+ *     mensagem continua entendendo a propria resposta. So o autor pode
+ *     (e o cargo com acesso total, para o caso de alguem sair da
+ *     empresa deixando algo indevido).
+ *
+ *   escopo=mim (padrao) — some so da MINHA tela. Vale para qualquer
+ *     mensagem, minha ou de outra pessoa, e nao muda nada para ninguem.
+ *
+ * O padrao e o menos destrutivo: uma chamada sem `escopo` nao apaga a
+ * mensagem de outras pessoas.
+ */
 router.delete('/chat/:id', exigeSessao, async (req, res) => {
+  const paraTodos = String(req.query?.escopo ?? 'mim') === 'todos'
+
   try {
     const dona = await query('SELECT usuario_id FROM chat_site WHERE id = $1', [req.params.id])
-    if (!dona.rows[0]) return res.status(404).json({ erro: 'Mensagem não encontrada.' })
-    if (String(dona.rows[0].usuario_id) !== String(req.dono.sub)) {
-      return res.status(403).json({ erro: 'Só quem escreveu pode apagar a mensagem.' })
+    if (!dona.rows[0]) return res.status(204).end()
+
+    if (!paraTodos) {
+      await query(
+        `INSERT INTO chat_site_oculta (mensagem_id, usuario_id)
+         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [req.params.id, req.dono.sub],
+      )
+      return res.status(204).end()
     }
-    await query('DELETE FROM chat_site WHERE id = $1', [req.params.id])
+
+    const meu = await meuCargo(req.dono.sub)
+    if (!meu.acessoTotal && String(dona.rows[0].usuario_id) !== String(req.dono.sub)) {
+      return res.status(403).json({ erro: 'Você só apaga para todos as suas próprias mensagens.' })
+    }
+
+    /* o conteudo some de verdade; o que sobra e a marca de que houve
+       uma mensagem ali. As mencoes vao junto: elas eram do texto. */
+    await query(
+      `UPDATE chat_site
+          SET texto = NULL, arquivo_nome = NULL, arquivo_tipo = NULL,
+              arquivo_conteudo = NULL, apagada_em = now(), apagada_por = $1
+        WHERE id = $2`,
+      [req.dono.sub, req.params.id],
+    )
+    await query('DELETE FROM chat_site_mencao WHERE mensagem_id = $1', [req.params.id]).catch(
+      () => {},
+    )
+
     return res.status(204).end()
   } catch (e) {
     if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_CHAT })
@@ -605,6 +827,19 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
   if (!clienteId) return res.status(400).json({ erro: 'Escolha a empresa.' })
   if (!proposta) return res.status(400).json({ erro: 'Informe o n° da proposta.' })
   if (!PRIORIDADES.includes(prioridade)) return res.status(400).json({ erro: 'Prioridade inválida.' })
+
+  /* Emergencia SEM prazo e uma contradicao: sem uma data ate a qual
+     aquilo precisa estar resolvido, o que existe e uma obra urgente —
+     e urgente ja e a prioridade alta da obra padrao. Alem disso e o
+     prazo que faz a obra aparecer como atrasada e entrar na conta de
+     atraso do painel; sem ele a emergencia seria a unica que nunca
+     cobra ninguem.
+
+     A tela ja barra isso, mas ela e so a primeira porta: quem chama a
+     API direto passaria por cima dela. */
+  if (tipo === 'emergencia' && !texto(req.body?.dataConclusao)) {
+    return res.status(400).json({ erro: 'Obra de emergência precisa de uma data de conclusão.' })
+  }
 
   try {
     const { rows } = await query(
@@ -652,6 +887,33 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
       return res.status(400).json({ erro: 'Tipo de obra inválido.' })
     }
     por('tipo', req.body.tipo)
+  }
+
+  /* A mesma regra da criacao, na edicao — e aqui ela precisa olhar o
+     BANCO, nao so o corpo da chamada. Sao dois caminhos ate a mesma
+     contradicao: apagar a data de uma emergencia que ja existe, e
+     transformar em emergencia uma obra padrao que esta sem data. */
+  if (req.body?.tipo === 'emergencia' || req.body?.dataConclusao !== undefined) {
+    try {
+      const { rows } = await query('SELECT tipo, data_conclusao FROM obra WHERE id = $1', [
+        req.params.id,
+      ])
+      if (!rows[0]) return res.status(404).json({ erro: 'Obra não encontrada.' })
+
+      const tipoFinal = req.body?.tipo ?? rows[0].tipo
+      const dataFinal =
+        req.body?.dataConclusao !== undefined
+          ? texto(req.body.dataConclusao)
+          : rows[0].data_conclusao
+
+      if (tipoFinal === 'emergencia' && !dataFinal) {
+        return res
+          .status(400)
+          .json({ erro: 'Obra de emergência precisa de uma data de conclusão.' })
+      }
+    } catch (e) {
+      return tratar(e, res, 'dados/obra-editar-conferir')
+    }
   }
   if (req.body?.prioridade !== undefined) {
     if (!PRIORIDADES.includes(req.body.prioridade)) {
@@ -776,12 +1038,15 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
      - a obra e de EMERGENCIA (ali ninguem espera por setor).
    ------------------------------------------------------------ */
 
-async function podeMarcar(usuarioId, checkId, obraId) {
+async function podeMarcar(usuarioId, checkId) {
   const meu = await meuCargo(usuarioId)
   if (cargoPode(meu, 'check_todas_etapas')) return true
 
-  const obra = await query('SELECT tipo FROM obra WHERE id = $1', [obraId])
-  if (obra.rows[0]?.tipo === 'emergencia') return true
+  /* A emergencia NAO libera mais o check para qualquer um. A regra
+     vivia aqui e no dominio da tela, e passava por cima do cadastro de
+     permissoes: bastava a obra ser emergencia para quem nao pode marcar
+     fora do seu setor marcar assim mesmo, e o rastro ficava com o nome
+     errado. Quem precisa disso ganha "check em todas as etapas". */
 
   /* o check pode ter dono proprio; se tiver, e ele quem decide, e o
      cargo do card nao entra na conta */
@@ -806,7 +1071,7 @@ async function podeMarcar(usuarioId, checkId, obraId) {
 
 router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, res) => {
   try {
-    if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
+    if (!(await podeMarcar(req.dono.sub, req.params.checkId))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
     }
     await query(
@@ -824,7 +1089,7 @@ router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, re
 
 router.delete('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, res) => {
   try {
-    if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
+    if (!(await podeMarcar(req.dono.sub, req.params.checkId))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
     }
     await query('DELETE FROM obra_check WHERE obra_id = $1 AND check_id = $2', [
@@ -913,18 +1178,53 @@ router.delete('/obras/:id/observacoes/:obsId', exigeSessao, obraAberta, async (r
    Observacoes do quadro (tela de Obras, valem para o quadro todo)
    ------------------------------------------------------------ */
 
+/**
+ * A janela de validade da observacao, conferida.
+ *
+ * Devolve { inicio, fim } ou lanca com o recado pronto para a tela. As
+ * duas datas andam JUNTAS: janela pela metade nao e janela, e o banco
+ * recusa de qualquer jeito (observacao_quadro_janela_ck) — conferir
+ * aqui e o que troca um erro de constraint por uma frase que a pessoa
+ * entende.
+ */
+function janela(corpo) {
+  const inicio = texto(corpo?.inicioEm) || null
+  const fim = texto(corpo?.fimEm) || null
+
+  if (!inicio && !fim) return { inicio: null, fim: null }
+  if (!inicio || !fim) {
+    throw Object.assign(new Error('Informe as duas datas da duração: de e até.'), { tela: true })
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fim)) {
+    throw Object.assign(new Error('As datas da duração vieram em formato inválido.'), {
+      tela: true,
+    })
+  }
+  if (fim < inicio) {
+    throw Object.assign(new Error('A data final não pode ser antes da inicial.'), { tela: true })
+  }
+  return { inicio, fim }
+}
+
 router.post('/observacoes', exigeSessao, async (req, res) => {
   const conteudo = texto(req.body?.texto)
   if (!conteudo) return res.status(400).json({ erro: 'Escreva a observação.' })
 
   try {
+    const { inicio, fim } = janela(req.body)
     const { rows } = await query(
-      `INSERT INTO observacao_quadro (usuario_id, autor_nome, texto)
-       VALUES ($1, $2, $3) RETURNING id, enviada_em`,
-      [req.dono.sub, texto(req.body?.autorNome) || 'Usuário', conteudo],
+      `INSERT INTO observacao_quadro (usuario_id, autor_nome, texto, inicio_em, fim_em)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, enviada_em, inicio_em, fim_em`,
+      [req.dono.sub, texto(req.body?.autorNome) || 'Usuário', conteudo, inicio, fim],
     )
-    return res.status(201).json({ id: String(rows[0].id), enviadaEm: rows[0].enviada_em })
+    return res.status(201).json({
+      id: String(rows[0].id),
+      enviadaEm: rows[0].enviada_em,
+      inicioEm: soData(rows[0].inicio_em),
+      fimEm: soData(rows[0].fim_em),
+    })
   } catch (e) {
+    if (e.tela) return res.status(400).json({ erro: e.message })
     return tratar(e, res, 'dados/obs-quadro-criar')
   }
 })
@@ -934,6 +1234,8 @@ router.patch('/observacoes/:id', exigeSessao, async (req, res) => {
   if (!conteudo) return res.status(400).json({ erro: 'Escreva a observação.' })
 
   try {
+    const { inicio, fim } = janela(req.body)
+
     const dona = await query('SELECT usuario_id FROM observacao_quadro WHERE id = $1', [
       req.params.id,
     ])
@@ -942,12 +1244,23 @@ router.patch('/observacoes/:id', exigeSessao, async (req, res) => {
       return res.status(403).json({ erro: 'Você só edita a sua própria observação.' })
     }
 
+    /* a janela vem inteira na edicao: quem desmarcou "Adicionar
+       duracao" manda as duas vazias, e e assim que a observacao volta
+       a valer para sempre */
     const { rows } = await query(
-      'UPDATE observacao_quadro SET texto = $1, editada_em = now() WHERE id = $2 RETURNING editada_em',
-      [conteudo, req.params.id],
+      `UPDATE observacao_quadro
+          SET texto = $1, inicio_em = $2, fim_em = $3, editada_em = now()
+        WHERE id = $4
+      RETURNING editada_em, inicio_em, fim_em`,
+      [conteudo, inicio, fim, req.params.id],
     )
-    return res.json({ editadaEm: rows[0].editada_em })
+    return res.json({
+      editadaEm: rows[0].editada_em,
+      inicioEm: soData(rows[0].inicio_em),
+      fimEm: soData(rows[0].fim_em),
+    })
   } catch (e) {
+    if (e.tela) return res.status(400).json({ erro: e.message })
     return tratar(e, res, 'dados/obs-quadro-editar')
   }
 })
@@ -975,15 +1288,104 @@ router.delete('/observacoes/:id', exigeSessao, async (req, res) => {
    Avisos aos setores pendentes
    ------------------------------------------------------------ */
 
+/**
+ * O aviso tambem vai por E-MAIL.
+ *
+ * O sininho so cobra quem esta com o sistema aberto, e quem esta
+ * devendo informacao costuma ser exatamente quem nao esta. Entao a
+ * mesma cobranca sai para a caixa de entrada de quem e do setor, com o
+ * que a pessoa precisa para decidir se para o que esta fazendo:
+ * prioridade, proposta, cliente, descricao — e um botao que abre a
+ * obra na tela onde o check e marcado.
+ *
+ * Quem recebe: TODO MUNDO do setor cobrado, inclusive quem apertou o
+ * botao. Isso e diferente do sininho, que pula o autor de proposito —
+ * e o selo vermelho existe para dizer "tem coisa nova para voce", e um
+ * recado que a propria pessoa escreveu nao e novidade nenhuma.
+ *
+ * O e-mail responde outra pergunta. Ele e o REGISTRO da cobranca, e
+ * quem esta no setor cobrado esta sendo cobrado — tenha ou nao apertado
+ * o botao. Alem disso, uma pessoa que avisa o proprio setor e o caso
+ * mais comum de todos ("a Excelencia esta devendo, e eu sou da
+ * Excelencia"), e some-la da lista fazia justamente ela nao receber
+ * nada. Receber copia do que se manda e o que qualquer e-mail faz.
+ *
+ * Duas coisas que esta funcao NAO faz, e de proposito:
+ *
+ *   - nao manda para quem desmarcou `avisos_email` no cadastro;
+ *   - nao estoura. O aviso ja esta gravado quando ela roda, e um
+ *     e-mail que nao saiu nao pode desfazer uma cobranca que saiu.
+ *     O que der errado vira log e o motivo na resposta.
+ */
+async function avisarPorEmail({ obraId, setores, etapa, mensagem, quem }) {
+  if (!temEmail()) return { enviados: 0, motivo: 'o envio de e-mail não está configurado' }
+
+  const alvos = await query(
+    `SELECT u.email
+       FROM usuario u JOIN cargo c ON c.id = u.cargo_id
+      WHERE c.chave = ANY($1)
+        AND u.ativo
+        AND coalesce(u.avisos_email, true)
+        AND u.email IS NOT NULL AND u.email <> ''`,
+    [setores],
+  )
+  const para = [...new Set(alvos.rows.map((l) => l.email))]
+  if (para.length === 0) {
+    return { enviados: 0, motivo: 'ninguém desse setor tem e-mail cadastrado' }
+  }
+
+  const dados = await query(
+    `SELECT o.id, o.proposta, o.descricao, o.tipo, o.prioridade,
+            cl.nome AS cliente_nome, cl.logo AS cliente_logo,
+            quem.name AS remetente
+       FROM obra o
+       JOIN cliente cl        ON cl.id = o.cliente_id
+       LEFT JOIN usuario quem ON quem.id = $2
+      WHERE o.id = $1`,
+    [obraId, quem],
+  )
+  const o = dados.rows[0]
+  if (!o) return { enviados: 0, motivo: 'obra não encontrada' }
+
+  /* os nomes dos setores cobrados, como a equipe os chama */
+  const nomes = await query('SELECT nome FROM cargo WHERE chave = ANY($1)', [setores])
+  const termos = await lerTermos()
+
+  const envio = await enviarAviso({
+    para,
+    obra: {
+      id: String(o.id),
+      proposta: o.proposta ?? '',
+      descricao: o.descricao ?? '',
+      tipo: o.tipo,
+      prioridade: o.prioridade,
+      setores: nomes.rows.map((l) => l.nome).join(', '),
+    },
+    cliente: { nome: o.cliente_nome, logo: o.cliente_logo },
+    etapa: `${etapa}ª ${termos.termo_etapa}`,
+    mensagem,
+    remetente: o.remetente ?? '',
+  })
+
+  if (!envio.ok) {
+    console.error('[dados/aviso-email]', envio.motivo)
+    return { enviados: 0, motivo: envio.motivo }
+  }
+  return { enviados: para.length }
+}
+
 router.post('/obras/:id/avisos', exigeSessao, exige('enviar_avisos'), obraAberta, async (req, res) => {
   const setores = (req.body?.setores ?? []).map(texto).filter(Boolean)
   if (setores.length === 0) return res.status(400).json({ erro: 'Nenhum setor para avisar.' })
+
+  const etapa = Number(req.body?.etapa) || 1
+  const mensagem = texto(req.body?.mensagem)
 
   try {
     const { rows } = await query(
       `INSERT INTO obra_aviso (obra_id, etapa, mensagem, enviado_por)
        VALUES ($1, $2, $3, $4) RETURNING id, enviado_em`,
-      [req.params.id, Number(req.body?.etapa) || 1, texto(req.body?.mensagem), req.dono.sub],
+      [req.params.id, etapa, mensagem, req.dono.sub],
     )
     await query(
       `INSERT INTO obra_aviso_cargo (aviso_id, cargo_id)
@@ -996,7 +1398,28 @@ router.post('/obras/:id/avisos', exigeSessao, exige('enviar_avisos'), obraAberta
       'INSERT INTO aviso_leitura (aviso_id, usuario_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
       [rows[0].id, req.dono.sub],
     )
-    return res.status(201).json({ id: String(rows[0].id), enviadoEm: rows[0].enviado_em })
+
+    /* o e-mail vem DEPOIS de gravar, e o que ele devolver nao muda o
+       resultado da chamada — a tela ja pode dizer "aviso enviado" */
+    const email = await avisarPorEmail({
+      obraId: req.params.id,
+      setores,
+      etapa,
+      mensagem,
+      quem: req.dono.sub,
+    }).catch((erro) => {
+      console.error('[dados/aviso-email]', erro.message)
+      return { enviados: 0, motivo: erro.message }
+    })
+
+    return res.status(201).json({
+      id: String(rows[0].id),
+      enviadoEm: rows[0].enviado_em,
+      /* quantos e-mails sairam, para a tela poder dizer "avisado por
+         e-mail" em vez de so "avisado" */
+      emails: email.enviados,
+      emailMotivo: email.motivo ?? null,
+    })
   } catch (e) {
     if (e.code === '23503') return res.status(404).json({ erro: 'Obra não encontrada.' })
     return tratar(e, res, 'dados/aviso-criar')

@@ -40,8 +40,7 @@ export default function ModalCargos({ aberto, aoFechar }) {
       <Modal
         aberto={aberto}
         aoFechar={aoFechar}
-        titulo="Setores"
-        subtitulo="Clique em um setor para editar. A cor dele pinta as etiquetas do card e os blocos das etapas."
+        titulo="Setor"
         largura={560}
       >
         <div className="cargos">
@@ -68,15 +67,10 @@ export default function ModalCargos({ aberto, aoFechar }) {
                 onClick={() => setEditando({ novo: true })}
               >
                 <Mais />
-                Novo cargo
+                Novo setor
               </button>
             </li>
           </ul>
-
-          <p className="cargos__legenda">
-            O número ao lado é quantas pessoas estão nesse cargo. Os cargos usados pelas etapas
-            da obra podem mudar de nome e de cor, mas não podem ser apagados.
-          </p>
         </div>
       </Modal>
 

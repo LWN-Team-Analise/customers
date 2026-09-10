@@ -51,7 +51,13 @@ export async function enviarNoChatDoSite(campos) {
   return mensagem
 }
 
-export const apagarDoChatDoSite = (id) => del(`/dados/chat/${id}`)
+/**
+ * `escopo`: 'mim' (padrao) esconde so na minha tela; 'todos' apaga o
+ * conteudo para a equipe inteira e deixa o rastro. O padrao e o menos
+ * destrutivo dos dois — ver a rota, em server/routes/dados.js.
+ */
+export const apagarDoChatDoSite = (id, escopo = 'mim') =>
+  del(`/dados/chat/${id}?escopo=${escopo}`)
 
 /* ---------------- Clientes ---------------- */
 
@@ -66,6 +72,18 @@ export async function editarCliente(id, campos) {
 }
 
 export const apagarCliente = (id) => del(`/dados/clientes/${id}`)
+
+/**
+ * A imagem INTEIRA do cliente — a que o editor de enquadramento usa
+ * para reenquadrar sem recortar o recorte anterior.
+ *
+ * Ela nao vem na carga do quadro de proposito: e pesada e serve a um
+ * clique so.
+ */
+export async function carregarImagemDoCliente(id) {
+  const { logoOriginal } = await get(`/dados/clientes/${id}/imagem`)
+  return logoOriginal ?? null
+}
 
 /* ---------------- Obras ---------------- */
 
@@ -104,9 +122,13 @@ export const editarObservacao = (obraId, obsId, texto) =>
   patch(`/dados/obras/${obraId}/observacoes/${obsId}`, { texto })
 
 /** As do quadro (tela de Obras), que nao pertencem a uma obra so. */
+/* campos: { texto, autorNome, inicioEm?, fimEm? }
+   inicioEm/fimEm sao 'AAAA-MM-DD' e andam juntos: e a duracao depois
+   da qual a observacao sai do painel e vai para o historico. */
 export const criarObservacaoQuadro = (campos) => post('/dados/observacoes', campos)
 export const apagarObservacaoQuadro = (id) => del(`/dados/observacoes/${id}`)
-export const editarObservacaoQuadro = (id, texto) => patch(`/dados/observacoes/${id}`, { texto })
+export const editarObservacaoQuadro = (id, campos) =>
+  patch(`/dados/observacoes/${id}`, campos)
 
 /* ---------------- Avisos ---------------- */
 

@@ -8,14 +8,14 @@
   gap: 16px;
 }
 
-/* O título, o Outlook e a conta ocupam a linha toda; o resto divide.
+/* TODOS os blocos ocupam a linha inteira.
 
-   O bloco do Outlook entrou aqui porque é o primeiro da tela e o único
-   que pede ação: parando no meio, sobrava um vazio grande à direita bem
-   onde a atenção da pessoa está. */
+   A tela tem poucos blocos e todos são formulários: parados no meio,
+   sobrava um vazio grande à direita bem onde a atenção da pessoa está,
+   e os campos de senha ficavam espremidos em meia tela sem motivo —
+   não há um segundo bloco para ocupar a outra metade. */
 .config > header,
-.config__bloco--outlook,
-.config__bloco--conta {
+.config__bloco {
   grid-column: 1 / -1;
 }
 
@@ -99,6 +99,11 @@
 }
 
 .config__semfoto:hover {
+  color: var(--accent);
+}
+
+/* so o "Remover" fica vermelho: e o unico que tira alguma coisa */
+.config__fotoacoes .config__semfoto:last-child:hover {
   color: var(--danger);
 }
 
@@ -307,10 +312,16 @@
   white-space: nowrap;
 }
 
-.config__semfoto {
+/* "Ajustar enquadramento" e "Remover foto" dividem a MESMA celula da
+   grade: soltos, os dois caiam na linha 2 e ficavam um por cima do
+   outro. Juntos num span, eles se alinham lado a lado. */
+.config__fotoacoes {
   grid-column: 1 / -1;
   grid-row: 2;
   justify-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 @media (max-width: 860px) {
@@ -325,7 +336,7 @@
     width: 100%;
   }
 
-  .config__semfoto {
+  .config__fotoacoes {
     grid-row: auto;
   }
 

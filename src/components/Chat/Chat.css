@@ -281,9 +281,13 @@
   line-height: 1.45;
 }
 
+/* Os botões (anexar, câmera, mencionar, enviar) ficam CENTRALIZADOS na
+   altura da caixa de escrever. Presos ao pé dela, como estavam, eles
+   desciam junto quando a caixa era esticada e a fileira ficava colada
+   na borda de baixo do pop-up. */
 .chat__linha {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
 }
 
@@ -298,7 +302,13 @@
   font: inherit;
   font-size: 0.85rem;
   line-height: 1.45;
-  resize: vertical;
+  /* Sem alcinha: a caixa acompanha o texto sozinha (useAlturaAuto).
+     O teto e daqui — passado ele ela para de crescer e o texto rola por
+     dentro, para uma mensagem longa nao empurrar o botao de enviar
+     para fora do pop-up. */
+  resize: none;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .chat__campo:focus {
@@ -314,7 +324,6 @@
   display: flex;
   align-items: center;
   gap: 3px;
-  padding-bottom: 2px;
 }
 
 .chat__ferramentas button {
@@ -459,25 +468,6 @@
   .fala {
     max-width: 95%;
   }
-}
-
-/* ============================================================
-   Obra concluída: no lugar da caixa de escrever, o motivo.
-
-   A conversa inteira continua rolando acima — é ela que conta o
-   que aconteceu na obra —, e aqui embaixo, onde a mão vai
-   procurar o campo de texto, está a explicação de por que ele
-   não está mais lá.
-   ============================================================ */
-
-.chat__encerrado {
-  margin: 0;
-  padding: 12px 14px;
-  border-top: 1px solid var(--line);
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--text-muted);
-  text-align: center;
 }
 
 /* ============================================================

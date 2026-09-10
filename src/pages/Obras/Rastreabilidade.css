@@ -32,11 +32,81 @@
   color: var(--text-muted);
 }
 
+.rastro__cabeca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rastro__limpar {
+  margin-left: auto;
+  padding: 4px 11px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.rastro__limpar:hover {
+  background: var(--control-bg);
+  color: var(--text-strong);
+}
+
+/* ---- As duas linhas de filtro ----
+
+   Uma pergunta por linha, com o nome da pergunta a esquerda. Os dois
+   filtros se CRUZAM, e sem a etiqueta os chips de setor pareceriam
+   mais uma leva de tipos — "Comercial" ao lado de "Anexos" nao diz
+   sozinho que sao dois eixos diferentes. */
+
+.rastro__grupo {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.rastro__legenda {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+@media (max-width: 620px) {
+  .rastro__grupo {
+    grid-template-columns: 1fr;
+  }
+}
+
 .rastro__filtros {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 4px;
+}
+
+/* o chip de setor leva a cor do cargo num ponto, e nao no fundo: o
+   fundo colorido ja e o jeito de dizer "escolhido", e as duas coisas
+   juntas nao deixam ver qual e qual */
+.rastro__setor::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--setor-cor);
+}
+
+/* ligada, o fundo JA e a cor do setor (--tom); o ponto passa a branco
+   para nao sumir dentro dela */
+.rastro__setor.is-atual::before {
+  background: currentColor;
 }
 
 .rastro__filtros .chip {
@@ -201,29 +271,4 @@
   .rastro__item {
     gap: 10px;
   }
-}
-
-/* Renomear "Etapa": a engrenagem no fim da fila de chips.
-
-   Fica junto dos filtros de propósito — é olhando para
-   "[1ª Etapa] [2ª Etapa]" que se percebe que a palavra não é a que a
-   empresa usa. Discreta: é ajuste raro, não ação do dia a dia. */
-.rastro__termo {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px dashed var(--line);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-
-.rastro__termo:hover {
-  border-style: solid;
-  border-color: var(--accent);
-  color: var(--accent);
 }

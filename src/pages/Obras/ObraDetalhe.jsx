@@ -10,20 +10,24 @@ import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import {
-  PRIORIDADES,
+  avisoDeEtapa,
   cardConcluido,
   cardsQueValem,
+  chaveDoCargo,
   checkTemDonoProprio,
   fundoDoCard,
   nomeDoCard,
   podeEditarCheck,
+  rotuloPrioridadeObra,
   tituloDaObra,
+  tomPrioridadeObra,
 } from '@/domain/obras'
 import { textoSobre } from '@/utils/cor'
 import { dataExtensa, dataHora } from '@/utils/formato'
 import ModalCard from './ModalCard'
 import ModalCheck from './ModalCheck'
 import ModalEtapa from './ModalEtapa'
+import ModalFechaEtapa from './ModalFechaEtapa'
 import ModalChat from './ModalChat'
 import Rastreabilidade from './Rastreabilidade'
 import ModalEtiquetas from './ModalEtiquetas'
@@ -94,6 +98,11 @@ const Icone = {
       <circle cx="7.9" cy="7.9" r="1.3" />
     </svg>
   ),
+  lixo: ({ tamanho = 15 }) => (
+    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
+    </svg>
+  ),
   clipe: ({ tamanho = 16 }) => (
     <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 11.5 12.2 19.3a5 5 0 0 1-7-7L13 4.4a3.4 3.4 0 0 1 4.8 4.8l-7.7 7.7a1.8 1.8 0 0 1-2.5-2.5l7.2-7.2" />
@@ -135,6 +144,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     corDoCargo,
     nomeDoCargo,
     alternarCheck,
+    removerObra,
     adicionarObservacao,
     editarObservacao,
     removerObservacao,
@@ -167,6 +177,9 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const [editandoEtapa, setEditandoEtapa] = useState(null) // {etapa} | {novo:true}
   const [editandoCard, setEditandoCard] = useState(null) // {etapa, card?}
   const [editandoCheck, setEditandoCheck] = useState(null) // {card, check?}
+  /* o recado de "acabei a minha parte desta etapa" — o mesmo do card
+     do quadro, para a resposta nao depender de por onde se marcou */
+  const [avisoEtapa, setAvisoEtapa] = useState(null)
   const [menuFlutuante, setMenuFlutuante] = useState(false)
 
   /* pop-ups da obra */
@@ -174,6 +187,9 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const [etiquetas, setEtiquetas] = useState(false)
   const [anexos, setAnexos] = useState(false)
   const [editandoObra, setEditandoObra] = useState(false)
+  /* a exclusao da obra concluida — o "sim" que abre a caixa de
+     confirmacao, que por sua vez pede o segundo */
+  const [apagando, setApagando] = useState(false)
 
   const obra = obraPorId(id)
 
@@ -188,18 +204,34 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 
   const cliente = clientePorId(obra.clienteId)
   const nomeDaObra = tituloDaObra(obra, cliente)
-  const prioridade = PRIORIDADES.find((p) => p.id === obra.prioridade)
   /* a trava vale pela ROTA (aba Concluídas) ou pela própria obra estar
      encerrada — o que vier primeiro */
   const soLeitura = somenteLeitura || concluida(obra)
   /* o roteiro que ESTA obra enxerga: o que foi criado depois dela nao
      entra, e o que saiu depois dela continua aqui */
   const roteiro = roteiroDaObra(obra)
+
+  /**
+   * Marcar um check, e — quando for o caso — anunciar o fechamento.
+   *
+   * A conta do aviso e feita ANTES de gravar, com o mapa de checks que
+   * a tela tem agora: depois da gravacao o `recarregar` ja trouxe o
+   * estado novo, e nao daria mais para saber se ESTE clique foi o que
+   * fechou a sua parte. Desmarcar nunca anuncia nada.
+   */
+  const marcarCheck = (checkId) => {
+    if (!obra.checks?.[checkId]) {
+      const novo = avisoDeEtapa(roteiro, obra.checks, checkId, chaveDoCargo(user))
+      if (novo) setAvisoEtapa(novo)
+    }
+    alternarCheck(obra.id, checkId)
+  }
   const numeroAtual = etapaDaObra(obra)
   const etapaCorrente = roteiro.find((e) => e.numero === numeroAtual)
   const pct = progresso(obra)
   const membros = obra.membros.map(pessoaPorId).filter(Boolean)
   const marcas = etiquetasDaObra(obra)
+
 
   /* No modo leitura TODA permissao cai junto, num lugar so. Espalhar o
      `!soLeitura` por quinze condicoes e como se esquece uma. */
@@ -207,6 +239,20 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const podeCards = !soLeitura && pode('editar_cards')
   const podeChecks = !soLeitura && pode('editar_checks')
   const podeObra = !soLeitura && pode('editar_obras')
+  /**
+   * Apagar a obra — DUAS permissoes, porque sao dois gestos:
+   *
+   *   obra ABERTA    'editar_obras'. Apagar uma obra em andamento e
+   *                  parte de tocar o quadro (a obra criada errada, a
+   *                  duplicada);
+   *   obra CONCLUIDA 'excluir_concluidas'. Ali nao se apaga trabalho
+   *                  em andamento, apaga-se o REGISTRO do que a
+   *                  empresa entregou.
+   *
+   * E a mesma divisao que o servidor faz em DELETE /obras/:id — sem
+   * ela, o botao apareceria para quem a API vai recusar.
+   */
+  const podeExcluir = pode(soLeitura ? 'excluir_concluidas' : 'editar_obras')
   const mexeNoRoteiro = podeEtapa || podeCards || podeChecks
 
   /* O botão "Concluir obra" só existe quando as três valem:
@@ -266,10 +312,21 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             A foto do cliente estica para ocupar a faixa inteira e vai
             de 0% de opacidade na esquerda a 15% na ponta direita. */}
         <header className="capa" data-tom={obra.tipo}>
-          {cliente?.logo && (
+          {/* O recorte de HEADER da logo, quando o cliente tem um: ele
+              já vem na proporção desta faixa, então entra em `cover` e
+              aparece exatamente como foi enquadrado.
+
+              Sem ele (cliente cadastrado antes do editor) cai na
+              própria logo — e ali continua esticada, como sempre foi:
+              `cover` numa logo quadrada daria um zoom que ninguém
+              escolheu. */}
+          {(cliente?.capa || cliente?.logo) && (
             <span
               className="capa__marca"
-              style={{ backgroundImage: `url(${cliente.logo})` }}
+              style={{
+                backgroundImage: `url(${cliente.capa ?? cliente.logo})`,
+                backgroundSize: cliente.capa ? 'cover' : '100% 100%',
+              }}
               aria-hidden="true"
             />
           )}
@@ -353,6 +410,23 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                 {obra.anexos?.length > 0 && <em>{obra.anexos.length}</em>}
               </button>
 
+              {/* Excluir mora aqui, ao lado de Anexos, aberta ou
+                  concluida. Nao numa lista: apagar uma obra e uma
+                  decisao que se toma olhando a obra, e nao passando o
+                  olho por doze linhas onde um lixo por linha e um
+                  clique errado esperando acontecer. */}
+              {podeExcluir && (
+                <button
+                  type="button"
+                  className="capa__acao capa__acao--perigo"
+                  onClick={() => setApagando(true)}
+                  title={soLeitura ? 'Excluir esta obra concluída' : 'Excluir esta obra'}
+                >
+                  <Icone.lixo />
+                  Excluir
+                </button>
+              )}
+
               {podeObra && (
                 <button
                   type="button"
@@ -377,8 +451,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                 escondia a própria cor da prioridade — que é o que essa
                 pastilha existe para mostrar. Quem quiser a regra a lê no
                 cadastro, onde ela muda alguma coisa. */}
-            <span className="info__valor info__valor--pri" data-pri={obra.prioridade}>
-              {prioridade?.rotulo}
+            <span className="info__valor info__valor--pri" data-pri={tomPrioridadeObra(obra)}>
+              {rotuloPrioridadeObra(obra)}
             </span>
           </div>
 
@@ -387,11 +461,39 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             <span className="info__valor">{dataExtensa(obra.dataInicio) || '—'}</span>
           </div>
 
-          <div className="info">
+          {/* ---------------- Data de conclusão ----------------
+
+              Obra PADRÃO sem data fica com um (!) piscando no canto.
+              Não é enfeite: sem prazo a obra nunca aparece como
+              atrasada na página inicial e fica de fora da conta de
+              atraso do painel — ela some dos dois lugares que existem
+              para cobrá-la, sem ninguém perceber.
+
+              O sinal é um botão: clicar abre o cadastro, que é onde a
+              data se preenche. Aviso que aponta um buraco sem levar
+              até ele obriga a pessoa a procurar sozinha onde conserta.
+
+              Na EMERGÊNCIA ele não aparece porque não pode acontecer:
+              ali a data é obrigatória no cadastro. E na obra já
+              concluída também não — o prazo daquela já passou, e
+              piscar sobre registro fechado é ruído. */}
+          <div className="info info--conclusao">
             <span className="info__nome">Data de conclusão</span>
             <span className="info__valor">
               {dataExtensa(obra.dataConclusao) || <em className="info__vazio">sem data</em>}
             </span>
+
+            {!obra.dataConclusao && !soLeitura && obra.tipo !== 'emergencia' && (
+              <button
+                type="button"
+                className="pendencia"
+                onClick={() => setEditandoObra(true)}
+                title="Esta obra está sem data de conclusão. Clique para preencher."
+                aria-label="Pendente: informe a data de conclusão desta obra"
+              >
+                !
+              </button>
+            )}
           </div>
 
           <div className="info">
@@ -414,16 +516,21 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
           </div>
 
           <div className="info info--progresso">
-            <span className="info__nome">Progresso</span>
-            <span className="barrinha" role="img" aria-label={`${pct}% concluído`}>
-              <span className="barrinha__cheio" style={{ width: `${pct}%` }} />
+            {/* a barra e a porcentagem numa coluna, o botão AO LADO
+                dela — e não embaixo, onde ele empurrava a faixa inteira
+                para baixo toda vez que a obra ficava pronta */}
+            <span className="info__coluna">
+              <span className="info__nome">Progresso</span>
+              <span className="barrinha" role="img" aria-label={`${pct}% concluído`}>
+                <span className="barrinha__cheio" style={{ width: `${pct}%` }} />
+              </span>
+              <span className="info__valor">{pct}%</span>
             </span>
-            <span className="info__valor">{pct}%</span>
 
-            {/* Ao lado do Progresso, e só quando a barra fecha em 100%.
-                A obra não se encerra mais sozinha ao marcar o último
-                check: marcar tudo faz o botão aparecer, encerrar é o
-                clique — com uma segunda confirmação depois dele. */}
+            {/* À DIREITA do Progresso, e só quando a barra fecha em
+                100%. A obra não se encerra mais sozinha ao marcar o
+                último check: marcar tudo faz o botão aparecer, encerrar
+                é o clique — com uma segunda confirmação depois dele. */}
             {podeConcluir && (
               <button
                 type="button"
@@ -526,10 +633,14 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               return (
                 <section key={etapa.id} className="etapa vidro" data-estado={estado}>
                   <header className="etapa__topo">
-                    {/* "3ª Etapa" — a palavra "Etapa" vem da configuração
-                        da empresa, não do código: ela pode virar Fase,
-                        Marco ou Frente sem passar por aqui */}
-                    <h2 className="etapa__titulo">{rotuloEtapa(etapa.numero)}</h2>
+                    {/* O NOME da etapa é o título ("Comercial"). Antes
+                        aqui ficava o rótulo automático ("1ª Etapa") e o
+                        nome ia embaixo, pequeno — o lugar de destaque
+                        gasto para dizer uma coisa que a ordem das
+                        colunas já diz. Etapa sem nome cai no rótulo. */}
+                    <h2 className="etapa__titulo" title={rotuloEtapa(etapa.numero)}>
+                      {etapa.nome || rotuloEtapa(etapa.numero)}
+                    </h2>
                     {estado === 'concluida' && <Icone.ok />}
                     {estado === 'atual' && <Icone.atual />}
                     {estado === 'bloqueada' && <Icone.travada />}
@@ -544,7 +655,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                             className="etapa__botao"
                             onClick={() => setEditandoCard({ etapa })}
                             title="Novo card nesta etapa"
-                            aria-label={`Novo card na ${rotuloEtapa(etapa.numero)}`}
+                            aria-label={`Novo card em ${etapa.nome || rotuloEtapa(etapa.numero)}`}
                           >
                             <Icone.mais tamanho={15} />
                           </button>
@@ -554,8 +665,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                             type="button"
                             className="etapa__botao"
                             onClick={() => setEditandoEtapa({ etapa })}
-                            title="Editar ou excluir a etapa"
-                            aria-label={`Editar a ${rotuloEtapa(etapa.numero)}`}
+                            title="Editar o nome e a descrição desta etapa"
+                            aria-label={`Editar ${etapa.nome || rotuloEtapa(etapa.numero)}`}
                           >
                             <Icone.lapis />
                           </button>
@@ -564,7 +675,9 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                     )}
                   </header>
 
-                  <p className="etapa__nome">{etapa.nome}</p>
+                  {/* a linha de apoio: em que pé a etapa está. Só
+                      aparece quando alguém escreveu alguma coisa. */}
+                  {etapa.descricao && <p className="etapa__desc">{etapa.descricao}</p>}
 
                   <div className="etapa__cards">
                     {etapa.cards.map((card) => (
@@ -584,7 +697,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                         nomeDoCargo={nomeDoCargo}
                         cargoPorChave={cargoPorChave}
                         pessoaPorId={pessoaPorId}
-                        aoMarcar={(checkId) => alternarCheck(obra.id, checkId)}
+                        aoMarcar={marcarCheck}
                         aoEditarCard={() => setEditandoCard({ etapa, card })}
                         aoNovoCheck={() => setEditandoCheck({ card })}
                         aoEditarCheck={(check) => setEditandoCheck({ card, check })}
@@ -787,6 +900,50 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         </form>
       </Modal>
 
+      <ModalFechaEtapa aviso={avisoEtapa} aoFechar={() => setAvisoEtapa(null)} />
+
+      {/* DOIS passos para apagar: o botao abre a caixa, e a caixa so
+          libera o "Excluir" depois que a pessoa marca que entendeu o
+          que vai junto. Nao ha desfazer, e um clique unico num botao
+          de lixo nao e decisao suficiente para isso. */}
+      <Confirma
+        aberto={apagando}
+        titulo={soLeitura ? 'Excluir esta obra concluída?' : 'Excluir esta obra?'}
+        mensagem={
+          soLeitura
+            ? 'O registro da obra sai do sistema e não há como voltar atrás.'
+            : 'A obra sai do quadro e do sistema. Não há como voltar atrás.'
+        }
+        aviso="Vão junto a rastreabilidade dos checks, o chat, as observações, as etiquetas, os anexos e as avaliações desta obra."
+        ciencia="Entendi que esta obra e tudo o que está nela serão apagados."
+        detalhes={
+          <dl className="fechada__resumo">
+            <dt>Obra</dt>
+            <dd>{tituloDaObra(obra, cliente)}</dd>
+            {soLeitura ? (
+              <>
+                <dt>Concluída em</dt>
+                <dd>{dataHora(obra.concluidaEm) || '—'}</dd>
+                <dt>Concluída por</dt>
+                <dd>{obra.concluidaPorNome ?? '—'}</dd>
+              </>
+            ) : (
+              <>
+                <dt>Progresso</dt>
+                <dd>{pct}% dos checks marcados</dd>
+              </>
+            )}
+          </dl>
+        }
+        rotuloConfirmar="Excluir obra"
+        aoConfirmar={async () => {
+          await removerObra(obra.id)
+          navigate(soLeitura ? '/app/concluidas' : '/app/obras')
+        }}
+        aoFechar={() => setApagando(false)}
+      />
+
+
       <ModalEtapa
         aberto={Boolean(editandoEtapa)}
         etapa={editandoEtapa?.etapa ?? null}
@@ -841,7 +998,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         aberto={concluindo}
         aoFechar={() => setConcluindo(false)}
         titulo="Concluir esta obra?"
-        subtitulo="Ela sai do quadro e passa a viver na aba Concluídas, só para consulta."
         largura={470}
       >
         <form
@@ -865,7 +1021,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             placeholder="Alguma coisa que precise ficar registrada no encerramento?"
             value={obsFinal}
             onChange={(e) => setObsFinal(e.target.value)}
-            dica="Opcional — dá para concluir sem escrever nada."
           />
 
           <footer className="formobra__acoes">
@@ -987,7 +1142,11 @@ function CardSetor({
       style={{ '--setor-cor': fundo, '--setor-cor-solida': corDoCargo(card.cargos[0]) }}
     >
       <header className="setorcard__topo">
-        <h3 className="setorcard__titulo">{titulo}</h3>
+        {/* o nome inteiro na dica: o titulo corta com reticencias para
+            a fila do cabecalho caber sempre */}
+        <h3 className="setorcard__titulo" title={titulo}>
+          {titulo}
+        </h3>
         {semPermissao && !travado && (
           <span className="setorcard__cadeado" title={`Só ${donos} marca estes checks`}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1028,6 +1187,18 @@ function CardSetor({
           </span>
         )}
       </header>
+
+      {/* as etiquetas DESTE card. Nada a ver com as da obra: outro
+          catalogo, outra caixa, e nenhuma das duas puxa a outra. */}
+      {(card.etiquetas ?? []).length > 0 && (
+        <ul className="setorcard__etiquetas">
+          {card.etiquetas.map((e) => (
+            <li key={e.id} style={{ background: e.cor }}>
+              {e.nome}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <ul className="setorcard__tarefas">
         {card.checks.map((check) => {

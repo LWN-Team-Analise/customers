@@ -39,7 +39,6 @@ export default function ModalSetores({ aberto, aoFechar }) {
   }, [aberto])
 
   const quantos = (id) => clientes.filter((c) => String(c.setorId) === String(id)).length
-  const semSetor = clientes.filter((c) => !c.setorId).length
 
   return (
     <>
@@ -47,7 +46,6 @@ export default function ModalSetores({ aberto, aoFechar }) {
         aberto={aberto}
         aoFechar={aoFechar}
         titulo="Setores"
-        subtitulo="O ramo em que a empresa atua. Clique em um setor para editar."
         largura={520}
       >
         <div className="setores">
@@ -79,13 +77,12 @@ export default function ModalSetores({ aberto, aoFechar }) {
             </li>
           </ul>
 
-          <p className="setores__nota">
-            {setores.length === 0
-              ? 'Nenhum setor ainda. Crie o primeiro e depois classifique os clientes no cadastro de cada um.'
-              : `O número ao lado é quantos clientes estão nesse setor.${
-                  semSetor > 0 ? ` ${semSetor} ainda sem setor.` : ''
-                }`}
-          </p>
+          {setores.length === 0 && (
+            <p className="setores__nota">
+              Nenhum setor ainda. Crie o primeiro e depois classifique os clientes no cadastro
+              de cada um.
+            </p>
+          )}
         </div>
       </Modal>
 

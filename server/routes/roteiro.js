@@ -52,8 +52,10 @@ const obraDaChamada = (req) => req.body?.obraId ?? req.query?.obraId ?? null
    ------------------------------------------------------------ */
 
 export async function lerRoteiro() {
-  const [etapas, cards, cargos, checks, cargosCheck] = await Promise.all([
-    query('SELECT id, ordem, nome, vigente_de, vigente_ate FROM etapa ORDER BY ordem, id'),
+  const [etapas, cards, cargos, checks, cargosCheck, etiquetas] = await Promise.all([
+    query(
+      'SELECT id, ordem, nome, descricao, vigente_de, vigente_ate FROM etapa ORDER BY ordem, id',
+    ),
     query(`SELECT id, etapa_id, ordem, titulo, vigente_de, vigente_ate
              FROM etapa_card ORDER BY ordem, id`),
     query(`SELECT cc.card_id, c.chave, cc.ordem
@@ -64,7 +66,23 @@ export async function lerRoteiro() {
     query(`SELECT kc.check_id, c.chave, kc.ordem
              FROM etapa_check_cargo kc JOIN cargo c ON c.id = kc.cargo_id
             ORDER BY kc.ordem`),
+    /* as etiquetas do card. Num banco sem a atualizacao 7 a tabela nao
+       existe, e o roteiro inteiro nao pode parar por causa disso: o
+       catch devolve lista vazia e os cards vem sem etiqueta */
+    query(`SELECT ce.card_id, e.id, e.nome, e.cor
+             FROM card_etiqueta ce JOIN etiqueta_card e ON e.id = ce.etiqueta_id
+            ORDER BY lower(e.nome)`).catch((erro) => {
+      if (erro.code === '42P01') return { rows: [] }
+      throw erro
+    }),
   ])
+
+  const etiquetasDoCard = {}
+  etiquetas.rows.forEach((l) => {
+    const lista = etiquetasDoCard[l.card_id] ?? []
+    lista.push({ id: String(l.id), nome: l.nome, cor: l.cor })
+    etiquetasDoCard[l.card_id] = lista
+  })
 
   const cargosDoCard = {}
   cargos.rows.forEach((l) => {
@@ -103,6 +121,7 @@ export async function lerRoteiro() {
       ordem: l.ordem,
       titulo: l.titulo,
       cargos: cargosDoCard[l.id] ?? [],
+      etiquetas: etiquetasDoCard[l.id] ?? [],
       checks: checksDoCard[l.id] ?? [],
       vigenteDe: l.vigente_de,
       vigenteAte: l.vigente_ate,
@@ -116,6 +135,9 @@ export async function lerRoteiro() {
     // numero e recalculado por obra na tela; aqui vai a posicao geral
     numero: e.ordem,
     nome: e.nome,
+    /* a linha de apoio embaixo do nome ("aguardando aprovacao").
+       Texto livre e opcional: etapa sem descricao mostra so o nome. */
+    descricao: e.descricao ?? '',
     cards: cardsDaEtapa[e.id] ?? [],
     vigenteDe: e.vigente_de,
     vigenteAte: e.vigente_ate,
@@ -136,15 +158,16 @@ router.get('/', exigeSessao, async (_req, res) => {
 
 router.post('/etapas', exigeSessao, exige('editar_etapa'), async (req, res) => {
   const nome = String(req.body?.nome ?? '').trim()
+  const descricao = String(req.body?.descricao ?? '').trim()
   if (!nome) return res.status(400).json({ erro: 'Informe o nome da etapa.' })
 
   try {
     const desde = await momento(obraDaChamada(req))
     const { rows } = await query(
-      `INSERT INTO etapa (ordem, nome, vigente_de)
-       VALUES (coalesce((SELECT max(ordem) FROM etapa), 0) + 1, $1, $2)
-       RETURNING id, ordem, nome, vigente_de`,
-      [nome, desde],
+      `INSERT INTO etapa (ordem, nome, descricao, vigente_de)
+       VALUES (coalesce((SELECT max(ordem) FROM etapa), 0) + 1, $1, $2, $3)
+       RETURNING id, ordem, nome, descricao, vigente_de`,
+      [nome, descricao || null, desde],
     )
     return res.status(201).json({
       etapa: {
@@ -152,6 +175,7 @@ router.post('/etapas', exigeSessao, exige('editar_etapa'), async (req, res) => {
         numero: rows[0].ordem,
         ordem: rows[0].ordem,
         nome: rows[0].nome,
+        descricao: rows[0].descricao ?? '',
         cards: [],
         vigenteDe: rows[0].vigente_de,
         vigenteAte: null,
@@ -162,16 +186,35 @@ router.post('/etapas', exigeSessao, exige('editar_etapa'), async (req, res) => {
   }
 })
 
-/** Renomear vale para todas as obras: e a mesma etapa, so trocou o nome. */
+/**
+ * Renomear vale para todas as obras: e a mesma etapa, so trocou o
+ * nome. A descricao segue a mesma regra — ela conta o ESTADO da
+ * etapa ("aguardando aprovacao"), e esse estado e um so.
+ *
+ * `descricao` vem separada do `nome` de proposito: mandar so uma das
+ * duas nao apaga a outra, e e isso que deixa a tela salvar o campo
+ * que a pessoa mexeu sem ter de reenviar o resto.
+ */
 router.patch('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res) => {
+  const temNome = req.body?.nome !== undefined
+  const temDescricao = req.body?.descricao !== undefined
   const nome = String(req.body?.nome ?? '').trim()
-  if (!nome) return res.status(400).json({ erro: 'Informe o nome da etapa.' })
+  const descricao = String(req.body?.descricao ?? '').trim()
+
+  if (temNome && !nome) return res.status(400).json({ erro: 'Informe o nome da etapa.' })
+  if (!temNome && !temDescricao) {
+    return res.status(400).json({ erro: 'Nada para alterar na etapa.' })
+  }
 
   try {
-    const { rows } = await query('UPDATE etapa SET nome = $1 WHERE id = $2 RETURNING id', [
-      nome,
-      req.params.id,
-    ])
+    const { rows } = await query(
+      `UPDATE etapa
+          SET nome      = coalesce($1, nome),
+              descricao = CASE WHEN $2::boolean THEN $3 ELSE descricao END
+        WHERE id = $4
+      RETURNING id`,
+      [temNome ? nome : null, temDescricao, descricao || null, req.params.id],
+    )
     if (!rows[0]) return res.status(404).json({ erro: 'Etapa não encontrada.' })
     return res.json({ ok: true })
   } catch (erro) {
@@ -395,6 +438,121 @@ router.delete('/checks/:id', exigeSessao, exige('editar_checks'), async (req, re
     return res.status(204).end()
   } catch (erro) {
     return tratar(erro, res, 'roteiro/check-apagar')
+  }
+})
+
+/* ------------------------------------------------------------
+   Etiquetas de CARD
+
+   Catalogo proprio (`etiqueta_card`), separado do das obras. As
+   duas etiquetagens respondem a perguntas diferentes — a da obra
+   diz o que a obra e, a do card diz o que aquele pedaco do
+   roteiro e —, e compartilhar o catalogo faria a sugestao de uma
+   aparecer na outra e uma renomeada de um lado mexer no outro.
+
+   Precisa da atualizacao 7 do banco (db/atualizacao-7.sql.txt).
+   Sem ela as tabelas nao existem, e as rotas respondem 501 em vez
+   de derrubar a tela.
+   ------------------------------------------------------------ */
+
+const semTabela = (erro, res) =>
+  erro.code === '42P01'
+    ? res.status(501).json({
+        erro: 'Etiquetas de card ainda não foram habilitadas no banco (atualização 7).',
+      })
+    : null
+
+router.post('/cards/:id/etiquetas', exigeSessao, exige('editar_cards'), async (req, res) => {
+  const nome = String(req.body?.nome ?? '').trim()
+  const cor = String(req.body?.cor ?? '').trim() || '#6b7280'
+  if (!nome) return res.status(400).json({ erro: 'Escreva o nome da etiqueta.' })
+  if (!/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(cor)) {
+    return res.status(400).json({ erro: 'Cor inválida.' })
+  }
+
+  try {
+    let etiqueta
+    /* etiqueta escolhida da lista: reaproveita sem mexer no nome nem
+       na cor dela — renomear e outra acao, com rota propria */
+    if (req.body?.etiquetaId) {
+      const achada = await query('SELECT * FROM etiqueta_card WHERE id = $1', [req.body.etiquetaId])
+      etiqueta = achada.rows[0]
+    }
+    if (!etiqueta) {
+      const criada = await query(
+        `INSERT INTO etiqueta_card (nome, cor) VALUES ($1, $2)
+         ON CONFLICT (lower(btrim(nome))) DO UPDATE SET cor = excluded.cor
+         RETURNING *`,
+        [nome, cor],
+      )
+      etiqueta = criada.rows[0]
+    }
+
+    await query(
+      'INSERT INTO card_etiqueta (card_id, etiqueta_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.params.id, etiqueta.id],
+    )
+
+    return res.status(201).json({
+      etiqueta: { id: String(etiqueta.id), nome: etiqueta.nome, cor: etiqueta.cor },
+    })
+  } catch (erro) {
+    if (semTabela(erro, res)) return undefined
+    if (erro.code === '23503') return res.status(404).json({ erro: 'Card não encontrado.' })
+    return tratar(erro, res, 'roteiro/etiqueta-card-criar')
+  }
+})
+
+router.patch('/cards/etiquetas/:id', exigeSessao, exige('editar_cards'), async (req, res) => {
+  const campos = []
+  const valores = []
+
+  if (req.body?.nome !== undefined) {
+    const nome = String(req.body.nome ?? '').trim()
+    if (!nome) return res.status(400).json({ erro: 'Escreva o nome da etiqueta.' })
+    valores.push(nome)
+    campos.push(`nome = ${valores.length}`)
+  }
+  if (req.body?.cor !== undefined) {
+    const cor = String(req.body.cor ?? '').trim()
+    if (!/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(cor)) {
+      return res.status(400).json({ erro: 'Cor inválida.' })
+    }
+    valores.push(cor)
+    campos.push(`cor = ${valores.length}`)
+  }
+  if (campos.length === 0) return res.status(400).json({ erro: 'Nada para alterar.' })
+
+  valores.push(req.params.id)
+  try {
+    const { rows } = await query(
+      `UPDATE etiqueta_card SET ${campos.join(', ')} WHERE id = ${valores.length} RETURNING *`,
+      valores,
+    )
+    if (!rows[0]) return res.status(404).json({ erro: 'Etiqueta não encontrada.' })
+    return res.json({
+      etiqueta: { id: String(rows[0].id), nome: rows[0].nome, cor: rows[0].cor },
+    })
+  } catch (erro) {
+    if (semTabela(erro, res)) return undefined
+    if (erro.code === '23505') {
+      return res.status(409).json({ erro: 'Já existe uma etiqueta de card com esse nome.' })
+    }
+    return tratar(erro, res, 'roteiro/etiqueta-card-editar')
+  }
+})
+
+/** Tira a etiqueta DESTE card; ela continua no catalogo para os outros. */
+router.delete('/cards/:id/etiquetas/:etiquetaId', exigeSessao, exige('editar_cards'), async (req, res) => {
+  try {
+    await query('DELETE FROM card_etiqueta WHERE card_id = $1 AND etiqueta_id = $2', [
+      req.params.id,
+      req.params.etiquetaId,
+    ])
+    return res.status(204).end()
+  } catch (erro) {
+    if (semTabela(erro, res)) return undefined
+    return tratar(erro, res, 'roteiro/etiqueta-card-tirar')
   }
 })
 

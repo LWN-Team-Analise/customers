@@ -55,6 +55,37 @@ export function prioridadeDaObra({ tipo, prioridade }) {
   return PRIORIDADE_FIXA[tipo] ?? prioridade
 }
 
+/* ------------------------------------------------------------
+   A prioridade da EMERGENCIA se escreve "Urgente"
+
+   No banco ela continua sendo 'alta' — e o gatilho que garante isso,
+   e mexer no valor gravado obrigaria a migrar a coluna, o CHECK e
+   todas as obras antigas para ganhar uma palavra.
+
+   O que muda e a LEITURA. "Alta" numa obra de emergencia nao
+   distinguia nada: a obra padrao tambem podia ser alta, e as duas
+   apareciam iguais no quadro. "Urgente" e a palavra que so a
+   emergencia usa.
+
+   A escolha do formulario continua sendo entre as TRES de sempre — e
+   so na obra padrao. Urgente nao e uma quarta opcao a marcar; e o
+   nome que a emergencia da a prioridade que ela ja tem.
+   ------------------------------------------------------------ */
+
+/** Como a prioridade DESTA obra se escreve. */
+export function rotuloPrioridadeObra(obra) {
+  if (obra?.tipo === 'emergencia') return 'Urgente'
+  return rotuloDaPrioridade(obra?.prioridade)
+}
+
+/**
+ * O tom da pastilha: 'urgente' na emergencia, a propria prioridade nas
+ * outras. E o que o `data-pri` do CSS le para pintar.
+ */
+export function tomPrioridadeObra(obra) {
+  return obra?.tipo === 'emergencia' ? 'urgente' : obra?.prioridade
+}
+
 export function prioridadeTravada(tipo) {
   return tipo in PRIORIDADE_FIXA
 }
@@ -332,16 +363,28 @@ export function checkTemDonoProprio(check) {
 /**
  * Quem marca ESTE check.
  *
- * Tres portas de saida da regra "so o seu cargo":
+ * Duas portas de saida da regra "so o seu cargo", e as duas sao
+ * PERMISSAO de quem esta logado:
  *   - acesso total (diretoria);
- *   - a permissao "check em todas as etapas";
- *   - obra de EMERGENCIA — ali ninguem fica esperando o setor certo.
+ *   - a permissao "check em todas as etapas".
+ *
+ * Havia uma terceira: obra de EMERGENCIA liberava o check para
+ * qualquer um, com a ideia de que ali ninguem fica esperando o setor
+ * certo. Ela saiu. Na pratica o TIPO DA OBRA passava por cima do
+ * cadastro de permissoes — quem nao pode marcar fora do seu setor
+ * marcava assim mesmo, bastando a obra ser emergencia, e o rastro
+ * ficava com o nome de quem nao devia ter marcado. Quem precisa
+ * marcar por outro setor numa emergencia ganha a permissao "check em
+ * todas as etapas", que e onde essa decisao deve morar.
+ *
+ * O parametro `obra` continua: quem chama ja passa, e e nele que
+ * entraria uma regra por obra se voltar a existir alguma.
  */
+// eslint-disable-next-line no-unused-vars
 export function podeEditarCheck(usuario, check, card, obra) {
   if (!usuario) return false
   if (temAcessoTotal(usuario)) return true
   if (podeFazer(usuario, 'check_todas_etapas')) return true
-  if (obra?.tipo === 'emergencia') return true
   return cargosDoCheck(check, card).includes(chaveDoCargo(usuario))
 }
 
@@ -370,4 +413,107 @@ export function nomeDoCard(card, nomeDoCargo) {
   if (card?.titulo) return card.titulo
   const nomes = (card?.cargos ?? []).map(nomeDoCargo).filter(Boolean)
   return nomes.length > 0 ? nomes.join(' + ') : 'Sem cargo'
+}
+
+/* ------------------------------------------------------------
+   O fechamento da SUA parte numa etapa
+   ------------------------------------------------------------ */
+
+/**
+ * O que anunciar depois de marcar `checkId` — ou null, quando nao ha
+ * nada a anunciar.
+ *
+ * A pergunta que ele responde e "acabei a minha parte desta etapa?", e
+ * ela so tem resposta interessante no instante da TRANSICAO: no check
+ * que fecha o ultimo pendente do seu setor naquela etapa. Marcar o
+ * penultimo nao anuncia nada, e desmarcar e remarcar nao repete o
+ * anuncio de graca — e por isso que a conta olha o antes e o depois,
+ * em vez de so o depois.
+ *
+ * Duas respostas possiveis:
+ *
+ *   fechou: true   — ninguem mais deve nada nesta etapa. A obra anda.
+ *   fechou: false  — a sua parte acabou, mas `pendentes` ainda tem
+ *                    setores. E o que a tela precisa dizer para
+ *                    ninguem ficar esperando a obra andar sozinha.
+ *
+ * `marcados` e o mapa da obra ANTES da marcacao: quem chama esta
+ * funcao acabou de clicar e ainda nao tem a resposta do banco.
+ */
+export function avisoDeEtapa(roteiro, marcados, checkId, cargo) {
+  if (!cargo || !checkId) return null
+
+  const etapa = (roteiro ?? []).find((e) =>
+    (e.cards ?? []).some((c) => (c.checks ?? []).some((k) => String(k.id) === String(checkId))),
+  )
+  if (!etapa) return null
+
+  const meus = (etapa.cards ?? []).flatMap((card) =>
+    (card.checks ?? []).filter((k) => cargosDoCheck(k, card).includes(cargo)),
+  )
+  if (meus.length === 0) return null
+
+  const antes = marcados ?? {}
+  const depois = { ...antes, [checkId]: true }
+
+  /* so na virada: faltava alguma coisa sua, e agora nao falta mais */
+  if (!meus.some((k) => !antes[k.id])) return null
+  if (!meus.every((k) => depois[k.id])) return null
+
+  /* quem mais deve check nesta etapa. O seu setor nao entra: ele
+     acabou de fechar, e listar a si mesmo seria o aviso se contradizer */
+  const pendentes = new Set()
+  ;(etapa.cards ?? []).forEach((card) => {
+    ;(card.checks ?? []).forEach((k) => {
+      if (depois[k.id]) return
+      cargosDoCheck(k, card).forEach((c) => {
+        if (c !== cargo) pendentes.add(c)
+      })
+    })
+  })
+
+  return {
+    numero: etapa.numero,
+    nome: etapa.nome ?? '',
+    ultima: etapa.numero === (roteiro?.length ?? 0),
+    pendentes: [...pendentes],
+    fechou: pendentes.size === 0,
+  }
+}
+
+/* ------------------------------------------------------------
+   O nome da etapa acrescenta alguma coisa ao rotulo dela?
+   ------------------------------------------------------------ */
+
+/** Tira acento, indicador ordinal e pontuacao: "3ª Etapa" -> "3 etapa". */
+function achatar(texto) {
+  return String(texto ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[ªº°]/g, '')
+    .toLowerCase()
+    /* o "a"/"o" solto que sobra do ordinal: "3a etapa" -> "3 etapa" */
+    .replace(/(\d)[ao](?![a-z0-9])/g, '$1')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+/**
+ * O nome PROPRIO da etapa, ou string vazia quando ele so repete o
+ * rotulo automatico.
+ *
+ * A tela mostra as duas coisas lado a lado — "3ª Etapa · Comercial" —,
+ * e isso funciona enquanto a etapa tem nome de verdade. So que nada
+ * impede alguem de chamar a etapa de "3° Etapa" no roteiro, e ai a
+ * mesma informacao saia duas vezes, escrita de dois jeitos: "3ª Etapa
+ * 3° Etapa".
+ *
+ * A comparacao ignora acento, indicador ordinal e pontuacao, porque e
+ * exatamente ai que as duas grafias divergem: "3ª", "3º", "3°" e "3a"
+ * sao a mesma coisa para quem le.
+ */
+export function nomeProprioDaEtapa(nome, rotulo) {
+  const proprio = achatar(nome)
+  if (!proprio) return ''
+  return proprio === achatar(rotulo) ? '' : String(nome).trim()
 }

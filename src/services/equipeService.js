@@ -29,6 +29,29 @@ export async function editarCargo(id, campos) {
 
 export const apagarCargo = (id) => del(`/equipe/cargos/${id}`)
 
+/* ---------------- Cargos ----------------
+
+   Aqui e o CARGO da pessoa ("Analista de Qualidade") — o cadastro
+   proprio dele, sem cor e sem permissao. Nao confundir com as funcoes
+   acima, que sao o SETOR (tabela `cargo` no banco). */
+
+export async function carregarTitulos() {
+  const { titulos } = await get('/equipe/titulos')
+  return titulos ?? []
+}
+
+export async function criarTitulo(campos) {
+  const { titulo } = await post('/equipe/titulos', campos)
+  return titulo
+}
+
+export async function editarTitulo(id, campos) {
+  const { titulo } = await patch(`/equipe/titulos/${id}`, campos)
+  return titulo
+}
+
+export const apagarTitulo = (id) => del(`/equipe/titulos/${id}`)
+
 /* ---------------- Usuarios ---------------- */
 
 export async function carregarUsuarios() {
@@ -36,10 +59,16 @@ export async function carregarUsuarios() {
   return usuarios ?? []
 }
 
-/** Cargos + usuarios de uma vez, para a carga inicial. */
+/** Setores + cargos + usuarios de uma vez, para a carga inicial. */
 export async function carregarEquipe() {
-  const [cargos, usuarios] = await Promise.all([carregarCargos(), carregarUsuarios()])
-  return { cargos, usuarios }
+  const [cargos, titulos, usuarios] = await Promise.all([
+    carregarCargos(),
+    /* cadastro novo: num banco sem a atualizacao-4 ele volta vazio e o
+       resto da carga segue normalmente */
+    carregarTitulos().catch(() => []),
+    carregarUsuarios(),
+  ])
+  return { cargos, titulos, usuarios }
 }
 
 export async function criarUsuario(campos) {
@@ -57,6 +86,18 @@ export async function editarUsuario(id, campos) {
 }
 
 export const apagarUsuario = (id) => del(`/equipe/usuarios/${id}`)
+
+/**
+ * A foto INTEIRA da pessoa — a que o editor de enquadramento usa para
+ * reenquadrar sem recortar o recorte anterior.
+ *
+ * Ela nao vem na carga da equipe de proposito: e pesada e serve a um
+ * clique so.
+ */
+export async function carregarFotoOriginal(id) {
+  const { fotoOriginal } = await get(`/equipe/usuarios/${id}/foto`)
+  return fotoOriginal ?? null
+}
 
 /* ---------------- Senha ---------------- */
 

@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import Avatar from '@/components/Avatar/Avatar'
 import Seletor from '@/components/Seletor/Seletor'
+import useAlturaAuto from '@/hooks/useAlturaAuto'
 import { prepararImagem } from '@/utils/imagem'
 import './Campo.css'
 
@@ -35,11 +36,26 @@ export function CampoTexto({ rotulo, dica, erro, largo, ...rest }) {
   )
 }
 
+/**
+ * A caixa cresce e encolhe sozinha conforme o texto quebra linha — a
+ * alcinha do canto inferior direito saiu (ver `useAlturaAuto`).
+ *
+ * `linhas` continua sendo a altura MINIMA: e o tamanho com que a caixa
+ * abre e ate onde ela volta ao ser esvaziada.
+ */
 export function CampoArea({ rotulo, dica, erro, largo, linhas = 3, ...rest }) {
   const id = useId()
+  const campo = useAlturaAuto(rest.value)
+
   return (
     <Moldura id={id} rotulo={rotulo} dica={dica} erro={erro} largo={largo}>
-      <textarea id={id} className="campo__controle campo__area" rows={linhas} {...rest} />
+      <textarea
+        ref={campo}
+        id={id}
+        className="campo__controle campo__area"
+        rows={linhas}
+        {...rest}
+      />
     </Moldura>
   )
 }

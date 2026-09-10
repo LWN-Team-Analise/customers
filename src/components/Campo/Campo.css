@@ -44,9 +44,15 @@
   cursor: not-allowed;
 }
 
+/* Sem alcinha: a caixa se ajusta sozinha ao texto (useAlturaAuto).
+   O teto e daqui — passado ele a caixa para de crescer e o texto rola
+   por dentro, para um texto longo nao empurrar os botoes do
+   formulario para fora da tela. */
 .campo__area {
-  resize: vertical;
+  resize: none;
   min-height: 78px;
+  max-height: 320px;
+  overflow-y: auto;
   line-height: 1.5;
   font-family: inherit;
 }
@@ -112,6 +118,15 @@
 .pastilha[data-tom='alta'] {
   --tom-bg: var(--pri-alta);
   --tom-fg: var(--pri-alta-fg);
+}
+
+/* "Urgente" é a prioridade da emergência. Ela leva a cor da PRÓPRIA
+   emergência, e não o vermelho da alta: no quadro as duas apareciam
+   iguais, e é justamente a diferença entre elas que a palavra nova
+   existe para marcar. */
+.pastilha[data-tom='urgente'] {
+  --tom-bg: var(--obra-emerg);
+  --tom-fg: var(--obra-emerg-fg);
 }
 
 .pastilha[data-tom='media'] {

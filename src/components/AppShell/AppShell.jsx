@@ -120,7 +120,7 @@ const MENU = [
     id: 'usuarios',
     rotulo: 'Usuários',
     rota: '/app/usuarios',
-    permissoes: ['editar_usuario', 'editar_cargo'],
+    permissoes: ['editar_usuario', 'editar_cargo', 'editar_cargo_titulo'],
   },
 ]
 
@@ -207,7 +207,6 @@ function MenuUsuario() {
       <Confirma
         aberto={saindo}
         titulo="Sair do sistema?"
-        mensagem="Você volta para a tela de login e precisa entrar de novo."
         tom="acao"
         rotuloConfirmar="Sair"
         aoConfirmar={sair}

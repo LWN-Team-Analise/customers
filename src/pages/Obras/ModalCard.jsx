@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
+import EtiquetasCard from './EtiquetasCard'
 import { SeletorMulti } from '@/components/Seletor/Seletor'
 import { CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
@@ -117,6 +118,13 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
             </span>
           </div>
         )}
+
+        {/* As etiquetas so no card que JA existe: sem id gravado nao ha
+            onde pendurar a etiqueta. No card novo elas nao aparecem —
+            a pessoa cria e reabre em Editar, que e uma ida a mais uma
+            vez so, contra um formulario que guardaria etiqueta em
+            memoria para gravar depois e perderia tudo num cancelar. */}
+        {editando && <EtiquetasCard card={card} />}
 
         {erro && (
           <p className="formrot__erro" role="alert">

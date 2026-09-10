@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { checarConexao, pool } from './db.js'
 import { plantarRoteiro } from './roteiro.js'
-import { comoEnvia } from './email.js'
+import { comoEnvia, diagnostico } from './email.js'
 import authRouter from './routes/auth.js'
 import equipeRouter from './routes/equipe.js'
 import dadosRouter from './routes/dados.js'
@@ -48,12 +48,22 @@ app.listen(porta, async () => {
   console.log(`[api] ouvindo em http://localhost:${porta}`)
   /* saber por onde o e-mail sai poupa meia hora de investigacao quando
      o "esqueci minha senha" nao chega */
+  const modo = comoEnvia()
   const caminho = {
     'api-microsoft': 'API da Microsoft (Graph)',
     smtp: 'SMTP',
     nenhum: 'NAO CONFIGURADO — o "esqueci minha senha" nao envia',
-  }[comoEnvia()]
+  }[modo]
   console.log(`[api] envio de e-mail: ${caminho}`)
+
+  /* Autenticar e uma coisa, ter permissao e outra: o registro pode
+     estar certinho e o envio falhar com 403 porque ninguem concedeu
+     Mail.Send. O token responde isso sem mandar e-mail nenhum, e dizer
+     aqui poupa a investigacao de "por que o codigo nao chega". */
+  if (modo === 'api-microsoft') {
+    const check = await diagnostico()
+    console.log(`[api] ${check.ok ? 'permissao ok:' : 'ATENCAO:'} ${check.motivo}`)
+  }
   try {
     const info = await checarConexao()
     console.log(`[api] banco "${info.banco}" conectado.`)

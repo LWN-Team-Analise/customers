@@ -5,13 +5,14 @@ import Avatar from '@/components/Avatar/Avatar'
 import Seletor from '@/components/Seletor/Seletor'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
-import { PRIORIDADES, PRIORIDADE_PESO } from '@/domain/obras'
+import { nomeProprioDaEtapa, PRIORIDADES, PRIORIDADE_PESO } from '@/domain/obras'
 import { dataExtensa, dataHora } from '@/utils/formato'
 import CardObra from './CardObra'
 import ModalObra from './ModalObra'
 import ModalMembros from './ModalMembros'
 import ModalSetores from './ModalSetores'
 import ModalObservacoes from './ModalObservacoes'
+import ModalFechaEtapa from './ModalFechaEtapa'
 import './Obras.css'
 
 const ORDENACOES = [
@@ -58,6 +59,7 @@ export default function Obras() {
     registrarAviso,
     concluida,
     etapaDaObra,
+    roteiroDaObra,
     pendentesDaObra,
     rotuloEtapa,
     pode,
@@ -69,8 +71,11 @@ export default function Obras() {
   const [modalMembros, setModalMembros] = useState(false)
   const [modalSetores, setModalSetores] = useState(false)
   const [modalObs, setModalObs] = useState(false)
-  const [filtrosAbertos, setFiltrosAbertos] = useState(true)
   const [recado, setRecado] = useState('')
+  /* o recado de "acabei a minha parte desta etapa". Ele mora AQUI, e
+     nao no card: quando a etapa fecha, a obra troca de grupo no quadro
+     e o card e remontado — o aviso morreria antes de ser lido */
+  const [avisoEtapa, setAvisoEtapa] = useState(null)
 
   /* sem a permissao, o botao nem aparece — e a API recusa igual */
   const podeCriarObra = pode('editar_obras')
@@ -98,6 +103,27 @@ export default function Obras() {
   }, [cargos, setores])
 
   const cargosRestantes = Math.max(0, cargos.length - cargosVisiveis.length)
+
+  /**
+   * Os clientes que aparecem no filtro: so os que tem obra ABERTA.
+   *
+   * A lista vinha do cadastro inteiro, e num cadastro de sessenta
+   * empresas o filtro do quadro oferecia cinquenta e cinco escolhas
+   * que so podiam devolver tela vazia — a obra daquelas ja fechou, e o
+   * quadro nao mostra obra concluida.
+   *
+   * O cliente ESCOLHIDO fica na lista mesmo que a ultima obra dele
+   * feche enquanto a tela esta aberta: some-lo dali deixaria o filtro
+   * ligado num cliente que nao da para desmarcar.
+   */
+  const clientesComObra = useMemo(() => {
+    const ativos = new Set(
+      obras.filter((o) => !concluida(o)).map((o) => String(o.clienteId)),
+    )
+    return clientes
+      .filter((c) => ativos.has(String(c.id)) || String(c.id) === String(clienteId))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [obras, clientes, concluida, clienteId])
 
   const alternarSetor = (id) =>
     setSetores((atual) => (atual.includes(id) ? atual.filter((s) => s !== id) : [...atual, id]))
@@ -168,6 +194,52 @@ export default function Obras() {
     pendentesDaObra,
   ])
 
+  /**
+   * As obras de uma coluna, separadas pela etapa em que estao AGORA.
+   *
+   * Cada obra aparece uma vez so, no grupo da sua etapa atual — nao
+   * uma vez por etapa do roteiro. Uma coluna de trinta cards seguidos
+   * nao responde "o que esta parado no Comercial?"; separada por
+   * etapa, ela responde de longe, so pelo tamanho das pilhas.
+   *
+   * Etapa sem nenhuma obra nao vira titulo: um "2ª Etapa" com nada
+   * embaixo so gasta altura da coluna.
+   *
+   * O nome do grupo sai do roteiro da PRIMEIRA obra dele. Obras
+   * antigas podem ter roteiro proprio, e nesse caso duas obras na
+   * "2ª" podem ter nomes diferentes para ela — o numero, que e o que
+   * o titulo garante, continua certo para as duas.
+   */
+  const porEtapa = useMemo(() => {
+    const agrupar = (lista) => {
+      const grupos = new Map()
+      lista.forEach((obra) => {
+        const numero = etapaDaObra(obra)
+        if (!grupos.has(numero)) grupos.set(numero, [])
+        grupos.get(numero).push(obra)
+      })
+      return [...grupos.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([numero, obras]) => {
+          const rotulo = rotuloEtapa(numero)
+          return {
+            numero,
+            rotulo,
+            /* o nome so entra quando ACRESCENTA. Nada impede alguem de
+               chamar a etapa de "3° Etapa" no roteiro, e ai o titulo
+               saia com a mesma informacao duas vezes, escrita de dois
+               jeitos: "3ª Etapa   3° Etapa". */
+            nome: nomeProprioDaEtapa(
+              roteiroDaObra(obras[0]).find((e) => e.numero === numero)?.nome,
+              rotulo,
+            ),
+            obras,
+          }
+        })
+    }
+    return agrupar
+  }, [etapaDaObra, rotuloEtapa, roteiroDaObra])
+
   const padrao = visiveis.filter((o) => o.tipo === 'padrao')
   const emergencia = visiveis.filter((o) => o.tipo === 'emergencia')
   /* so entram na coluna de aviso as obras que realmente devem algo */
@@ -183,11 +255,26 @@ export default function Obras() {
   }, [visiveis, pessoaPorId])
 
   /** Avisa todos os setores que ainda devem informacao na etapa da obra. */
+  /* O pedaço que conta se a cobrança saiu também da caixa de entrada.
+     Aviso que só acende o sininho cobra apenas quem está com o sistema
+     aberto, e vale dizer qual dos dois foi.
+
+     Quando NÃO saiu, a tela diz o motivo. Silêncio aqui é o pior dos
+     mundos: o aviso é gravado do mesmo jeito, a tela diz "enviado", e
+     não há como descobrir que o e-mail morreu no caminho sem ir ler o
+     log do servidor. */
+  const porEmail = (quantos, motivo) => {
+    if (quantos > 0) {
+      return ` ${quantos} pessoa${quantos > 1 ? 's' : ''} recebeu por e-mail.`
+    }
+    return motivo ? ` Nenhum e-mail saiu: ${motivo}.` : ''
+  }
+
   const avisarObra = async (obra) => {
     const faltando = pendentesDaObra(obra)
     if (faltando.length === 0) return
     const etapa = etapaDaObra(obra)
-    await registrarAviso(obra.id, {
+    const saida = await registrarAviso(obra.id, {
       setores: faltando,
       /* "Pendência na 3ª Etapa." — a palavra "Etapa" vem da configuração
          da empresa, não do código */
@@ -196,23 +283,34 @@ export default function Obras() {
     }).catch(() => null)
     const nomes = faltando.map((s) => cargoPorChave(s)?.nome ?? s).join(', ')
     const empresa = clientePorId(obra.clienteId)?.nome ?? 'obra'
-    setRecado(`Aviso enviado para ${nomes} — ${empresa}.`)
+    setRecado(
+      `Aviso enviado para ${nomes} — ${empresa}.${porEmail(
+        saida?.emails ?? 0,
+        saida?.emailMotivo,
+      )}`,
+    )
   }
 
   const avisarTodas = async () => {
     if (pendentes.length === 0) return
+    let emails = 0
+    let motivo = null
     for (const obra of pendentes) {
       const etapa = etapaDaObra(obra)
-      await registrarAviso(obra.id, {
+      const saida = await registrarAviso(obra.id, {
         setores: pendentesDaObra(obra),
         mensagem: `Pendência na ${rotuloEtapa(etapa)}.`,
         etapa,
       }).catch(() => null)
+      emails += saida?.emails ?? 0
+      /* o primeiro motivo basta: se o e-mail está quebrado, ele está
+         quebrado igual nas dez obras */
+      motivo = motivo ?? saida?.emailMotivo ?? null
     }
     setRecado(
       `Aviso enviado a todos os setores pendentes de ${pendentes.length} obra${
         pendentes.length > 1 ? 's' : ''
-      }.`,
+      }.${porEmail(emails, motivo)}`,
     )
   }
 
@@ -231,9 +329,14 @@ export default function Obras() {
       ]}
     >
       <section className="obras">
-        {/* ---------------- cabecalho de filtros ---------------- */}
-        {filtrosAbertos && (
-          <div className="painel vidro">
+        {/* ---------------- cabecalho de filtros ----------------
+
+            Sempre aberto. Havia um botao "Filtros" na barra de baixo
+            que escondia este painel; ele saiu porque escondia
+            justamente o que a tela usa o tempo todo — e um filtro
+            fechado e um filtro esquecido ligado, que faz a pessoa
+            procurar a obra que "sumiu". O "Limpar" continua ali. */}
+        <div className="painel vidro">
             <div className="painel__filtros">
               <div className="filtro">
                 <span className="filtro__nome">Prioridade</span>
@@ -264,9 +367,7 @@ export default function Obras() {
                     aria-label="Filtrar por cliente"
                     opcoes={[
                       { valor: '', rotulo: 'Todos os clientes' },
-                      ...[...clientes]
-                        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-                        .map((c) => ({ valor: c.id, rotulo: c.nome })),
+                      ...clientesComObra.map((c) => ({ valor: c.id, rotulo: c.nome })),
                     ]}
                   />
                 </div>
@@ -291,8 +392,14 @@ export default function Obras() {
               </div>
 
               {/* mostra ate 5 cargos; o que for filtrado pelo "+N" sobe
-                  para a frente da linha e passa a aparecer aqui */}
-              <div className="filtro">
+                  para a frente da linha e passa a aparecer aqui.
+
+                  E o unico filtro ELASTICO da fila (`--setores`): ele e
+                  o mais largo e o unico cujo conteudo quebra bem, entao
+                  e ele que cede quando falta espaco — as pastilhas
+                  passam para uma segunda linha dentro do proprio bloco
+                  e os cinco rotulos continuam alinhados em cima. */}
+              <div className="filtro filtro--setores">
                 <span className="filtro__nome">Setor pendente</span>
                 <div className="filtro__linha">
                   {cargosVisiveis.map((cargo) => {
@@ -325,7 +432,12 @@ export default function Obras() {
               </div>
             </div>
 
-            {/* membros ancorado na direita do cabecalho */}
+            {/* Membros: a SEGUNDA coluna da grade do painel, presa no
+                alto da direita. O rotulo fica na altura de
+                "Prioridade" e as fotos na altura das pastilhas.
+                Dentro da fila dos filtros ele caia para a linha de
+                baixo — ali sobrava sempre um pouco menos do que ele
+                precisava. */}
             <div className="filtro filtro--membros">
               <span className="filtro__nome">Membros</span>
               <button
@@ -357,8 +469,7 @@ export default function Obras() {
                 )}
               </button>
             </div>
-          </div>
-        )}
+        </div>
 
         {/* ---------------- barra de acoes ---------------- */}
         <div className="barra">
@@ -401,31 +512,24 @@ export default function Obras() {
               />
             </label>
 
-            <button
-              type="button"
-              className={`ferramenta ${filtrosAtivos > 0 ? 'is-ativo' : ''}`.trim()}
-              onClick={() => setFiltrosAbertos((v) => !v)}
-              aria-expanded={filtrosAbertos}
-            >
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                <path d="M3.5 6h17M6.5 12h11M10 18h4" />
-              </svg>
-              Filtros
-              {filtrosAtivos > 0 && <span className="ferramenta__selo">{filtrosAtivos}</span>}
-            </button>
-
             {filtrosAtivos > 0 && (
               <button type="button" className="ferramenta ferramenta--fraca" onClick={limparFiltros}>
-                Limpar
+                Limpar {filtrosAtivos} filtro{filtrosAtivos > 1 ? 's' : ''}
               </button>
             )}
 
-            <Seletor
-              valor={ordem}
-              aoMudar={setOrdem}
-              aria-label="Ordenar por"
-              opcoes={ORDENACOES.map((o) => ({ valor: o.valor, rotulo: o.rotulo }))}
-            />
+            {/* largura fixa: "Data de conclusão" e a opcao mais longa, e
+                sem espaco para ela o botao cortava o proprio rotulo com
+                reticencias — a pessoa lia "Data de conclu..." e nao
+                sabia por que a lista estava naquela ordem */}
+            <div className="barra__ordem">
+              <Seletor
+                valor={ordem}
+                aoMudar={setOrdem}
+                aria-label="Ordenar por"
+                opcoes={ORDENACOES.map((o) => ({ valor: o.valor, rotulo: o.rotulo }))}
+              />
+            </div>
           </div>
         </div>
 
@@ -450,14 +554,23 @@ export default function Obras() {
             aoAdicionar={podeCriarObra ? () => setModalObra('padrao') : undefined}
             vazio="Nenhuma obra padrão por aqui."
           >
-            {padrao.map((obra) => (
-              <CardObra
-                key={obra.id}
-                obra={obra}
-                cliente={clientePorId(obra.clienteId)}
-                pessoas={pessoasDa(obra)}
-                aoAbrir={() => navigate(`/app/obras/${obra.id}`)}
-              />
+            {porEtapa(padrao).map((grupo) => (
+              <GrupoEtapa key={grupo.numero} grupo={grupo}>
+                {grupo.obras.map((obra) => (
+                  <CardObra
+                    key={obra.id}
+                    obra={obra}
+                    cliente={clientePorId(obra.clienteId)}
+                    pessoas={pessoasDa(obra)}
+                    /* os checks do seu setor vem dentro do card nas duas
+                       colunas de obra; na de aviso nao, porque la o card
+                       inteiro dispara a cobranca */
+                    comChecks
+                    aoAvisarEtapa={setAvisoEtapa}
+                    aoAbrir={() => navigate(`/app/obras/${obra.id}`)}
+                  />
+                ))}
+              </GrupoEtapa>
             ))}
           </Coluna>
 
@@ -468,14 +581,23 @@ export default function Obras() {
             aoAdicionar={podeCriarObra ? () => setModalObra('emergencia') : undefined}
             vazio="Nenhuma emergência aberta."
           >
-            {emergencia.map((obra) => (
-              <CardObra
-                key={obra.id}
-                obra={obra}
-                cliente={clientePorId(obra.clienteId)}
-                pessoas={pessoasDa(obra)}
-                aoAbrir={() => navigate(`/app/obras/${obra.id}`)}
-              />
+            {porEtapa(emergencia).map((grupo) => (
+              <GrupoEtapa key={grupo.numero} grupo={grupo}>
+                {grupo.obras.map((obra) => (
+                  <CardObra
+                    key={obra.id}
+                    obra={obra}
+                    cliente={clientePorId(obra.clienteId)}
+                    pessoas={pessoasDa(obra)}
+                    /* os checks do seu setor vem dentro do card nas duas
+                       colunas de obra; na de aviso nao, porque la o card
+                       inteiro dispara a cobranca */
+                    comChecks
+                    aoAvisarEtapa={setAvisoEtapa}
+                    aoAbrir={() => navigate(`/app/obras/${obra.id}`)}
+                  />
+                ))}
+              </GrupoEtapa>
             ))}
           </Coluna>
 
@@ -574,6 +696,8 @@ export default function Obras() {
         </div>
       </section>
 
+      <ModalFechaEtapa aviso={avisoEtapa} aoFechar={() => setAvisoEtapa(null)} />
+
       <ModalObra
         aberto={modalObra !== null}
         tipo={modalObra ?? 'padrao'}
@@ -631,6 +755,28 @@ function Coluna({ titulo, tom, total, aoAdicionar, acaoTopo, vazio, children }) 
       <div className="coluna__pilha">
         {total === 0 ? <p className="coluna__vazio">{vazio}</p> : children}
       </div>
+    </section>
+  )
+}
+
+/**
+ * Um degrau da coluna: "2ª Etapa — Técnico", e embaixo as obras que
+ * estao nela.
+ *
+ * O numero da etapa vem numa pastilha, o nome dela ao lado e a
+ * contagem na ponta — a mesma leitura do cabecalho da coluna, um
+ * degrau abaixo.
+ */
+function GrupoEtapa({ grupo, children }) {
+  return (
+    <section className="etapagrupo">
+      <h3 className="etapagrupo__topo">
+        <span className="etapagrupo__numero">{grupo.rotulo}</span>
+        {grupo.nome && <span className="etapagrupo__nome">{grupo.nome}</span>}
+        <span className="etapagrupo__conta">{grupo.obras.length}</span>
+      </h3>
+
+      <div className="etapagrupo__pilha">{children}</div>
     </section>
   )
 }

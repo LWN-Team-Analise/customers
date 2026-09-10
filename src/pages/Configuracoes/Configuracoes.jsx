@@ -2,19 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
 import Button from '@/components/Button/Button'
+import EditorImagem from '@/components/EditorImagem/EditorImagem'
 import { CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
 import { useAuth } from '@/context/AuthContext'
 import { useDados } from '@/context/DadosContext'
 import { useTheme } from '@/context/ThemeContext'
 import useOutlook from '@/hooks/useOutlook'
 import { podeEditarCpf } from '@/domain/obras'
-import { editarUsuario, trocarSenha } from '@/services/equipeService'
+import { carregarFotoOriginal, editarUsuario, trocarSenha } from '@/services/equipeService'
 import { validateCPF, vincularOutlook } from '@/services/authService'
 import { tokenAtual } from '@/services/api'
 import { formatarCPF, formatarTelefone, soDigitos } from '@/utils/formato'
 import { prepararImagem } from '@/utils/imagem'
 import outlookLogo from '@/assets/outlook.png'
 import './Configuracoes.css'
+
+/* a imagem inteira e guardada maior que o avatar recortado: e dela que
+   o editor parte quando alguem reenquadra a foto depois */
+const LADO_ORIGINAL = 1024
 
 const Sol = () => (
   <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -49,9 +54,14 @@ const Lua = () => (
  */
 export default function Configuracoes() {
   const { user, atualizarPerfil } = useAuth()
-  const { cargos, recarregar } = useDados()
+  const { cargos, titulos, pessoaPorId, pode, recarregar } = useDados()
   const { theme, selectTheme } = useTheme()
   const entradaFoto = useRef(null)
+  /* a imagem que o editor de enquadramento esta ajustando; null = fechado */
+  const [ajustando, setAjustando] = useState(null)
+  /* a foto so vai junto na gravacao quando alguem mexeu nela: a imagem
+     inteira nao vem na carga, e manda-la vazia apagaria o original */
+  const [fotoMexida, setFotoMexida] = useState(false)
 
   const [form, setForm] = useState(null)
   const [erros, setErros] = useState({})
@@ -59,6 +69,13 @@ export default function Configuracoes() {
   const [salvando, setSalvando] = useState(false)
 
   const cpfLiberado = podeEditarCpf(user)
+  /* atribuir cargo tem permissao propria — inclusive para o proprio
+     cadastro. Sem ela ninguem se promove sozinho por esta tela. */
+  const podeCargo = pode('editar_cargo_titulo')
+
+  /* a sessao guarda so a foto recortada; a imagem inteira e o
+     enquadramento vem da equipe carregada do banco */
+  const eu = pessoaPorId(user?.id)
 
   /* carrega o formulario com o que a sessao tem hoje */
   useEffect(() => {
@@ -68,14 +85,31 @@ export default function Configuracoes() {
       email: user.email ?? '',
       telefone: formatarTelefone(user.telefone ?? ''),
       nascimento: user.dataNascimento ?? '',
-      /* `cargo` aqui é a chave do SETOR (travado); `cargoTitulo` é o
-         cargo específico da pessoa, que ela mesma edita */
+      /* `cargo` aqui é a chave do SETOR (travado); `cargoTituloId` é o
+         cargo específico da pessoa, que só quem tem a permissão muda */
       cargo: user.cargoChave ?? '',
-      cargoTitulo: user.cargoTitulo ?? '',
+      cargoTituloId: '',
       cpf: formatarCPF(user.cpf ?? ''),
       foto: user.foto ?? null,
+      fotoOriginal: null,
+      recorteFoto: null,
     })
   }, [user])
+
+  /* o cargo e o enquadramento chegam com a carga da equipe, que pode
+     voltar depois do primeiro render desta tela */
+  useEffect(() => {
+    if (!eu) return
+    setForm((atual) =>
+      atual
+        ? {
+            ...atual,
+            cargoTituloId: atual.cargoTituloId || (eu.cargoTituloId ?? ''),
+            recorteFoto: atual.recorteFoto ?? eu.recorteFoto ?? null,
+          }
+        : atual,
+    )
+  }, [eu])
 
   if (!form) return null
 
@@ -92,16 +126,32 @@ export default function Configuracoes() {
     setRecado('')
   }
 
-  /* a imagem e reduzida aqui, no navegador: foto de celular crua nao
-     cabe no limite do servidor nem no localStorage da sessao */
+  /* A imagem e reduzida aqui, no navegador: foto de celular crua nao
+     cabe no limite do servidor nem no localStorage da sessao.
+
+     Escolher o arquivo NAO grava a foto — abre o editor de
+     enquadramento; sair de la e que define o recorte. */
   const escolherFoto = async (evento) => {
     const arquivo = evento.target.files?.[0]
     evento.target.value = ''
     if (!arquivo) return
     try {
-      const foto = await prepararImagem(arquivo)
-      setForm((atual) => ({ ...atual, foto }))
       setRecado('')
+      setAjustando({ imagem: await prepararImagem(arquivo, { lado: LADO_ORIGINAL }), nova: true })
+    } catch (e) {
+      setRecado(e.message)
+    }
+  }
+
+  /* Reenquadrar parte da imagem INTEIRA: recortar o recorte anterior
+     iria comendo a foto a cada ajuste.
+
+     Ela nao vem na carga da equipe (pesada demais para viajar por
+     pessoa em toda leitura), entao e buscada aqui, no clique. */
+  const reenquadrar = async () => {
+    try {
+      const origem = form.fotoOriginal ?? (await carregarFotoOriginal(user.id))
+      if (origem) setAjustando({ imagem: origem, nova: false })
     } catch (e) {
       setRecado(e.message)
     }
@@ -130,11 +180,19 @@ export default function Configuracoes() {
       /* o SETOR não vai: o campo é só informativo nesta tela, e mandá-lo
          daqui abriria caminho para a pessoa trocar o próprio setor — que
          é o mesmo que trocar as próprias permissões.
-         O CARGO vai: ele é o título dela, não decide nada, e é ela quem
-         sabe quando mudou. */
-      cargoTitulo: form.cargoTitulo.trim(),
-      foto: form.foto,
+         O CARGO só vai para quem tem a permissão de defini-lo — ver
+         abaixo: sem ela, ninguém se dá o cargo que quiser aqui. */
     }
+    /* a foto só viaja quando alguém mexeu nela: a imagem inteira não
+       vem na carga, e mandá-la vazia apagaria o original guardado */
+    if (fotoMexida) {
+      campos.foto = form.foto
+      campos.fotoOriginal = form.fotoOriginal
+      campos.recorteFoto = form.recorteFoto
+    }
+    /* o CARGO só viaja para quem pode defini-lo: mandá-lo sem a
+       permissão faria a API recusar a gravação inteira */
+    if (podeCargo) campos.cargoTituloId = form.cargoTituloId || ''
     /* o CPF so vai quando pode mudar E mudou */
     if (cpfLiberado && soDigitos(form.cpf) !== soDigitos(user.cpf)) {
       campos.cpf = soDigitos(form.cpf)
@@ -151,10 +209,10 @@ export default function Configuracoes() {
         telefone: salvo?.telefone ?? campos.telefone,
         cpf: salvo?.cpf ?? user.cpf,
         dataNascimento: salvo?.nascimento ?? campos.nascimento,
-        foto: campos.foto,
+        foto: salvo?.foto ?? user.foto,
         cargoChave: user.cargoChave,
         cargoNome: user.cargoNome,
-        cargoTitulo: salvo?.cargoTitulo ?? campos.cargoTitulo,
+        cargoTitulo: salvo?.cargoTitulo ?? user.cargoTitulo,
       })
       await recarregar()
 
@@ -233,13 +291,21 @@ export default function Configuracoes() {
               </div>
 
               {form.foto && (
-                <button
-                  type="button"
-                  className="config__semfoto"
-                  onClick={() => setForm((a) => ({ ...a, foto: null }))}
-                >
-                  Remover foto
-                </button>
+                <span className="config__fotoacoes">
+                  <button type="button" className="config__semfoto" onClick={reenquadrar}>
+                    Ajustar enquadramento
+                  </button>
+                  <button
+                    type="button"
+                    className="config__semfoto"
+                    onClick={() => {
+                      setForm((a) => ({ ...a, foto: null, fotoOriginal: null, recorteFoto: null }))
+                      setFotoMexida(true)
+                    }}
+                  >
+                    Remover foto
+                  </button>
+                </span>
               )}
             </div>
           </div>
@@ -289,26 +355,35 @@ export default function Configuracoes() {
                 campo aberto na tela é um convite a tentar.
 
                 Quem muda setor é quem tem permissão para isso, na aba
-                Usuários. Aqui ele só informa em que setor a pessoa está. */}
+                Usuários. Aqui ele só informa em que setor a pessoa está.
+
+                Setor e Cargo ficam lado a lado, nessa ordem: um diz de
+                que grupo a pessoa é, o outro o que ela é dentro dele. */}
             <CampoSelecao
               rotulo="Setor"
-              largo
               value={form.cargo}
               vazio="Sem setor"
               disabled
               opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
-              dica="É o setor que define as suas permissões. Só a administração altera."
             />
 
-            {/* O cargo específico é da pessoa e não decide permissão
-                nenhuma, então ela mesma mantém o dele atualizado. */}
-            <CampoTexto
+            {/* O cargo não decide permissão nenhuma, mas ATRIBUIR um é
+                permissão própria: sem ela ninguém escolhe o próprio
+                cargo aqui — o campo mostra o que está gravado e não
+                aceita troca. */}
+            <CampoSelecao
               rotulo="Cargo"
-              largo
-              placeholder="Ex.: Analista de Qualidade"
-              value={form.cargoTitulo}
-              onChange={mudar('cargoTitulo')}
-              dica="Opcional — o seu cargo dentro do setor."
+              value={form.cargoTituloId}
+              onChange={mudar('cargoTituloId')}
+              disabled={!podeCargo}
+              vazio={
+                !podeCargo
+                  ? user?.cargoTitulo || 'Sem cargo'
+                  : titulos.length === 0
+                    ? 'Nenhum cargo cadastrado ainda'
+                    : 'Sem cargo'
+              }
+              opcoes={titulos.map((t) => ({ valor: String(t.id), rotulo: t.nome }))}
             />
           </div>
 
@@ -327,6 +402,26 @@ export default function Configuracoes() {
 
         <TrocarSenha />
       </section>
+
+      {/* Sem painel de header: quem tem header é o cliente, e a foto de
+          perfil nunca abre faixa nenhuma. */}
+      <EditorImagem
+        aberto={Boolean(ajustando)}
+        imagem={ajustando?.imagem}
+        nome={form.nome}
+        nivel={0}
+        recorteInicial={ajustando?.nova ? null : form.recorteFoto}
+        aoConfirmar={({ original, imagem, recorte }) => {
+          setForm((atual) => ({
+            ...atual,
+            foto: imagem,
+            fotoOriginal: original,
+            recorteFoto: recorte,
+          }))
+          setFotoMexida(true)
+        }}
+        aoFechar={() => setAjustando(null)}
+      />
     </AppShell>
   )
 }
@@ -501,14 +596,6 @@ function TrocarSenha() {
   return (
     <form className="config__bloco vidro" onSubmit={enviar} noValidate>
       <h2 className="config__titulo">Senha</h2>
-
-      {user?.senhaTemporaria && (
-        <p className="config__alerta" role="alert">
-          {user?.outlook
-            ? 'Você acabou de vincular o Outlook. Troque a senha do site para a MESMA senha do Outlook — assim você não confunde as duas.'
-            : 'Você ainda está com a senha padrão do primeiro acesso. Troque agora.'}
-        </p>
-      )}
 
       <div className="config__grade">
         <CampoTexto

@@ -473,10 +473,17 @@
 
 /* ---------------- Conteudo ---------------- */
 
+/* Coluna: as telas continuam com a altura do proprio conteudo, porque
+   um filho de flex so cresce se ele pedir (`flex: 1`). Quem pede e a
+   tela de Concluidas, que precisa espalhar os doze meses pela altura
+   inteira — o resto nao sente diferenca. */
 .shell__conteudo {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   margin-top: 18px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ---------------- Responsivo ---------------- */
@@ -623,6 +630,7 @@
 .shell__erro button:hover {
   opacity: 1;
 }
+
 
 /* o menu do avatar abre para a direita da coluna da bolha */
 .euzinho__menu {

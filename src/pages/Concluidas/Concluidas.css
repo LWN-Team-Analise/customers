@@ -1,7 +1,13 @@
+/* A tela ocupa a altura inteira: os doze meses se espalham por ela em
+   vez de virar uma faixa de botoes no topo com o resto da pagina
+   vazio. Quem cresce e o calendario (`flex: 1` la embaixo); o titulo e
+   a linha do ano ficam com a altura deles. */
 .concluidas {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
 }
 
 .concluidas__topo {
@@ -99,11 +105,21 @@
    diz alguma coisa, e a grade fixa deixa a leitura sempre no mesmo lugar
    de um ano para o outro. */
 
+/* Quatro colunas por tres linhas, e as duas medidas em `1fr`: a grade
+   preenche o que sobra da tela na largura E na altura. Antes eram seis
+   colunas de altura fixa — uma tira no alto da pagina.
+
+   `minmax(0, 1fr)` nas linhas, e nao `1fr` puro: sem o minimo zero, a
+   linha nunca encolhe abaixo do conteudo e a grade estoura a tela em
+   janela baixa. */
 .calendario {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
-  margin-bottom: 18px;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, minmax(84px, 1fr));
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 4px;
 }
 
 .calmes {
@@ -130,14 +146,16 @@
   background: var(--vidro-fundo-forte);
 }
 
+/* com o card maior, o texto acompanha — mas com teto, para nao virar
+   um numero gigante numa tela de 4K */
 .calmes__nome {
-  font-size: 0.76rem;
+  font-size: clamp(0.76rem, 1.1vw, 0.95rem);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .calmes__quantas {
-  font-size: 1.35rem;
+  font-size: clamp(1.35rem, 3vw, 2.4rem);
   font-weight: 800;
   line-height: 1;
   color: var(--text-strong);
@@ -188,48 +206,15 @@
   color: var(--btn-fg);
 }
 
-/* ---------------- O mês aberto ---------------- */
+/* ---------------- O mês aberto, dentro do pop-up ----------------
+
+   O titulo e o resumo do mes agora sao o cabecalho do proprio pop-up
+   (Modal), entao aqui sobra so a lista. */
 
 .mesaberto {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  animation: mes-abre var(--dur-base) var(--ease-out);
-}
-
-@keyframes mes-abre {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mesaberto {
-    animation: none;
-  }
-}
-
-.mesaberto__topo {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-.mesaberto__titulo {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text-strong);
-}
-
-.mesaberto__resumo {
-  margin-left: auto;
-  font-size: 0.8rem;
-  color: var(--text-muted);
 }
 
 /* ---------------- Padrão e emergência, separados ----------------
@@ -282,21 +267,24 @@
 
 @media (max-width: 720px) {
   .calendario {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, minmax(76px, 1fr));
   }
 }
 
 @media (max-width: 460px) {
   .calendario {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(6, minmax(68px, 1fr));
   }
 }
+
 .mes__obras {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 0;
-  padding: 0 12px 12px;
+  padding: 0;
   list-style: none;
 }
 

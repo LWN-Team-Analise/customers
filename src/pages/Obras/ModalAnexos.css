@@ -152,3 +152,86 @@
   color: #fff;
   filter: brightness(1.06);
 }
+
+/* ============================================================
+   Os documentos, separados por SETOR
+
+   Cada seção corre na cor do cargo dela. O botão de anexar existe só
+   na do seu setor — nas outras não há botão nenhum, porque um botão
+   desabilitado por seção encheria a caixa de ações que ninguém pode
+   usar. Baixar, esse vale em todas.
+   ============================================================ */
+
+.anexos__setor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+}
+
+/* o seu setor ganha o fio de cor na borda: é a única seção em que há
+   o que fazer, e ela precisa se achar de relance */
+.anexos__setor[data-meu='sim'] {
+  border-color: color-mix(in srgb, var(--setor-cor) 45%, transparent);
+  background: color-mix(in srgb, var(--setor-cor) 7%, transparent);
+}
+
+.anexos__setortopo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.anexos__setornome {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--setor-cor);
+}
+
+.anexos__setornome::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--setor-cor);
+}
+
+.anexos__conta {
+  flex-shrink: 0;
+  min-width: 22px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* dentro da seção o botão de anexar é pequeno: ele não é mais a ação
+   principal da caixa, é a ação daquele setor */
+.anexos__setor .anexos__novo {
+  width: auto;
+  flex-shrink: 0;
+  padding: 6px 13px;
+  font-size: 0.76rem;
+}
+
+.anexos__setor .anexos__vazio {
+  margin: 0;
+  padding: 4px 0 2px;
+  font-size: 0.78rem;
+  text-align: left;
+}

@@ -38,8 +38,16 @@ const VAZIO = {
  *
  * Duas datas:
  *   Data de inicio     — ja vem preenchida com hoje;
- *   Data de conclusao  — quando a obra deve/foi entregue; pode ficar
- *                        em branco enquanto ninguem souber.
+ *   Data de conclusao  — quando a obra deve/foi entregue. Na obra
+ *                        PADRAO pode ficar em branco enquanto ninguem
+ *                        souber; na EMERGENCIA e obrigatoria.
+ *
+ * Emergencia sem prazo e uma contradicao: se nao ha data ate a qual
+ * aquilo precisa estar resolvido, o que existe e uma obra urgente — e
+ * urgente ja e a prioridade alta da obra padrao. Fora isso, e o prazo
+ * que faz a obra aparecer como atrasada na pagina inicial e entrar na
+ * conta de atraso do painel: sem ele a emergencia seria a unica que
+ * nunca cobra ninguem.
  *
  * Emergencia nao escolhe prioridade: e sempre alta. A tela mostra a
  * pastilha travada, e o banco garante o mesmo por gatilho.
@@ -102,6 +110,19 @@ export default function ModalObra({
     if (!form.proposta.trim()) novosErros.proposta = 'Informe o n° da proposta.'
     /* a descricao NAO entra aqui: e opcional de propósito */
     if (!form.dataInicio) novosErros.dataInicio = 'Informe a data de início.'
+
+    /* Na EMERGENCIA a data de conclusao e obrigatoria.
+       Emergencia sem prazo e uma contradicao: se nao ha uma data ate a
+       qual aquilo precisa estar resolvido, o que existe e uma obra
+       urgente, e urgente ja e a prioridade alta da obra padrao. E e o
+       prazo que faz a obra aparecer como atrasada na pagina inicial e
+       entrar na conta de atraso do painel — sem ele a emergencia e a
+       unica que nunca cobra ninguem. Na obra padrao ele continua
+       opcional: ali a data as vezes so se sabe depois. */
+    if (emergencia && !form.dataConclusao) {
+      novosErros.dataConclusao = 'Obra de emergência precisa de uma data de conclusão.'
+    }
+
     /* conclusao antes do inicio quase sempre e dedo trocado no teclado */
     if (form.dataConclusao && form.dataConclusao < form.dataInicio) {
       novosErros.dataConclusao = 'A conclusão não pode ser antes do início.'
@@ -144,7 +165,7 @@ export default function ModalObra({
     ? 'O que mudar aqui fica registrado com o seu nome e a hora.'
     : emergencia
       ? 'Entra no quadro em vermelho, com prioridade alta e todas as etapas liberadas.'
-      : 'Começa na 1ª etapa, com o comercial.'
+      : undefined
 
   return (
     <Modal aberto={aberto} aoFechar={aoFechar} titulo={titulo} subtitulo={subtitulo} largura={560}>
@@ -192,7 +213,6 @@ export default function ModalObra({
           value={form.descricao}
           onChange={mudar('descricao')}
           erro={erros.descricao}
-          dica="Opcional — a obra já é identificada pela proposta e pelo cliente."
         />
 
         {/* emergencia nao escolhe: a prioridade e alta e nao muda */}
@@ -200,11 +220,14 @@ export default function ModalObra({
           <div className="campo">
             <span className="campo__rotulo">Prioridade</span>
             <div className="pastilhas">
-              <span className="pastilha is-atual is-travada" data-tom="alta">
-                Alta
+              {/* "Urgente", e não "Alta": no banco a emergência continua
+                  sendo alta (é o gatilho que garante), mas "Alta" não
+                  distinguia nada — a obra padrão também pode ser alta.
+                  Urgente é a palavra que só a emergência usa. */}
+              <span className="pastilha is-atual is-travada" data-tom="urgente">
+                Urgente
               </span>
             </div>
-            <span className="campo__nota">Toda obra de emergência é prioridade alta.</span>
           </div>
         ) : (
           <CampoPastilhas
@@ -222,16 +245,42 @@ export default function ModalObra({
             value={form.dataInicio}
             onChange={mudar('dataInicio')}
             erro={erros.dataInicio}
-            dica={editando ? undefined : 'Vem preenchida com hoje.'}
           />
-          <CampoTexto
-            rotulo="Data de conclusão"
-            type="date"
-            value={form.dataConclusao}
-            onChange={mudar('dataConclusao')}
-            erro={erros.dataConclusao}
-            dica="Opcional — dá para preencher depois."
-          />
+          {/* O mesmo (!) da tela da obra, aqui dentro do formulário:
+              obra padrão que já existe e continua sem data de
+              conclusão. É o campo ao lado que resolve, então aqui ele
+              é só o sinal — não leva a lugar nenhum.
+
+              Só na EDIÇÃO. Numa obra nascendo o campo está vazio por
+              definição, e piscar em todo cadastro novo ensinaria a
+              ignorar o sinal justamente onde ele importa. */}
+          <div className="pendencia__caixa">
+            <CampoTexto
+              rotulo={emergencia ? 'Data de conclusão *' : 'Data de conclusão'}
+              type="date"
+              required={emergencia}
+              min={form.dataInicio || undefined}
+              value={form.dataConclusao}
+              onChange={mudar('dataConclusao')}
+              erro={erros.dataConclusao}
+              dica={
+                emergencia
+                  ? 'Obrigatória na emergência: é o prazo que a cobrança usa.'
+                  : undefined
+              }
+            />
+
+            {editando && !emergencia && !form.dataConclusao && (
+              <span
+                className="pendencia pendencia--parada"
+                title="Esta obra está sem data de conclusão. Sem prazo ela nunca aparece como atrasada."
+                role="img"
+                aria-label="Pendente: esta obra está sem data de conclusão"
+              >
+                !
+              </span>
+            )}
+          </div>
         </div>
 
         {erros.geral && (
@@ -270,7 +319,7 @@ export default function ModalObra({
             <dd>{emergencia ? 'Emergência' : 'Padrão'}</dd>
 
             <dt>Prioridade</dt>
-            <dd>{rotuloDaPrioridade(prioridade)}</dd>
+            <dd>{emergencia ? 'Urgente' : rotuloDaPrioridade(prioridade)}</dd>
 
             <dt>Descrição</dt>
             <dd>{form.descricao.trim() || <em>sem descrição</em>}</dd>
