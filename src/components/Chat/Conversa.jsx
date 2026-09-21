@@ -157,15 +157,12 @@ export default function Conversa({
     fimDaLista.current?.scrollIntoView({ block: 'end' })
   }, [aberto, mensagens.length])
 
-  /* ---------------- mencao com @ ---------------- */
 
   const aoDigitar = (evento) => {
     const valor = evento.target.value
     setTexto(valor)
     setErro('')
 
-    /* olha so o pedaco entre o ultimo @ e o cursor: se tiver espaco no
-       meio, a pessoa ja passou da mencao e a lista fecha */
     const ateOCursor = valor.slice(0, evento.target.selectionStart)
     const arroba = ateOCursor.lastIndexOf('@')
     if (arroba === -1) {

@@ -554,16 +554,32 @@
     white-space: nowrap;
   }
 
-  /* no celular a logo sai da tela e o avatar entra na faixa de baixo */
+  /* no celular a logo sai da tela: o topo e pequeno demais para marca
+     e saudacao ao mesmo tempo */
   .marca {
     display: none;
   }
 
+  /* O avatar sobe para o alto, a direita.
+
+     Com `position: static` ele voltava para o fluxo do .shell — que no
+     celular empilha — e pousava SOZINHO no canto de cima a esquerda,
+     antes da barra, com cara de peca esquecida. Fixo no alto a direita
+     ele fica onde todo aplicativo de celular poe a conta, e a barra
+     ganha o recuo para o sino nao passar por baixo dele. */
   .euzinho {
-    position: static;
+    top: 20px;
+    right: 14px;
+    bottom: auto;
+    left: auto;
+    width: auto;
+    z-index: 22;
   }
 
+  /* o menu do avatar agora desce, e nao sobe: nao ha tela acima dele */
   .euzinho__menu {
+    top: calc(100% + 8px);
+    bottom: auto;
     left: auto;
     right: 0;
   }
@@ -576,7 +592,9 @@
     top: 14px;
     flex-wrap: wrap;
     border-radius: var(--radius-lg);
-    padding: 12px;
+    /* o recuo a direita e o lugar do avatar, que flutua por cima da
+       barra: sem ele o sino fica por baixo do rosto de quem esta logado */
+    padding: 12px 58px 12px 12px;
   }
 
   .omni {
@@ -867,6 +885,14 @@
 }
 
 .bolhachat__menu {
+  /* Ancorado ao botao, e nao empilhado com ele.
+     Empilhado, abrir o menu mudava a ALTURA do container — e o container
+     e justamente o que o arrasto mede para saber onde o botao esta. O
+     botao pulava ao abrir o menu, e o arrasto comecava torto. Fora do
+     fluxo, o container e do tamanho do botao o tempo todo. */
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -914,4 +940,25 @@
     width: 48px;
     height: 48px;
   }
+}
+
+/* ---------------- a bolha arrastada ----------------
+   Arrastada para o topo, o menu nasceria para cima, fora da tela;
+   arrastada para a esquerda, nasceria para a esquerda, tambem fora. As
+   duas classes viram o menu para o lado que ainda tem tela. */
+.bolhachat.is-parabaixo .bolhachat__menu {
+  bottom: auto;
+  top: calc(100% + 10px);
+}
+
+.bolhachat.is-esquerda .bolhachat__menu {
+  right: auto;
+  left: 0;
+}
+
+.bolhachat__botao {
+  /* o arrasto nao pode virar rolagem no celular nem selecao no desktop */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }

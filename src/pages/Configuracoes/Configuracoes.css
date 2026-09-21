@@ -345,3 +345,28 @@
     width: 100%;
   }
 }
+
+/* ---------------- o bloco apontado pela ilha ----------------
+   Chegar rolando ate o bloco certo nao basta: a tela inteira e feita
+   de blocos iguais, e a pessoa nao sabe em qual deles parou. O anel
+   pisca duas vezes e sai — marca o lugar sem virar decoracao. */
+.config__bloco.is-aceso {
+  animation: config-aceso 1.2s var(--ease-out) 2;
+}
+
+@keyframes config-aceso {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  35% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .config__bloco.is-aceso {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}

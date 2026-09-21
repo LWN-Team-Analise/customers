@@ -38,6 +38,15 @@ const Sino = () => (
   </svg>
 )
 
+/* o relogio com a seta para tras: o historico das observacoes */
+const Historico = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 4v5h5" />
+    <path d="M3.1 13.2A9 9 0 1 0 6.1 6.1L3 9" />
+    <path d="M12 8v4.3l3.4 1.9" />
+  </svg>
+)
+
 /* o icone da opcao "Adicionar observação" no botao flutuante */
 const NotaGlifo = () => (
   <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -52,6 +61,7 @@ export default function Obras() {
     clientes,
     cargos,
     observacoesQuadro,
+    historicoObservacoes,
     clientePorId,
     pessoaPorId,
     cargoPorChave,
@@ -70,7 +80,9 @@ export default function Obras() {
   const [modalObra, setModalObra] = useState(null) // 'padrao' | 'emergencia' | null
   const [modalMembros, setModalMembros] = useState(false)
   const [modalSetores, setModalSetores] = useState(false)
-  const [modalObs, setModalObs] = useState(false)
+  /* qual aba do pop-up de observacoes abrir: 'atuais', 'historico' ou
+     null quando ele esta fechado */
+  const [modalObs, setModalObs] = useState(null)
   const [recado, setRecado] = useState('')
   /* o recado de "acabei a minha parte desta etapa". Ele mora AQUI, e
      nao no card: quando a etapa fecha, a obra troca de grupo no quadro
@@ -324,7 +336,7 @@ export default function Obras() {
           id: 'obs-quadro',
           rotulo: 'Adicionar observação',
           Glifo: NotaGlifo,
-          aoClicar: () => setModalObs(true),
+          aoClicar: () => setModalObs('atuais'),
         },
       ]}
     >
@@ -650,10 +662,41 @@ export default function Obras() {
             <header className="quadroobs__topo">
               <h2 className="quadroobs__titulo">Observações</h2>
               <span className="quadroobs__contagem">{observacoesQuadro.length}</span>
+              {/* O historico e o lugar da observacao que TINHA duracao e
+                  venceu: ela sai do painel sozinha, mas nao e apagada.
+                  Sem esta porta, o unico jeito de chegar la era abrir o
+                  pop-up por outro motivo e reparar na aba.
+
+                  O botao fica no lugar mesmo com o historico vazio —
+                  cabecalho que muda de forma e cabecalho que ninguem
+                  aprende. Vazio, ele abre a aba que explica em uma linha
+                  o que entra ali.
+
+                  So existe para as observacoes do QUADRO: as de dentro
+                  de uma obra nao tem duracao, entao nunca vencem e nao
+                  tem historico para abrir. */}
+              <button
+                type="button"
+                className={`quadroobs__historico ${
+                  historicoObservacoes.length > 0 ? 'is-contando' : ''
+                }`.trim()}
+                onClick={() => setModalObs('historico')}
+                title="Histórico de observações"
+                aria-label={
+                  historicoObservacoes.length === 0
+                    ? 'Histórico de observações'
+                    : historicoObservacoes.length === 1
+                      ? 'Histórico: 1 observação vencida'
+                      : `Histórico: ${historicoObservacoes.length} observações vencidas`
+                }
+              >
+                <Historico />
+                {historicoObservacoes.length > 0 && <em>{historicoObservacoes.length}</em>}
+              </button>
               <button
                 type="button"
                 className="quadroobs__mais"
-                onClick={() => setModalObs(true)}
+                onClick={() => setModalObs('atuais')}
                 title="Nova observação"
                 aria-label="Nova observação"
               >
@@ -684,7 +727,7 @@ export default function Obras() {
                     <button
                       type="button"
                       className="quadroobs__ver"
-                      onClick={() => setModalObs(true)}
+                      onClick={() => setModalObs('atuais')}
                     >
                       Ver as {observacoesQuadro.length} observações
                     </button>
@@ -721,8 +764,9 @@ export default function Obras() {
       />
 
       <ModalObservacoes
-        aberto={modalObs}
-        aoFechar={() => setModalObs(false)}
+        aberto={modalObs !== null}
+        abaInicial={modalObs ?? 'atuais'}
+        aoFechar={() => setModalObs(null)}
         autor={user}
       />
     </AppShell>

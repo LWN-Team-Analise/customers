@@ -258,7 +258,14 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   /* O botão "Concluir obra" só existe quando as três valem:
      a obra está aberta, a barra chegou a 100% (nenhum check em
      aberto) e quem está olhando pode editar obra. Antes disso ele
-     nem aparece — botão desabilitado só faz perguntar por quê. */
+     nem aparece — botão desabilitado só faz perguntar por quê.
+
+     UM argumento, e não dois: este `prontaParaConcluir` é o do
+     CONTEXTO, que já resolve sozinho o roteiro que esta obra
+     enxerga. O do domínio (src/domain/obras.js) tem o mesmo nome e
+     pede (roteiro, obra) — é fácil confundir os dois, e passar o
+     roteiro aqui faz o contexto tratá-lo como se fosse a obra: a
+     resposta vira false para sempre e o botão some. */
   const podeConcluir = podeObra && prontaParaConcluir(obra)
 
   const encerrar = async () => {
@@ -861,7 +868,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         subtitulo={
           editandoObs
             ? 'Ela vai aparecer com a marca de "editada".'
-            : 'Fica registrada com seu nome e o horário.'
+            : undefined
         }
         largura={470}
       >

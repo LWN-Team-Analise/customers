@@ -1,7 +1,7 @@
 import Modal from '@/components/Modal/Modal'
 import Avatar from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
-import { cardConcluido, tituloDaObra } from '@/domain/obras'
+import { cardConcluido, nomeProprioDaEtapa, tituloDaObra } from '@/domain/obras'
 import './ModalMembros.css'
 
 /**
@@ -10,7 +10,7 @@ import './ModalMembros.css'
  * de cada uma e se o setor dela ja fechou aquela etapa.
  */
 export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
-  const { obrasDaPessoa, cargoPorChave, roteiroDaObra, etapaDaObra } = useDados()
+  const { obrasDaPessoa, cargoPorChave, roteiroDaObra, etapaDaObra, rotuloEtapa } = useDados()
 
   return (
     <Modal
@@ -64,15 +64,24 @@ export default function ModalMembros({ aberto, aoFechar, pessoas = [] }) {
                         ? null
                         : meusCards.every((c) => cardConcluido(c, obra.checks))
 
+                    /* "4ª — 4ª Etapa" era o que saia aqui: a etapa sem
+                       nome proprio se chama "4ª Etapa", e o numero na
+                       frente repetia o que o nome ja dizia. Agora o
+                       numero e fixo e o nome so entra quando ele
+                       ACRESCENTA alguma coisa ("4ª · fundação"). */
+                    const proprio = nomeProprioDaEtapa(modelo?.nome, rotuloEtapa(numero))
+
                     return (
                       <li key={obra.id} className="membros__obra">
                         <span className="membros__tipo" data-tipo={obra.tipo} aria-hidden="true" />
+                        {/* a etapa vem ANTES do cliente: e por ela que se
+                            varre a lista procurando quem esta em que ponto */}
+                        <span className="membros__etapa">
+                          {numero}ª{proprio && <em>{proprio.toLowerCase()}</em>}
+                        </span>
                         <span className="membros__nomeobra">
                           {tituloDaObra(obra, cliente)}
                           {obra.descricao && <em>{obra.descricao}</em>}
-                        </span>
-                        <span className="membros__etapa">
-                          {numero}ª — {modelo?.nome?.toLowerCase()}
                         </span>
                         {fechou !== null && (
                           <span

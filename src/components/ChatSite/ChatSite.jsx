@@ -75,7 +75,15 @@ export default function ChatSite({ aberto, aoFechar }) {
   }
 
   return (
-    <Modal aberto={aberto} aoFechar={aoFechar} titulo="Chat da equipe" largura={640}>
+    <Modal
+      aberto={aberto}
+      aoFechar={aoFechar}
+      titulo="Chat da equipe"
+      largura={640}
+      /* o chat e pop-up de morar: quem passa o dia nele escolhe o
+         tamanho uma vez e o sistema lembra */
+      ajustavel="customers.chat-tamanho"
+    >
       <Conversa
         aberto={aberto}
         mensagens={mensagens}

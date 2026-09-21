@@ -7,6 +7,7 @@ import authRouter from './routes/auth.js'
 import equipeRouter from './routes/equipe.js'
 import dadosRouter from './routes/dados.js'
 import roteiroRouter from './routes/roteiro.js'
+import botRouter, { aquecer } from './routes/bot.js'
 
 const app = express()
 const porta = Number(process.env.API_PORT ?? 3001)
@@ -28,6 +29,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/equipe', equipeRouter)
 app.use('/api/dados', dadosRouter)
 app.use('/api/roteiro', roteiroRouter)
+app.use('/api/bot', botRouter)
 
 app.use((erro, _req, res, _next) => {
   /* imagem grande demais chegava aqui como 500 sem explicacao, e a tela
@@ -46,6 +48,9 @@ app.use((erro, _req, res, _next) => {
 
 app.listen(porta, async () => {
   console.log(`[api] ouvindo em http://localhost:${porta}`)
+  /* o modelo do bot entra na memoria agora, sem ninguem esperando: a
+     primeira pergunta do dia custa 50s com ele frio e 7s com ele quente */
+  aquecer()
   /* saber por onde o e-mail sai poupa meia hora de investigacao quando
      o "esqueci minha senha" nao chega */
   const modo = comoEnvia()

@@ -631,3 +631,31 @@
   font-style: italic;
   color: var(--text-faint);
 }
+
+/* ---- a nota no cabeçalho do card ----
+   Fica entre o nome e o setor, encolhida: é um dado de leitura rápida
+   na varredura da lista, e não o assunto do cartão. */
+.cliente__nota {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+}
+
+.cliente__nota strong {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+/* em tela estreita o nome já aperta: a nota perde o fundo e fica só o
+   número com as estrelas */
+@media (max-width: 520px) {
+  .cliente__nota {
+    padding: 0;
+    background: transparent;
+  }
+}

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import Avatar from '@/components/Avatar/Avatar'
-import { CampoArea, CampoTexto } from '@/components/Campo/Campo'
+import { CampoArea, CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
+import { tituloDaObra } from '@/domain/obras'
 import { useDados } from '@/context/DadosContext'
 import { dataBR, dataHora, hojeISO } from '@/utils/formato'
 import './ModalObservacoes.css'
@@ -74,8 +75,13 @@ const paraApi = ({ comPrazo, inicioEm, fimEm }) =>
  *     alguem apagar, como sempre foi;
  *   - a observacao apagada na mao: quem clicou no lixo nao queria mais
  *     ver aquilo, e ressuscitar numa aba seria o contrario do gesto.
+ *
+ * O painel do quadro tem um relogio no topo que abre este pop-up ja no
+ * historico (`abaInicial`). Sem ele, so chegava ao historico quem
+ * abrisse o pop-up por outro motivo e reparasse na aba — e reparar numa
+ * aba nao e um jeito de procurar uma coisa.
  */
-export default function ModalObservacoes({ aberto, aoFechar, autor }) {
+export default function ModalObservacoes({ aberto, abaInicial = 'atuais', aoFechar, autor }) {
   const {
     observacoesQuadro,
     historicoObservacoes,
@@ -83,10 +89,26 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
     adicionarObservacaoQuadro,
     editarObservacaoQuadro,
     removerObservacaoQuadro,
+    adicionarObservacao,
+    obras,
+    clientePorId,
+    concluida,
   } = useDados()
 
-  const [aba, setAba] = useState('atuais')
+  /* as obras que ainda aceitam observação: obra encerrada é registro,
+     e registro não recebe recado novo */
+  const abertas = useMemo(
+    () =>
+      obras
+        .filter((o) => !concluida(o))
+        .map((o) => ({ valor: String(o.id), rotulo: tituloDaObra(o, clientePorId(o.clienteId)) })),
+    [obras, concluida, clientePorId],
+  )
+
+  const [aba, setAba] = useState(abaInicial)
   const [texto, setTexto] = useState('')
+  /* null = a observação é do QUADRO; com id, ela é daquela obra */
+  const [obraAlvo, setObraAlvo] = useState(null)
   const [prazo, setPrazo] = useState(SEM_PRAZO)
   const [erroPrazo, setErroPrazo] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -96,19 +118,36 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
   const [prazoEdicao, setPrazoEdicao] = useState(SEM_PRAZO)
   const [erroEdicao, setErroEdicao] = useState('')
 
+  /* O pop-up nao desmonta ao fechar, entao a aba escolhida na visita
+     passada sobreviveria ate a proxima. Quem clicou no relogio do
+     painel quer o historico AGORA, e nao a aba onde parou ontem —
+     cada abertura recomeca pela aba que o botao pediu. */
+  useEffect(() => {
+    if (aberto) setAba(abaInicial)
+  }, [aberto, abaInicial])
+
   const enviar = async (evento) => {
     evento.preventDefault()
     if (!texto.trim()) return
 
-    const problema = conferirPrazo(prazo)
+    const problema = obraAlvo ? '' : conferirPrazo(prazo)
     setErroPrazo(problema)
     if (problema) return
 
     setSalvando(true)
     try {
-      await adicionarObservacaoQuadro({ texto: texto.trim(), ...paraApi(prazo) })
+      if (obraAlvo) {
+        /* observação DA OBRA: vai para dentro dela e aparece lá — no
+           painel de observações da obra e no card dela. Não passa pelo
+           quadro, e por isso não tem duração: o que vale para uma obra
+           só vale enquanto a obra existir. */
+        await adicionarObservacao(obraAlvo, { texto: texto.trim() })
+      } else {
+        await adicionarObservacaoQuadro({ texto: texto.trim(), ...paraApi(prazo) })
+      }
       setTexto('')
       setPrazo(SEM_PRAZO)
+      setObraAlvo(null)
     } catch {
       /* o recado do erro aparece na faixa do AppShell */
     } finally {
@@ -156,7 +195,6 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Observações do quadro"
-      subtitulo="Recados que valem para as obras em geral. Ficam com seu nome e o horário."
       largura={560}
     >
       <form className="quadroform" onSubmit={enviar}>
@@ -174,7 +212,57 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
           onChange={(e) => setTexto(e.target.value)}
         />
 
-        <Duracao valor={prazo} aoMudar={setPrazo} erro={erroPrazo} />
+        {/* ---- os dois interruptores, lado a lado ----
+            São a mesma pergunta vista de dois lados — onde a observação
+            vive e por quanto tempo —, e por isso ficam na mesma linha:
+            empilhados, cada um parecia uma decisão independente.
+
+            Também são excludentes. Desmarcada, a observação é do quadro,
+            como sempre foi; marcada, ela entra numa obra — e aí a
+            duração se apaga e trava, porque quem manda no tempo dela
+            passa a ser a própria obra. */}
+        <div className="quadroform__dupla">
+          <label className="quadroprazo__marca">
+            <input
+              type="checkbox"
+              checked={obraAlvo !== null}
+              onChange={(e) => {
+                const naObra = e.target.checked
+                setObraAlvo(naObra ? (abertas[0]?.valor ?? '') : null)
+                /* sem isto o prazo digitado antes continuava no estado e
+                   voltava sozinho ao desmarcar a obra */
+                if (naObra) {
+                  setPrazo(SEM_PRAZO)
+                  setErroPrazo('')
+                }
+              }}
+              disabled={abertas.length === 0}
+            />
+            <span>
+              Adicionar observação à obra
+              {abertas.length === 0 && <em> — nenhuma obra aberta</em>}
+            </span>
+          </label>
+
+          <DuracaoMarca valor={prazo} aoMudar={setPrazo} desligado={obraAlvo !== null} />
+        </div>
+
+        {obraAlvo !== null && (
+          <CampoSelecao
+            rotulo="Obra"
+            largo
+            value={obraAlvo}
+            onChange={(e) => setObraAlvo(e.target.value)}
+            opcoes={abertas}
+            vazio="Escolha a obra"
+          />
+        )}
+
+        {obraAlvo === null && prazo.comPrazo && (
+          <div className="quadroprazo">
+            <DuracaoCampos valor={prazo} aoMudar={setPrazo} erro={erroPrazo} />
+          </div>
+        )}
 
         <div className="quadroform__acao">
           <Button type="submit" disabled={!texto.trim()} loading={salvando}>
@@ -197,7 +285,10 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
           <em>{observacoesQuadro.length}</em>
         </button>
 
-        {historicoObservacoes.length > 0 && (
+        {/* aberto pelo relogio do painel, o historico aparece mesmo
+            vazio: a aba e a resposta a pergunta que o clique fez, e o
+            texto dela e o que explica por que nao ha nada dentro */}
+        {(historicoObservacoes.length > 0 || aba === 'historico') && (
           <button
             type="button"
             role="tab"
@@ -206,7 +297,7 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
             onClick={() => setAba('historico')}
           >
             Histórico
-            <em>{historicoObservacoes.length}</em>
+            {historicoObservacoes.length > 0 && <em>{historicoObservacoes.length}</em>}
           </button>
         )}
       </div>
@@ -272,7 +363,7 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
                     {o.fimEm && (
                       <p className="quadrolista__prazo">
                         <Relogio />
-                        {vencida ? 'Valeu de' : 'De'} {dataBR(o.inicioEm)} até {dataBR(o.fimEm)}
+                        De {dataBR(o.inicioEm)} até {dataBR(o.fimEm)}
                       </p>
                     )}
                   </>
@@ -281,15 +372,21 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
 
               {minha && !emEdicao && (
                 <span className="quadrolista__ferramentas">
-                  <button
-                    type="button"
-                    className="quadrolista__apagar"
-                    onClick={() => abrirEdicao(o)}
-                    aria-label={`Editar a sua observação de ${dataHora(o.enviadaEm)}`}
-                    title="Editar"
-                  >
-                    <Lapis />
-                  </button>
+                  {/* no HISTÓRICO não se edita: aquilo já valeu e já
+                      saiu de cena, e reescrever o passado é mudar o que
+                      a equipe leu na época. O que resta é apagar, para
+                      quem não quer mais aquilo guardado. */}
+                  {!vencida && (
+                    <button
+                      type="button"
+                      className="quadrolista__apagar"
+                      onClick={() => abrirEdicao(o)}
+                      aria-label={`Editar a sua observação de ${dataHora(o.enviadaEm)}`}
+                      title="Editar"
+                    >
+                      <Lapis />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="quadrolista__apagar"
@@ -326,7 +423,10 @@ export default function ModalObservacoes({ aberto, aoFechar, autor }) {
  * conferencia no envio e a segunda, para quem digita a data na mao, e
  * a constraint do banco e a terceira.
  */
-function Duracao({ valor, aoMudar, erro }) {
+/* A caixinha sozinha. Ela sai de dentro da moldura para poder ficar ao
+   lado do "Adicionar observação à obra" no formulário novo — no pop-up
+   de edição continua onde sempre esteve, dentro do <Duracao>. */
+export function DuracaoMarca({ valor, aoMudar, desligado = false }) {
   const marcar = (marcado) =>
     aoMudar(
       marcado
@@ -339,45 +439,57 @@ function Duracao({ valor, aoMudar, erro }) {
     )
 
   return (
-    <div className="quadroprazo">
-      <label className="quadroprazo__marca">
-        <input
-          type="checkbox"
-          checked={valor.comPrazo}
-          onChange={(e) => marcar(e.target.checked)}
+    <label className="quadroprazo__marca">
+      <input
+        type="checkbox"
+        checked={valor.comPrazo && !desligado}
+        onChange={(e) => marcar(e.target.checked)}
+        disabled={desligado}
+      />
+      <span>Adicionar duração</span>
+    </label>
+  )
+}
+
+/* Os dois calendários e o recado embaixo deles. */
+function DuracaoCampos({ valor, aoMudar, erro }) {
+  return (
+    <>
+      <div className="quadroprazo__datas">
+        <CampoTexto
+          rotulo="De"
+          type="date"
+          required
+          value={valor.inicioEm}
+          max={valor.fimEm || undefined}
+          onChange={(e) => aoMudar({ ...valor, inicioEm: e.target.value })}
         />
-        <span>Adicionar duração</span>
-      </label>
+        <CampoTexto
+          rotulo="Até"
+          type="date"
+          required
+          value={valor.fimEm}
+          min={valor.inicioEm || undefined}
+          onChange={(e) => aoMudar({ ...valor, fimEm: e.target.value })}
+        />
+      </div>
 
-      {valor.comPrazo && (
-        <>
-          <div className="quadroprazo__datas">
-            <CampoTexto
-              rotulo="De"
-              type="date"
-              required
-              value={valor.inicioEm}
-              max={valor.fimEm || undefined}
-              onChange={(e) => aoMudar({ ...valor, inicioEm: e.target.value })}
-            />
-            <CampoTexto
-              rotulo="Até"
-              type="date"
-              required
-              value={valor.fimEm}
-              min={valor.inicioEm || undefined}
-              onChange={(e) => aoMudar({ ...valor, fimEm: e.target.value })}
-            />
-          </div>
+      <p
+        className={`quadroprazo__nota ${erro ? 'is-erro' : ''}`.trim()}
+        role={erro ? 'alert' : undefined}
+      >
+        {erro || 'Depois da data final a observação sai do quadro e vai para o histórico.'}
+      </p>
+    </>
+  )
+}
 
-          <p
-            className={`quadroprazo__nota ${erro ? 'is-erro' : ''}`.trim()}
-            role={erro ? 'alert' : undefined}
-          >
-            {erro || 'Depois da data final a observação sai do quadro e vai para o histórico.'}
-          </p>
-        </>
-      )}
+/* O conjunto, para a edição: moldura, caixinha e, marcada, os campos. */
+function Duracao({ valor, aoMudar, erro }) {
+  return (
+    <div className="quadroprazo">
+      <DuracaoMarca valor={valor} aoMudar={aoMudar} />
+      {valor.comPrazo && <DuracaoCampos valor={valor} aoMudar={aoMudar} erro={erro} />}
     </div>
   )
 }

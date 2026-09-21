@@ -96,12 +96,13 @@ function emTempo(dias) {
  * O painel olha a EMPRESA INTEIRA, e nao so o setor de quem esta
  * vendo: uma media de uma pessoa so nao e media de nada.
  */
-export default function Painel({ mes }) {
+export default function Painel({ mes, passo = 'mes' }) {
   const { obras, equipe, concluida, roteiroDaObra, clientePorId, nomeDoCargo, corDoCargo } =
     useDados()
 
   /* o grafico de resposta troca de eixo: por setor ou por pessoa */
   const [eixo, setEixo] = useState('setor')
+
 
   /**
    * O mes escolhido nas setas do topo, como 'AAAA-MM'.
@@ -124,20 +125,54 @@ export default function Painel({ mes }) {
    * Os cartoes que nao sao linha (a rosca, os numeros de cima)
    * continuam olhando so o mes escolhido.
    */
-  const janela = useMemo(() => {
-    const meses = []
-    for (let n = 5; n >= 0; n -= 1) {
-      const d = new Date(mes.ano, mes.mes - n, 1)
-      meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    }
-    return meses
-  }, [mes.ano, mes.mes])
+  /**
+   * As colunas do painel — e o que cada uma significa.
+   *
+   * No passo MENSAL são os dias do mês escolhido: o mês corrente vai
+   * até hoje (dia que ainda não chegou não é dado, é espaço vazio) e
+   * um mês passado vai até o último dia dele.
+   *
+   * No passo ANUAL são os meses de janeiro até o mês escolhido. Não
+   * é o ano inteiro de propósito: dezembro em março seria uma fileira
+   * de nada no fim do gráfico.
+   */
+  const fatias = useMemo(() => {
+    const doisDigitos = (n) => String(n).padStart(2, '0')
 
+    if (passo === 'ano') {
+      return Array.from({ length: mes.mes + 1 }, (_, i) => `${mes.ano}-${doisDigitos(i + 1)}`)
+    }
+
+    const ultimo = mes.atual
+      ? new Date().getDate()
+      : new Date(mes.ano, mes.mes + 1, 0).getDate()
+    return Array.from(
+      { length: ultimo },
+      (_, i) => `${mes.ano}-${doisDigitos(mes.mes + 1)}-${doisDigitos(i + 1)}`,
+    )
+  }, [passo, mes.ano, mes.mes, mes.atual])
   /** 'AAAA-MM' -> 'set/26', que e o que cabe embaixo de um ponto. */
   const rotuloMes = (chave) => {
     const [ano, m] = chave.split('-')
     return `${MESES_CURTOS[Number(m) - 1]}/${ano.slice(2)}`
   }
+
+  /* 'AAAA-MM-DD' -> '11'. Só o número do dia: o mês já está na seta
+     em cima, e repeti-lo trinta vezes embaixo do gráfico é ruído.
+     Quem decide se algum rótulo precisa ser pulado é o gráfico, que
+     sabe a largura que tem. */
+  const rotuloDia = (chave) => chave.slice(8)
+
+  /** o rótulo certo para o passo em vigor */
+  const rotuloDaFatia = (chave, i) =>
+    passo === 'ano' ? rotuloMes(chave) : rotuloDia(chave, i)
+
+  /** a chave do carimbo no passo em vigor: o mês ou o dia.
+      Os dois passam por `soDia`, que nivela timestamp e data no
+      calendário LOCAL — sem ele, uma marcação da noite cairia no dia
+      seguinte por causa do fuso. */
+  const fatiaDoCarimbo = (carimbo) =>
+    passo === 'ano' ? mesDoCarimbo(carimbo) : soDia(carimbo)
 
   const fechadas = useMemo(
     () => obras.filter((o) => concluida(o) && noMes(o.concluidaEm)),
@@ -183,13 +218,13 @@ export default function Painel({ mes }) {
      --------------------------------------------------------- */
   const iniciadas = useMemo(
     () =>
-      janela.map((chave) => ({
+      fatias.map((chave, i) => ({
         chave,
-        rotulo: rotuloMes(chave),
-        valor: obras.filter((o) => mesDoCarimbo(o.dataInicio ?? o.criadoEm) === chave).length,
+        rotulo: rotuloDaFatia(chave, i),
+        valor: obras.filter((o) => fatiaDoCarimbo(o.dataInicio ?? o.criadoEm) === chave).length,
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [obras, janela],
+    [obras, fatias, passo],
   )
 
   /* ---------------------------------------------------------
@@ -235,8 +270,8 @@ export default function Painel({ mes }) {
            marcacoes de fora da janela aqui daria distancias erradas.
            O que o mes decide e em qual COLUNA do grafico o intervalo
            cai, e nao se ele existe. */
-        const quando = mesDoCarimbo(m.feitoEm)
-        if (!janela.includes(quando)) return
+        const quando = fatiaDoCarimbo(m.feitoEm)
+        if (!fatias.includes(quando)) return
 
         const dias = horas / 24
         const pessoa = String(m.feitoPor)
@@ -255,7 +290,7 @@ export default function Painel({ mes }) {
         .map(([chave, porMes]) => ({
           chave,
           ...resolve(chave),
-          pontos: janela.map((m) => (porMes[m] ? media(porMes[m]) : null)),
+          pontos: fatias.map((f) => (porMes[f] ? media(porMes[f]) : null)),
           texto: (v) => emTempo(v),
           /* ordena pela media geral: a serie mais lenta vem primeiro na
              legenda, que e por onde se comeca a ler */
@@ -274,7 +309,7 @@ export default function Painel({ mes }) {
       }),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [obras, roteiroDaObra, equipe, nomeDoCargo, corDoCargo, mes.chave])
+  }, [obras, roteiroDaObra, equipe, nomeDoCargo, corDoCargo, mes.chave, passo, fatias])
 
   const lista = resposta[eixo] ?? []
 
@@ -367,7 +402,8 @@ export default function Painel({ mes }) {
       eixo={eixo}
       setEixo={setEixo}
       lista={lista}
-      eixoMeses={janela.map(rotuloMes)}
+      eixoMeses={fatias.map(rotuloDaFatia)}
+      passo={passo}
       iniciadas={iniciadas}
       atrasoLinha={serieDeDesvio(atrasadas, 'var(--gr-ruim)', 'Atraso')}
       adiantoLinha={serieDeDesvio(adiantadas, 'var(--gr-bom)', 'Adiantamento')}
@@ -396,6 +432,7 @@ export function PainelVista({
   setEixo,
   lista,
   eixoMeses,
+  passo,
   iniciadas,
   atrasoLinha,
   adiantoLinha,
@@ -474,7 +511,9 @@ export function PainelVista({
           nota={
             lista.length === 0
               ? 'nenhum check marcado ainda'
-              : `entre ${lista.length} ${eixo === 'setor' ? 'setores' : 'pessoas'} · 6 meses`
+              : `entre ${lista.length} ${eixo === 'setor' ? 'setores' : 'pessoas'} · ${
+                  passo === 'ano' ? 'no ano' : 'no mês, dia a dia'
+                }`
           }
         />
       </div>
@@ -495,21 +534,23 @@ export function PainelVista({
               <h2 className="cartao__titulo">Tempo de resposta</h2>
             </div>
 
-            <div className="escopo escopo--peq" role="group" aria-label="Agrupar por">
-              <button
-                type="button"
-                className={eixo === 'setor' ? 'is-atual' : ''}
-                onClick={() => setEixo('setor')}
-              >
-                Setor
-              </button>
-              <button
-                type="button"
-                className={eixo === 'pessoa' ? 'is-atual' : ''}
-                onClick={() => setEixo('pessoa')}
-              >
-                Pessoa
-              </button>
+            <div className="cartao__escolhas">
+              <div className="escopo escopo--peq" role="group" aria-label="Agrupar por">
+                <button
+                  type="button"
+                  className={eixo === 'setor' ? 'is-atual' : ''}
+                  onClick={() => setEixo('setor')}
+                >
+                  Setor
+                </button>
+                <button
+                  type="button"
+                  className={eixo === 'pessoa' ? 'is-atual' : ''}
+                  onClick={() => setEixo('pessoa')}
+                >
+                  Pessoa
+                </button>
+              </div>
             </div>
           </header>
 
@@ -519,7 +560,14 @@ export function PainelVista({
                 Nenhum check marcado ainda — sem marcação não há tempo para medir.
               </p>
             ) : (
-              <Linha series={lista} eixoX={eixoMeses} unidade="dias" alturaTotal={250} />
+              <Linha
+                series={lista}
+                eixoX={eixoMeses}
+                unidade="dias"
+                alturaTotal={250}
+                /* dia é um número de dois dígitos; mês é "set/26" */
+                larguraRotulo={passo === 'ano' ? 38 : 16}
+              />
             )}
           </div>
         </section>
@@ -554,7 +602,9 @@ export function PainelVista({
         <section className="cartao vidro">
           <header className="cartao__topo">
             <div>
-              <h2 className="cartao__titulo">Obras iniciadas por mês</h2>
+              <h2 className="cartao__titulo">
+                Obras iniciadas {passo === 'ano' ? 'por mês' : 'por dia'}
+              </h2>
             </div>
           </header>
 

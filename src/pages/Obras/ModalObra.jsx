@@ -163,9 +163,7 @@ export default function ModalObra({
 
   const subtitulo = editando
     ? 'O que mudar aqui fica registrado com o seu nome e a hora.'
-    : emergencia
-      ? 'Entra no quadro em vermelho, com prioridade alta e todas as etapas liberadas.'
-      : undefined
+    : undefined
 
   return (
     <Modal aberto={aberto} aoFechar={aoFechar} titulo={titulo} subtitulo={subtitulo} largura={560}>
@@ -263,11 +261,6 @@ export default function ModalObra({
               value={form.dataConclusao}
               onChange={mudar('dataConclusao')}
               erro={erros.dataConclusao}
-              dica={
-                emergencia
-                  ? 'Obrigatória na emergência: é o prazo que a cobrança usa.'
-                  : undefined
-              }
             />
 
             {editando && !emergencia && !form.dataConclusao && (

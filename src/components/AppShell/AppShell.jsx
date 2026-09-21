@@ -6,7 +6,10 @@ import { useDados } from '@/context/DadosContext'
 import Avatar from '@/components/Avatar/Avatar'
 import ParticleInterlock from '@/components/ParticleInterlock/ParticleInterlock'
 import ChatSite from '@/components/ChatSite/ChatSite'
+import IlhaAviso from '@/components/IlhaAviso/IlhaAviso'
+import ChatBot from '@/components/ChatBot/ChatBot'
 import Confirma from '@/components/Confirma/Confirma'
+import { ehIphone } from '@/utils/dispositivo'
 import { primeiroNome, saudacao } from '@/utils/pessoa'
 import { dataHora } from '@/utils/formato'
 /* O nome do arquivo diz para QUAL FUNDO a logo foi feita:
@@ -93,6 +96,26 @@ const Icone = {
   chatPequeno: () => (
     <svg viewBox="0 0 24 24" width="17" height="17" {...traco}>
       <path d="M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
+  robo: () => (
+    <svg viewBox="0 0 24 24" width="17" height="17" {...traco}>
+      <rect x="4" y="8" width="16" height="11" rx="3" />
+      <path d="M12 4.5V8M9.5 13h.01M14.5 13h.01M9.5 16h5" />
+      <circle cx="12" cy="3.4" r="1.2" />
+    </svg>
+  ),
+  cadeado: () => (
+    <svg viewBox="0 0 24 24" width="16" height="16" {...traco} strokeWidth="1.9">
+      <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.2" />
+      <path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" />
+      <path d="M12 14.4v2.2" />
+    </svg>
+  ),
+  relogio: () => (
+    <svg viewBox="0 0 24 24" width="16" height="16" {...traco} strokeWidth="1.9">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.2V12l3.2 1.9" />
     </svg>
   ),
   sino: () => (
@@ -341,23 +364,68 @@ function Notificacoes() {
   )
 }
 
+/* ---------------- onde o botao mora ----------------
+
+   O canto inferior direito e o padrao, e continua sendo: quem nunca
+   arrastar nunca vai saber que da. Mas o botao flutua POR CIMA da tela,
+   e numa tabela larga ele acaba pousando justo sobre a ultima coluna —
+   dai a vontade de empurrar o botao para o lado, e nao de mudar a
+   tabela de lugar.
+
+   A posicao e guardada como o canto superior esquerdo do botao, em
+   pixels. Guardar "encostado a direita" seria mais elegante, mas o
+   botao pode parar no meio da tela: nao ha borda a que se referir. */
+const CANTO = 'customers.bolhachat-posicao'
+const BORDA = 12
+/* o menu tem ~200px de altura e 210px de largura, contra 54px de botao:
+   ele sobra uns 160px para o lado de fora */
+const MENU_ALTO = 220
+const MENU_SOBRA = 170
+
+function lerCanto() {
+  try {
+    const cru = JSON.parse(localStorage.getItem(CANTO) ?? 'null')
+    if (!cru || typeof cru.x !== 'number' || typeof cru.y !== 'number') return null
+    return cru
+  } catch {
+    return null
+  }
+}
+
+/* a janela encolhe e o botao guardado ficaria do lado de fora, sem
+   volta: todo ponto e trazido para dentro antes de virar estilo */
+function dentroDaTela({ x, y }, larg, alt) {
+  return {
+    x: Math.min(Math.max(BORDA, x), Math.max(BORDA, window.innerWidth - larg - BORDA)),
+    y: Math.min(Math.max(BORDA, y), Math.max(BORDA, window.innerHeight - alt - BORDA)),
+  }
+}
+
 /**
  * O botao redondo do canto inferior direito.
  *
- * Na maioria das telas ele e so o chat da equipe: um clique abre. Na tela
- * de Obras ele vira um "+" com duas opcoes, porque la existe uma segunda
- * coisa a acrescentar (a observacao do quadro) — e um botao que faz duas
- * coisas precisa perguntar qual.
+ * Ele e sempre um "+" com menu: em qualquer tela ha pelo menos duas
+ * coisas atras dele — o chat da equipe e o Chat LWN —, e um botao que faz
+ * duas coisas precisa perguntar qual. Antes ele era atalho direto para o
+ * chat e so virava menu na tela de Obras, onde havia a observacao do
+ * quadro para acrescentar; com o bot entrando em todas as telas, o
+ * atalho direto deixou de existir.
  *
  * Dentro de uma obra ele nao aparece: la o chat que vale e o da obra, e
  * dois botoes de chat na mesma tela so confundiriam.
  */
-function BotaoChat({ acoes = [], aoAbrirChat }) {
+function BotaoChat({ acoes = [], aoAbrirChat, aoAbrirBot }) {
   const [aberto, setAberto] = useState(false)
   const caixa = useRef(null)
+  const [canto, setCanto] = useState(lerCanto)
+  /* o arrasto em curso; enquanto vale, o clique nao conta */
+  const arrasto = useRef(null)
+  /* quando o ultimo arrasto terminou. O clique que o navegador dispara
+     no fim de um arrasto chega logo depois do pointerup: e por essa
+     distancia no relogio que ele e reconhecido e descartado. */
+  const fimDoArrasto = useRef(0)
 
-  /* com opcoes extras o botao vira menu; sem elas, atalho direto */
-  const temMenu = acoes.length > 0
+
 
   useEffect(() => {
     if (!aberto) return undefined
@@ -373,6 +441,99 @@ function BotaoChat({ acoes = [], aoAbrirChat }) {
     }
   }, [aberto])
 
+  /* a janela mudou de tamanho: o botao volta para dentro dela */
+  useEffect(() => {
+    if (!canto) return undefined
+    const caber = () => {
+      const alvo = caixa.current
+      if (!alvo) return
+      const r = alvo.getBoundingClientRect()
+      setCanto((atual) => (atual ? dentroDaTela(atual, r.width, r.height) : atual))
+    }
+    window.addEventListener('resize', caber)
+    return () => window.removeEventListener('resize', caber)
+  }, [canto])
+
+  /**
+   * Arrastar o botao.
+   *
+   * O mesmo gesto que abre o chat e o que muda o botao de lugar, entao
+   * um dos dois tem de ceder: ate 4px de caminho ainda e um clique
+   * (ninguem acerta o pixel), e do quinto em diante vira arrasto e o
+   * clique nao acontece mais. E a mesma regra que a ilha do topo usa
+   * para nao confundir toque com rolagem.
+   */
+  const pegar = (evento) => {
+    const alvo = caixa.current
+    if (!alvo || evento.button !== 0) return
+    const r = alvo.getBoundingClientRect()
+    arrasto.current = {
+      dx: evento.clientX - r.left,
+      dy: evento.clientY - r.top,
+      larg: r.width,
+      alt: r.height,
+      andou: false,
+      onde: null,
+    }
+
+    const mover = (e) => {
+      const a = arrasto.current
+      if (!a) return
+      if (
+        !a.andou &&
+        Math.abs(e.clientX - (r.left + a.dx)) < 4 &&
+        Math.abs(e.clientY - (r.top + a.dy)) < 4
+      ) {
+        return
+      }
+      a.andou = true
+      /* o menu aberto atrapalha a mira: ele fecha no primeiro milimetro */
+      setAberto(false)
+      a.onde = dentroDaTela({ x: e.clientX - a.dx, y: e.clientY - a.dy }, a.larg, a.alt)
+      setCanto(a.onde)
+    }
+
+    const soltar = () => {
+      window.removeEventListener('pointermove', mover)
+      window.removeEventListener('pointerup', soltar)
+      const a = arrasto.current
+      if (a?.andou && a.onde) {
+        fimDoArrasto.current = Date.now()
+        try {
+          localStorage.setItem(CANTO, JSON.stringify(a.onde))
+        } catch {
+          /* sem storage o lugar novo vale ate recarregar */
+        }
+      }
+      arrasto.current = null
+    }
+
+    window.addEventListener('pointermove', mover)
+    window.addEventListener('pointerup', soltar)
+  }
+
+  /* dois cliques na bolha devolvem o canto de fabrica */
+  const devolver = () => {
+    setCanto(null)
+    try {
+      localStorage.removeItem(CANTO)
+    } catch {
+      /* sem storage nao ha o que limpar */
+    }
+  }
+
+  /* De onde o menu sai. Ele nasce ACIMA do botao e alinhado pela
+     direita, que e o certo no canto de origem. Arrastado para perto do
+     topo ou da borda esquerda, essa mesma abertura cairia fora da tela
+     — as medidas abaixo sao a altura e a sobra lateral do menu, e nao a
+     metade da tela: o que decide e se o menu CABE, nao em que lado do
+     monitor o botao esta. */
+  const lados = canto
+    ? `${canto.y < MENU_ALTO ? 'is-parabaixo' : ''} ${
+        canto.x < MENU_SOBRA ? 'is-esquerda' : ''
+      }`.trim()
+    : ''
+
   const itens = [
     ...acoes,
     {
@@ -381,11 +542,21 @@ function BotaoChat({ acoes = [], aoAbrirChat }) {
       Glifo: Icone.chatPequeno,
       aoClicar: aoAbrirChat,
     },
+    {
+      id: 'bot',
+      rotulo: 'Chat LWN',
+      Glifo: Icone.robo,
+      aoClicar: aoAbrirBot,
+    },
   ]
 
   return (
-    <div className="bolhachat" ref={caixa}>
-      {temMenu && aberto && (
+    <div
+      className={`bolhachat ${lados}`.trim()}
+      ref={caixa}
+      style={canto ? { left: canto.x, top: canto.y, right: 'auto', bottom: 'auto' } : undefined}
+    >
+      {aberto && (
         <div className="bolhachat__menu" role="menu">
           {itens.map(({ id, rotulo, Glifo, aoClicar }) => (
             <button
@@ -408,13 +579,21 @@ function BotaoChat({ acoes = [], aoAbrirChat }) {
       <button
         type="button"
         className={`bolhachat__botao ${aberto ? 'is-aberto' : ''}`.trim()}
-        onClick={() => (temMenu ? setAberto((v) => !v) : aoAbrirChat())}
-        aria-haspopup={temMenu ? 'menu' : undefined}
-        aria-expanded={temMenu ? aberto : undefined}
-        aria-label={temMenu ? 'Adicionar observação ou abrir o chat' : 'Abrir o chat da equipe'}
-        title={temMenu ? 'Adicionar' : 'Chat da equipe'}
+        onPointerDown={pegar}
+        onDoubleClick={devolver}
+        onClick={() => {
+          /* o botao andou junto com o ponteiro, entao o clique do fim do
+             arrasto cai nele mesmo — e abriria o menu a cada vez que
+             alguem so quis mudar o botao de lugar */
+          if (Date.now() - fimDoArrasto.current < 300) return
+          setAberto((v) => !v)
+        }}
+        aria-haspopup="menu"
+        aria-expanded={aberto}
+        aria-label="Abrir o chat da equipe, o Chat LWN ou acrescentar"
+        title="Abrir — arraste para mudar de lugar, dois cliques voltam ao canto"
       >
-        {temMenu ? <Icone.mais /> : <Icone.chat />}
+        <Icone.mais />
       </button>
     </div>
   )
@@ -438,8 +617,10 @@ export default function AppShell({
   const { user } = useAuth()
   const { isDark } = useTheme()
   const { erro, limparErro, pode } = useDados()
+  const navegar = useNavigate()
   const [buscaLocal, setBuscaLocal] = useState('')
   const [chatAberto, setChatAberto] = useState(false)
+  const [botAberto, setBotAberto] = useState(false)
 
   /* a tela pode assumir o campo de busca; se nao assumir, ele fica local */
   const controlada = typeof busca === 'string'
@@ -598,10 +779,59 @@ export default function AppShell({
       </div>
 
       {!semChat && (
-        <BotaoChat acoes={acoesFlutuantes} aoAbrirChat={() => setChatAberto(true)} />
+        <BotaoChat
+          acoes={acoesFlutuantes}
+          aoAbrirChat={() => setChatAberto(true)}
+          aoAbrirBot={() => setBotAberto(true)}
+        />
       )}
 
       <ChatSite aberto={chatAberto} aoFechar={() => setChatAberto(false)} />
+      <ChatBot aberto={botAberto} aoFechar={() => setBotAberto(false)} />
+
+      {/* ---------------- a senha ainda e a padrao ----------------
+
+          `senhaTemporaria` vem do banco (usuario.senha_temporaria) e so
+          cai quando a pessoa troca a senha de verdade — trocar pela tela
+          ou pelo "esqueci minha senha" zera a coluna. Enquanto ela for
+          true a ilha esta aqui, em TODA tela de dentro do sistema,
+          porque o AppShell e o que toda tela veste.
+
+          Nao ha como dispensar o aviso: "Agora nao" recolhe a ilha para
+          a pilula e ela continua no alto da tela. Senha que outra pessoa
+          escolheu e senha que outra pessoa sabe.
+
+          SO NO IPHONE. A ilha e a citacao de uma peca que so existe la:
+          no iPhone ela pousa onde o aparelho ja tem uma, e a pessoa
+          reconhece o gesto antes de ler o texto. No Android e no
+          computador a mesma pastilha preta no alto da tela nao cita
+          nada — e so uma tarja cobrindo a barra de cima.
+
+          O aviso em si nao se perde: o bloco Senha, em Configuracoes,
+          diz a mesma coisa em toda tela e em todo aparelho. */}
+      {user?.senhaTemporaria && ehIphone() && (
+        <IlhaAviso
+          chave="customers.ilha-senha"
+          Glifo={Icone.cadeado}
+          titulo="Troque a sua senha"
+          subtitulo="A senha que você está usando foi definida por outra pessoa e continua valendo. Este aviso fica aqui até você criar a sua."
+          acoes={[
+            {
+              id: 'trocar',
+              rotulo: 'Trocar a senha agora',
+              Glifo: Icone.cadeado,
+              /* leva ate o bloco Senha em Configuracoes e o acende la */
+              aoClicar: () => navegar('/app/configuracoes', { state: { focar: 'senha' } }),
+            },
+            {
+              id: 'depois',
+              rotulo: 'Agora não',
+              Glifo: Icone.relogio,
+              /* sem acao: recolher para a pilula ja e o que este botao faz */
+            },
+          ]}
+        />
+      )}
     </div>
   )
 }

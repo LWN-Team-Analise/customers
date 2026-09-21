@@ -533,11 +533,15 @@
   font-weight: 700;
 }
 
-.quadroobs__mais {
-  display: grid;
-  place-items: center;
-  width: 28px;
+.quadroobs__mais,
+.quadroobs__historico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 28px;
   height: 28px;
+  padding: 0;
   border: 1px solid var(--control-border);
   border-radius: 50%;
   background: var(--control-bg);
@@ -547,13 +551,35 @@
     color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
-.quadroobs__mais:hover {
+.quadroobs__mais:hover,
+.quadroobs__historico:hover {
   background: var(--control-bg-hover);
   color: var(--text-strong);
 }
 
-.quadroobs__mais:active {
+.quadroobs__mais:active,
+.quadroobs__historico:active {
   transform: scale(0.9);
+}
+
+/* o historico e o mais discreto dos dois: escrever vem primeiro,
+   consultar o que venceu vem depois */
+.quadroobs__historico {
+  color: var(--text-muted);
+}
+
+/* com numero ele deixa de ser circulo e vira pilula — a contagem do
+   que venceu cabe dentro do proprio botao */
+.quadroobs__historico.is-contando {
+  padding: 0 9px 0 7px;
+  border-radius: var(--radius-pill);
+}
+
+.quadroobs__historico em {
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .quadroobs__vazio {

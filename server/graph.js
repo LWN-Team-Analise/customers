@@ -140,12 +140,13 @@ const destinatarios = (para) =>
  * Devolve { ok: true } ou { ok: false, motivo } — nunca estoura, para
  * a rota poder decidir o que contar na tela.
  */
-export async function enviar({ para, assunto, html, texto, embutidas = [] }) {
+export async function enviar({ para, cco, assunto, html, texto, embutidas = [] }) {
   if (!configurado()) {
     return { ok: false, motivo: 'O envio pela API da Microsoft não está configurado.' }
   }
 
   const alvos = destinatarios(para)
+  const ocultos = destinatarios(cco ?? [])
   if (alvos.length === 0) return { ok: false, motivo: 'Nenhum destinatário informado.' }
 
   try {
@@ -173,6 +174,11 @@ export async function enviar({ para, assunto, html, texto, embutidas = [] }) {
             subject: assunto,
             body: { contentType: 'HTML', content: html },
             toRecipients: alvos,
+            /* Cco existe para UM caso: a sugestao anonima, que sai da
+               caixa do sistema para ela mesma e leva a Excelencia
+               escondida. Quem recebe nao ve lista de destinatarios
+               nenhuma — nem a propria. */
+            ...(ocultos.length > 0 ? { bccRecipients: ocultos } : {}),
             ...(anexos.length > 0 ? { attachments: anexos } : {}),
           },
           /* false = a copia fica em "Itens Enviados" da caixa. E o que

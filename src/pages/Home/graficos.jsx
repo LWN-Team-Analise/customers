@@ -464,7 +464,7 @@ export function Colunas({ itens, unidade = '', referencia = null, alturaTotal = 
       valor que ninguem mediu, bem no meio do desenho.
    ============================================================ */
 
-export function Linha({ series, eixoX, unidade = '', alturaTotal = 260 }) {
+export function Linha({ series, eixoX, unidade = '', alturaTotal = 260, larguraRotulo = 38 }) {
   const [caixa, largura] = useLargura()
   const [dica, seguir, sumir] = useDica(caixa)
   const gradiente = useId()
@@ -483,10 +483,12 @@ export function Linha({ series, eixoX, unidade = '', alturaTotal = 260 }) {
       ? MARGEM.esquerda + areaL / 2
       : MARGEM.esquerda + (n / (eixoX.length - 1)) * areaL
 
-  /* de quantos em quantos o eixo escreve o mes: doze rotulos num
-     cartao estreito encavalam e viram uma fita ilegivel */
+  /* De quantos em quantos o eixo escreve o rotulo. "set/26" precisa de
+     uns 38px; o numero do dia ("11") cabe em 16, e e por isso que quem
+     chama diz de quanto precisa — senao um mes inteiro de dias sairia
+     escrito de cinco em cinco, como se faltassem dados. */
   const passo = areaL / Math.max(eixoX.length - 1, 1)
-  const salto = Math.max(1, Math.ceil(38 / Math.max(passo, 1)))
+  const salto = Math.max(1, Math.ceil(larguraRotulo / Math.max(passo, 1)))
 
   /** Os trechos continuos da serie — o buraco parte a linha em dois. */
   const trechos = (pontos) => {

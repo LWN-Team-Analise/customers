@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
 import Button from '@/components/Button/Button'
@@ -54,6 +55,7 @@ const Lua = () => (
  */
 export default function Configuracoes() {
   const { user, atualizarPerfil } = useAuth()
+  const local = useLocation()
   const { cargos, titulos, pessoaPorId, pode, recarregar } = useDados()
   const { theme, selectTheme } = useTheme()
   const entradaFoto = useRef(null)
@@ -400,7 +402,7 @@ export default function Configuracoes() {
           </div>
         </form>
 
-        <TrocarSenha />
+        <TrocarSenha chamado={local.state?.focar === 'senha' ? local.key : null} />
       </section>
 
       {/* Sem painel de header: quem tem header é o cliente, e a foto de
@@ -546,8 +548,22 @@ function BlocoOutlook() {
  * depois de vincular o Outlook, que ele iguala a senha do site a da
  * conta Microsoft.
  */
-function TrocarSenha() {
+function TrocarSenha({ chamado = null }) {
   const { user, atualizarPerfil } = useAuth()
+
+  const caixa = useRef(null)
+  /* aceso = o bloco acabou de ser apontado pela ilha do topo. E so um
+     piscar: quem chegou aqui por um botao que dizia "trocar a senha"
+     precisa ver ONDE caiu, e a tela tem outros blocos iguais a este. */
+  const [aceso, setAceso] = useState(false)
+
+  useEffect(() => {
+    if (!chamado) return undefined
+    caixa.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setAceso(true)
+    const relogio = setTimeout(() => setAceso(false), 2400)
+    return () => clearTimeout(relogio)
+  }, [chamado])
 
   const [atual, setAtual] = useState('')
   const [nova, setNova] = useState('')
@@ -594,8 +610,21 @@ function TrocarSenha() {
   }
 
   return (
-    <form className="config__bloco vidro" onSubmit={enviar} noValidate>
+    <form
+      className={`config__bloco vidro ${aceso ? 'is-aceso' : ''}`.trim()}
+      ref={caixa}
+      onSubmit={enviar}
+      noValidate
+    >
       <h2 className="config__titulo">Senha</h2>
+      {/* quem ainda esta na senha padrao chega aqui vindo da ilha do topo:
+          a linha explica, no lugar, o que a ilha dizia la em cima */}
+      {user?.senhaTemporaria && (
+        <p className="config__alerta" role="alert">
+          Você ainda está com a <strong>senha padrão</strong>, definida por outra pessoa. Crie a
+          sua abaixo.
+        </p>
+      )}
 
       <div className="config__grade">
         <CampoTexto

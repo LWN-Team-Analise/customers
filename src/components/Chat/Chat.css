@@ -591,3 +591,19 @@
   color: var(--text-faint);
 }
 
+
+/* ---------------- dentro de um pop-up redimensionado ----------------
+   A lista tem teto proprio (46dvh) para o campo de escrever nao ser
+   empurrado para fora da tela. Quando a pessoa escolheu o tamanho do
+   pop-up na mao, esse teto vira estorvo: quem manda na altura passa a
+   ser a caixa, e a lista ocupa o que sobrar. */
+.modal__caixa.is-ajustado .chat {
+  flex: 1;
+  min-height: 0;
+}
+
+.modal__caixa.is-ajustado .chat__lista {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}

@@ -1005,12 +1005,54 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
       return res.status(409).json({ erro: 'Esta obra já foi concluída.' })
     }
 
-    /* "ja marcou tudo?" — a mesma conta da view, que ja respeita a
-       vigencia: obra de marco nao e cobrada pelo check criado em maio */
-    const pronta = await query('SELECT 1 FROM obra_conclusao WHERE obra_id = $1', [req.params.id])
-    if (pronta.rows.length === 0) {
+    /* "ja marcou tudo?"
+
+       A conta e feita AQUI, e nao mais lida da view obra_conclusao.
+       A view existe em duas versoes: a primeira cobrava todo check do
+       cadastro, e a segunda (db/atualizacao.sql.txt) so os que valiam
+       quando a obra nasceu. Num banco que ficou com a versao antiga, a
+       obra fechava 100% na tela, o botao aparecia, e o clique voltava
+       "ainda ha check em aberto" por causa de um check criado DEPOIS
+       dela — que ela nem enxerga. Escrita aqui, a regra nao depende de
+       ninguem ter rodado a atualizacao: e a mesma janela de vigencia
+       que o roteiro da tela aplica (src/domain/obras.js).
+
+       vigenteDe <= nascimento < vigenteAte, nos tres niveis — etapa,
+       card e check —, porque apagar a etapa apaga junto o que estava
+       dentro dela. */
+    const conta = await query(
+      `SELECT count(*)                                  AS total,
+              count(*) FILTER (WHERE m.obra_id IS NULL) AS abertos
+         FROM obra o
+         JOIN etapa_check ec ON ec.vigente_de <= o.criado_em
+                            AND (ec.vigente_ate IS NULL OR o.criado_em < ec.vigente_ate)
+         JOIN etapa_card kd  ON kd.id = ec.card_id
+                            AND kd.vigente_de <= o.criado_em
+                            AND (kd.vigente_ate IS NULL OR o.criado_em < kd.vigente_ate)
+         JOIN etapa et       ON et.id = kd.etapa_id
+                            AND et.vigente_de <= o.criado_em
+                            AND (et.vigente_ate IS NULL OR o.criado_em < et.vigente_ate)
+         LEFT JOIN obra_check m ON m.obra_id = o.id AND m.check_id = ec.id
+        WHERE o.id = $1`,
+      [req.params.id],
+    )
+
+    const { total, abertos } = conta.rows[0] ?? { total: 0, abertos: 0 }
+
+    /* obra sem check nenhum no roteiro dela nao "acaba": nao ha o que
+       dar por feito, e fecha-la seria arquivar uma obra vazia */
+    if (Number(total) === 0) {
       return res.status(409).json({
-        erro: 'Ainda há check em aberto nesta obra. Conclua todos antes de encerrá-la.',
+        erro: 'O roteiro desta obra não tem nenhum check. Sem check não há o que concluir.',
+      })
+    }
+
+    if (Number(abertos) > 0) {
+      return res.status(409).json({
+        erro:
+          Number(abertos) === 1
+            ? 'Ainda há 1 check em aberto nesta obra. Conclua-o antes de encerrá-la.'
+            : `Ainda há ${abertos} checks em aberto nesta obra. Conclua todos antes de encerrá-la.`,
       })
     }
 

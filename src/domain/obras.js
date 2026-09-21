@@ -228,9 +228,25 @@ export function etapaAtual(roteiro, marcados) {
  * Antes as duas eram a mesma coisa, e um check marcado por engano
  * mandava a obra inteira para o arquivo sem ninguem decidir nada.
  */
+/**
+ * Etapa VAZIA não segura a obra.
+ *
+ * `etapaConcluida` devolve false para a etapa sem card com check —
+ * e está certa no contexto dela, que é a FILA: uma etapa sem nada
+ * escrito ainda não foi preenchida, e liberar a seguinte por causa
+ * disso seria pular o trabalho.
+ *
+ * Aqui a pergunta é outra: "sobrou alguma coisa por marcar?". Uma
+ * etapa sem nenhum check não tem o que marcar, então não pode ser o
+ * motivo de a obra nunca poder ser encerrada. Enquanto ela contava,
+ * bastava UMA etapa vazia no roteiro — a última criada e ainda sem
+ * cards, por exemplo — para o botão "Concluir obra" não aparecer
+ * nunca mais, em obra nenhuma que tivesse esse roteiro.
+ */
 export function obraConcluida(roteiro, marcados) {
-  if (!roteiro?.length) return false
-  return roteiro.every((e) => etapaConcluida(e, marcados))
+  const comTrabalho = (roteiro ?? []).filter((e) => (e?.cards ?? []).some(cardVale))
+  if (comTrabalho.length === 0) return false
+  return comTrabalho.every((e) => etapaConcluida(e, marcados))
 }
 
 /**

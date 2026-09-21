@@ -165,6 +165,20 @@
   background: var(--control-bg);
 }
 
+/* Os dois interruptores do formulário dividem a linha em dois. O
+   `flex-basis` generoso é o que faz um descer para baixo do outro
+   quando a tela é estreita, em vez de espremer os dois rótulos. */
+.quadroform__dupla {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+
+.quadroform__dupla > * {
+  flex: 1 1 190px;
+}
+
 .quadroprazo__marca {
   display: flex;
   align-items: center;
@@ -173,6 +187,12 @@
   font-weight: 600;
   color: var(--text-strong);
   cursor: pointer;
+}
+
+/* desligado — não há obra aberta, ou a observação já é de uma obra */
+.quadroprazo__marca:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .quadroprazo__marca input {

@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
 import IconeClima from '@/components/Clima/IconeClima'
+import Globo from '@/components/Globo/Globo'
 import { useAuth } from '@/context/AuthContext'
 import { useDados } from '@/context/DadosContext'
-import { rotuloPrioridadeObra, tomPrioridadeObra } from '@/domain/obras'
+import { useTheme } from '@/context/ThemeContext'
+import { rotuloPrioridadeObra, tituloDaObra, tomPrioridadeObra } from '@/domain/obras'
+import { coordenadaDoCliente } from '@/domain/geo'
 import useClima, { familiaDoTempo, nomeDoTempo } from '@/hooks/useClima'
 import { dataBR, dataHora, hojeISO } from '@/utils/formato'
 import useTarefas from './useTarefas'
@@ -170,9 +173,16 @@ function SeletorMes({ mes, aoMudar }) {
   )
 }
 
+/* A ordem e a leitura do quadro: primeiro o que esta acontecendo, depois
+   o que ainda espera a vez, por fim o que ja saiu.
+
+   "Em andamento" sao as etapas ABERTAS — o que da para tocar hoje.
+   "Não iniciado" sao as etapas futuras, travadas esperando outro cargo
+   fechar a dele; e por isso que a coluna vem depois, e nao antes: ela
+   nao pede acao de ninguem, so explica quem esta segurando a fila. */
 const COLUNAS = [
-  { id: 'espera', rotulo: 'Não iniciado', Glifo: Icone.cadeado },
   { id: 'andamento', rotulo: 'Em andamento', Glifo: Icone.relogio },
+  { id: 'espera', rotulo: 'Não iniciado', Glifo: Icone.cadeado },
   { id: 'concluida', rotulo: 'Concluída', Glifo: Icone.ok },
 ]
 
@@ -199,6 +209,9 @@ export default function Home() {
   const tarefas = useTarefas()
 
   const [aba, setAba] = useState('grade')
+  /* o passo do Dashboard mora aqui porque o seletor dele vive na barra
+     de abas, ao lado de Grade/Quadro/Dashboard */
+  const [passo, setPasso] = useState('mes')
   const [mes, setMes] = useState(() => {
     const agora = new Date()
     return mesDe(agora.getFullYear(), agora.getMonth())
@@ -348,6 +361,30 @@ export default function Home() {
               e os gráficos do Dashboard. */}
           <SeletorMes mes={mes} aoMudar={setMes} />
 
+          {/* o passo do Dashboard entra na MESMA linha das abas: ele é
+              um modo de olhar, como elas, e não um controle de dentro
+              de um cartão */}
+          {aba === 'painel' && (
+            <div className="escopo" role="group" aria-label="Passo do tempo">
+              <button
+                type="button"
+                className={passo === 'mes' ? 'is-atual' : ''}
+                onClick={() => setPasso('mes')}
+                title="O mês escolhido, dia a dia"
+              >
+                Diário
+              </button>
+              <button
+                type="button"
+                className={passo === 'ano' ? 'is-atual' : ''}
+                onClick={() => setPasso('ano')}
+                title="De janeiro até o mês escolhido, mês a mês"
+              >
+                Mensal
+              </button>
+            </div>
+          )}
+
           {/* o Dashboard olha a empresa inteira: filtrar por setor ali
               daria uma média de uma pessoa só, que não é média nenhuma */}
           {aba !== 'painel' && temMinhas && (
@@ -403,7 +440,7 @@ export default function Home() {
           />
         )}
 
-        {aba === 'painel' && <Painel mes={mes} />}
+        {aba === 'painel' && <Painel mes={mes} passo={passo} />}
       </section>
     </AppShell>
   )
@@ -465,10 +502,7 @@ function Prazo({ iso, hoje }) {
 function Grade({ tarefas, hoje, nomeDoCargo, corDoCargo, aoAbrir }) {
   if (tarefas.length === 0) {
     return (
-      <Vazio
-        titulo="Nada pendente por aqui"
-        texto="Quando uma obra tiver check em aberto, ele aparece nesta grade."
-      />
+      <Vazio titulo="Nada pendente por aqui" arte="globo" />
     )
   }
 
@@ -526,27 +560,27 @@ function Grade({ tarefas, hoje, nomeDoCargo, corDoCargo, aoAbrir }) {
                     {t.titulo}
                   </button>
                 </td>
-                <td>
+                <td data-rotulo="Obra">
                   <span className="grade__obra" data-tipo={t.obra.tipo}>
                     {daObra(t)}
                   </span>
                 </td>
-                <td className="grade__etapa">
+                <td className="grade__etapa" data-rotulo="Etapa">
                   {t.etapaNome || `${t.etapaNumero}ª`}
                   {t.cardTitulo && <em>{t.cardTitulo}</em>}
                 </td>
-                <td className="grade__setor">
+                <td className="grade__setor" data-rotulo="Setor">
                   <Setores cargos={t.cargos} nomeDoCargo={nomeDoCargo} corDoCargo={corDoCargo} />
                 </td>
-                <td>
+                <td data-rotulo="Prioridade">
                   <span className="tpri" data-pri={tomPrioridadeObra(t.obra)}>
                     {rotuloPrioridadeObra(t.obra)}
                   </span>
                 </td>
-                <td>
+                <td data-rotulo="Prazo">
                   <Prazo iso={t.obra.dataConclusao} hoje={hoje} />
                 </td>
-                <td>
+                <td data-rotulo="Estado">
                   <span className="testado" data-estado="andamento">
                     Em andamento
                   </span>
@@ -565,27 +599,27 @@ function Grade({ tarefas, hoje, nomeDoCargo, corDoCargo, aoAbrir }) {
                     {t.titulo}
                   </span>
                 </td>
-                <td>
+                <td data-rotulo="Obra">
                   <span className="grade__obra" data-tipo={t.obra.tipo}>
                     {daObra(t)}
                   </span>
                 </td>
-                <td className="grade__etapa">
+                <td className="grade__etapa" data-rotulo="Etapa">
                   {t.etapaNome || `${t.etapaNumero}ª`}
                   {t.cardTitulo && <em>{t.cardTitulo}</em>}
                 </td>
-                <td className="grade__setor">
+                <td className="grade__setor" data-rotulo="Setor">
                   <Setores cargos={t.cargos} nomeDoCargo={nomeDoCargo} corDoCargo={corDoCargo} />
                 </td>
-                <td>
+                <td data-rotulo="Prioridade">
                   <span className="tpri" data-pri={tomPrioridadeObra(t.obra)}>
                     {rotuloPrioridadeObra(t.obra)}
                   </span>
                 </td>
-                <td>
+                <td data-rotulo="Prazo">
                   <Prazo iso={t.obra.dataConclusao} hoje={hoje} />
                 </td>
-                <td>
+                <td data-rotulo="Estado">
                   <span className="testado" data-estado="espera">
                     Aguardando
                   </span>
@@ -849,13 +883,449 @@ function Quadro({ tarefas, hoje, mes, nomeDoCargo, corDoCargo, pessoaPorId, aoAb
   )
 }
 
+/* As duas cores das marcas no globo. Ficam aqui, e nao nos tokens, por
+   um motivo pratico: o canvas nao le variavel de CSS — ele precisa da
+   cor resolvida em texto. Sao as mesmas familias do resto do sistema. */
+const OBRA_FECHADA = '#3ddc97'
+const OBRA_ABERTA = '#ff9f43'
+
+/* teto de marcas no globo. Passando disso a bola vira uma sopa de
+   pontos e para de dizer qualquer coisa; as mais recentes bastam. */
+const MARCAS_NO_GLOBO = 60
+
+/* A largura da nuvem, em pixels, e a folga que ela guarda das bordas.
+
+   O numero mora aqui porque o JS precisa dele para PRENDER a nuvem
+   dentro da caixa — o CSS sozinho nao tem como saber onde o ponto caiu.
+   Se mudar aqui, mude no .nuvem do CSS junto. */
+const NUVEM_L = 440
+const NUVEM_A = 340
+const NUVEM_FOLGA = 6
+
+/**
+ * A NUVEM.
+ *
+ * Nao e um contorno desenhado: e uma MASSA. Seis elipses sobrepostas
+ * passam por um filtro de turbulencia que empurra cada ponto da borda
+ * para um lado diferente, e o resultado e a silhueta irregular e fofa
+ * de um cumulo — em vez do colar de bolhas iguais que todo mundo
+ * reconhece como "nuvem desenhada por crianca".
+ *
+ * As coordenadas sao em pixels da propria nuvem (nao em 0–1) porque o
+ * filtro trabalha em espaco de usuario: turbulencia numa caixa de
+ * 0 a 1 sai invisivel.
+ */
+const MASSA = [
+  /* a base deitada: e ela que da a linha de nuvem, e nao um circulo */
+  { cx: 0.5, cy: 0.6, rx: 0.45, ry: 0.24 },
+  { cx: 0.32, cy: 0.58, rx: 0.27, ry: 0.24 },
+  { cx: 0.68, cy: 0.58, rx: 0.27, ry: 0.24 },
+  /* os montes de cima, o do meio mais alto */
+  { cx: 0.28, cy: 0.44, rx: 0.22, ry: 0.23 },
+  { cx: 0.5, cy: 0.37, rx: 0.27, ry: 0.27 },
+  { cx: 0.72, cy: 0.44, rx: 0.22, ry: 0.23 },
+  /* o miolo, para nao sobrar vinco entre um monte e outro */
+  { cx: 0.39, cy: 0.5, rx: 0.24, ry: 0.25 },
+  { cx: 0.61, cy: 0.5, rx: 0.24, ry: 0.25 },
+]
+
+/**
+ * As bolhinhas que ligam a nuvem ao pingo.
+ *
+ * Sao o rabicho de um balao de PENSAMENTO, e nao o bico de um balao de
+ * fala: tres circulos que vao diminuindo ate a marca. E o unico jeito
+ * de ligar uma nuvem a um ponto sem desenhar um risco, que numa nuvem
+ * de verdade nao existiria.
+ */
+function bolhinhas(alvoX, alvoY, larg, alt) {
+  const peX = Math.min(Math.max(alvoX, larg * 0.3), larg * 0.7)
+  const paraBaixo = alvoY > alt / 2
+  const peY = paraBaixo ? alt * 0.74 : alt * 0.26
+  return [0.42, 0.68, 0.88].map((t, i) => ({
+    cx: peX + (alvoX - peX) * t,
+    cy: peY + (alvoY - peY) * t,
+    r: 9 - i * 2.6,
+  }))
+}
+
+/**
+ * Onde a nuvem pousa, sem ultrapassar a caixa do globo.
+ *
+ * Ela quer nascer centrada no ponto, mas ponto perto da borda jogaria
+ * metade dela para fora — e foi o que acontecia. Entao o lado esquerdo
+ * e preso entre as duas margens, e a PONTA se desloca sozinha para
+ * continuar apontando para o pingo, mesmo quando o corpo da nuvem
+ * escorregou para o lado.
+ *
+ * Na vertical ela abre para cima quando o ponto esta na metade de
+ * baixo, e para baixo quando esta na de cima: e sempre o lado que tem
+ * mais espaco.
+ */
+export function pousarNuvem(onde) {
+  /* o ponto vem em coordenadas da BOLA; a nuvem mora no painel, que é
+     maior — somar o deslocamento da bola dentro dele é o que permite a
+     nuvem usar toda a altura disponível em vez de só a do quadrado do
+     globo, onde ela saía espremida */
+  const px = onde.x + (onde.deslocX ?? 0)
+  const py = onde.y + (onde.deslocY ?? 0)
+  const larg = onde.painelL ?? onde.largura
+  const alt = onde.painelA ?? onde.altura
+
+  const teto = Math.max(NUVEM_FOLGA, larg - NUVEM_L - NUVEM_FOLGA)
+  const esq = Math.min(Math.max(px - NUVEM_L / 2, NUVEM_FOLGA), teto)
+
+  /* abre para o lado que TEM mais espaço, e não por regra fixa */
+  const acima = py - NUVEM_FOLGA - 12
+  const abaixo = alt - py - NUVEM_FOLGA - 12
+  const paraBaixo = abaixo >= acima
+
+  /* a nuvem tem altura fixa: o desenho dela é uma forma, e forma que
+     estica com o conteúdo deixa de ser a forma que foi desenhada. O
+     topo é preso dentro do painel em vez de encolher a nuvem. */
+  const topo = paraBaixo
+    ? Math.min(py + 12, alt - NUVEM_A - NUVEM_FOLGA)
+    : Math.max(py - 12 - NUVEM_A, NUVEM_FOLGA)
+
+  const topoFinal = Math.max(topo, NUVEM_FOLGA)
+
+  return {
+    paraBaixo,
+    /* o pingo, visto de dentro da nuvem: é para cá que o rabicho aponta */
+    alvo: { x: px - esq, y: py - topoFinal },
+    estilo: {
+      left: `${Math.round(esq)}px`,
+      top: `${Math.round(topoFinal)}px`,
+    },
+  }
+}
+
 /** O vazio das abas: um recado, e nao uma tela em branco. */
-export function Vazio({ titulo, texto }) {
+export function Vazio({ titulo, texto, arte = 'sol' }) {
+  const { isDark } = useTheme()
+  const { obras, concluida, clientePorId, etapaDaObra, rotuloEtapa } = useDados()
+  const navegar = useNavigate()
+  /* O que a pessoa tocou no globo: as obras daquele ponto e onde o
+     ponto está na tela. A nuvem nasce ali, ancorada no pingo — e não
+     num painel embaixo, longe de onde o dedo encostou. */
+  const [toque, setToque] = useState(null)
+  /* qual das obras do ponto está aberta, quando há mais de uma */
+  const [escolhida, setEscolhida] = useState(null)
+  /* as duas caixas: a do globo e a do painel. É a diferença entre elas
+     que diz onde o ponto caiu dentro do painel. */
+  const caixaGlobo = useRef(null)
+  const caixaPainel = useRef(null)
+
+  /**
+   * Uma marca por obra: verde para a que fechou, laranja para a que
+   * ainda corre.
+   *
+   * O globo aparece quando NAO ha o que fazer hoje, e "nada a fazer"
+   * nao e a mesma coisa que "nada acontecendo". As marcas sao o que
+   * separa as duas leituras: a tela continua dizendo que a casa tem
+   * obra, sem inventar tarefa para preencher a tabela.
+   *
+   * Onde cada uma pousa quem decide e o globo, a partir do id — aqui so
+   * saem a chave e a cor.
+   */
+  const marcas = useMemo(() => {
+    if (arte !== 'globo') return []
+    return obras.slice(0, MARCAS_NO_GLOBO).map((obra) => {
+      /* a marca pousa na cidade do cliente. Sem UF no cadastro nao ha
+         lugar no mapa, e o globo cai no sorteio estavel por id: a obra
+         continua aparecendo, so que fora do Brasil — o que e, tambem,
+         um jeito de a falta do cadastro aparecer. */
+      const onde = coordenadaDoCliente(clientePorId(obra.clienteId))
+      return {
+        chave: String(obra.id),
+        cor: concluida(obra) ? OBRA_FECHADA : OBRA_ABERTA,
+        lat: onde?.lat,
+        lon: onde?.lon,
+      }
+    })
+  }, [arte, obras, concluida, clientePorId])
+
+  const fechadas = marcas.filter((m) => m.cor === OBRA_FECHADA).length
+  const abertas = marcas.length - fechadas
+
+  const naNuvem = (toque?.chaves ?? [])
+    .map((c) => obras.find((o) => String(o.id) === c))
+    .filter(Boolean)
+  const obraTocada = escolhida ? naNuvem.find((o) => String(o.id) === escolhida) : null
+  const clienteTocado = obraTocada ? clientePorId(obraTocada.clienteId) : null
+  const fechou = obraTocada ? concluida(obraTocada) : false
+  const fecharNuvem = useCallback(() => {
+    setToque(null)
+    setEscolhida(null)
+  }, [])
+
+  /**
+   * Clicar em qualquer outro lugar fecha a nuvem.
+   *
+   * O botão de fechar continua onde estava — ele é a saída ÓBVIA, a
+   * que se procura quando não se sabe que dá para clicar fora. O clique
+   * fora é o atalho de quem já sabe, e as duas coisas convivem sem se
+   * atrapalhar.
+   *
+   * O que NÃO fecha é o clique dentro da própria nuvem (senão escolher
+   * uma obra da lista fecharia a lista) nem no globo (que tem o clique
+   * dele, para abrir outro ponto).
+   */
+  useEffect(() => {
+    if (!toque) return undefined
+    const fora = (evento) => {
+      if (evento.target.closest('.nuvem, .vaziot__globo')) return
+      fecharNuvem()
+    }
+    const tecla = (evento) => evento.key === 'Escape' && fecharNuvem()
+    document.addEventListener('pointerdown', fora)
+    document.addEventListener('keydown', tecla)
+    return () => {
+      document.removeEventListener('pointerdown', fora)
+      document.removeEventListener('keydown', tecla)
+    }
+  }, [toque, fecharNuvem])
+
   return (
-    <div className="vaziot vidro">
-      <IconeClima familia="sol" titulo="" tamanho={54} />
+    <div className="vaziot vidro" ref={caixaPainel}>
+      {/* O globo e do vazio da GRADE, e nao de todo vazio: e a tela do
+          "o que faco agora", e quando nao ha nada a fazer ela fica sem
+          assunto. Um mundo girando devagar, que responde ao cursor e
+          aceita um alfinete, ocupa esse silencio melhor que um icone
+          parado — e nao inventa nenhum dado que nao existe. */}
+      {arte === 'globo' ? (
+        <>
+          <div className="vaziot__globo" ref={caixaGlobo}>
+            <Globo
+              /* a tinta do globo segue o tema; o fundo dele e transparente,
+                 entao quem aparece atras e o vidro do painel */
+              baseColor={isDark ? '#e2e4e9' : '#1d2633'}
+              /* o preset do autor foi calibrado para uma tela de 1200x800.
+                 Aqui a caixa tem 340px: com a densidade de la a malha do mar
+                 rala some e sobram letras soltas no escuro, sem bola nenhuma
+                 por tras. Estes dois numeros devolvem a esfera no tamanho que
+                 ela tem nesta tela. */
+              density={95}
+              glyphSize={115}
+              marcas={marcas}
+              parado={toque !== null}
+              aoTocarMarca={(chaves, onde) => {
+                const g = caixaGlobo.current?.getBoundingClientRect()
+                const p = caixaPainel.current?.getBoundingClientRect()
+                setToque({
+                  chaves,
+                  onde:
+                    g && p
+                      ? {
+                          ...onde,
+                          deslocX: g.left - p.left,
+                          deslocY: g.top - p.top,
+                          painelL: p.width,
+                          painelA: p.height,
+                        }
+                      : onde,
+                })
+                /* com uma obra só, ela já abre; com várias, a nuvem
+                   primeiro pergunta qual */
+                setEscolhida(chaves.length === 1 ? chaves[0] : null)
+              }}
+              /* zoom pela roda desligado: ligado, ele comeria a rolagem da
+                 pagina de quem so passou o cursor por cima */
+              pointer={{ zoom: 0, light: 100, pins: 7 }}
+            />
+
+          </div>
+
+          {/* ---- a nuvem ----
+              Nasce colada no pingo que foi tocado, com a ponta apontando
+              para ele. É a diferença entre "abriu alguma coisa" e "abriu
+              ISTO aqui": o olho não precisa procurar de onde veio. */}
+          {toque && (
+            <div
+              className={`nuvem ${pousarNuvem(toque.onde).paraBaixo ? 'is-baixo' : ''}`.trim()}
+              style={pousarNuvem(toque.onde).estilo}
+              role="dialog"
+              aria-label="Obra no globo"
+            >
+              {/* ---- a nuvem ----
+
+                  Tudo o que se vê dela sai daqui: a massa de elipses
+                  passa pelo filtro de turbulência, vira MÁSCARA, e a
+                  máscara é o que recorta o vidro. Nada de contorno —
+                  nuvem não tem linha em volta.
+
+                  O filtro mora no próprio componente porque depende do
+                  tamanho da nuvem em pixels: turbulência é um efeito de
+                  espaço, não de proporção. */}
+              <svg className="nuvem__oculto" aria-hidden="true">
+                <defs>
+                  <filter id="nuvem-fofa" x="-25%" y="-25%" width="150%" height="150%">
+                    {/* o ruído que amassa a borda */}
+                    <feTurbulence
+                      type="fractalNoise"
+                      baseFrequency="0.011"
+                      numOctaves="4"
+                      seed="9"
+                      result="ruido"
+                    />
+                    <feDisplacementMap
+                      in="SourceGraphic"
+                      in2="ruido"
+                      scale="26"
+                      xChannelSelector="R"
+                      yChannelSelector="G"
+                    />
+                    {/* o desfoque final é o que tira a aresta e deixa a
+                        borda algodão em vez de recortada */}
+                    <feGaussianBlur stdDeviation="5" />
+                  </filter>
+
+                  <mask id="nuvem-mascara">
+                    <g filter="url(#nuvem-fofa)" fill="#fff">
+                      {MASSA.map((e, i) => (
+                        <ellipse
+                          key={i}
+                          cx={e.cx * NUVEM_L}
+                          cy={e.cy * NUVEM_A}
+                          rx={e.rx * NUVEM_L}
+                          ry={e.ry * NUVEM_A}
+                        />
+                      ))}
+                      {bolhinhas(
+                        pousarNuvem(toque.onde).alvo.x,
+                        pousarNuvem(toque.onde).alvo.y,
+                        NUVEM_L,
+                        NUVEM_A,
+                      ).map((b, i) => (
+                        <circle key={`b${i}`} cx={b.cx} cy={b.cy} r={b.r} />
+                      ))}
+                    </g>
+                  </mask>
+                </defs>
+              </svg>
+
+              {/* a sombra segue o alfa do filho mascarado — por isso ela
+                  acompanha a nuvem, e não uma caixa retangular */}
+              <span className="nuvem__sombra" aria-hidden="true">
+                <span className="nuvem__massa" />
+              </span>
+
+              <div className="nuvem__corpo">
+                <button
+                  type="button"
+                  className="nuvem__fechar"
+                  onClick={fecharNuvem}
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+
+                {/* várias obras no mesmo endereço: a lista vem antes */}
+                {!obraTocada && (
+                  <>
+                    <p className="nuvem__titulo">
+                      Obras neste ponto
+                    </p>
+                    <ul className="nuvem__lista">
+                      {naNuvem.map((o) => (
+                        <li key={o.id}>
+                          <button type="button" onClick={() => setEscolhida(String(o.id))}>
+                            <span
+                              className="vaziot__ponto"
+                              data-obra={concluida(o) ? 'fechada' : 'aberta'}
+                              aria-hidden="true"
+                            />
+                            {tituloDaObra(o, clientePorId(o.clienteId))}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+
+                {obraTocada && (
+                  <>
+                    <p className="nuvem__titulo">
+                      <span
+                        className="vaziot__ponto"
+                        data-obra={fechou ? 'fechada' : 'aberta'}
+                        aria-hidden="true"
+                      />
+                      {tituloDaObra(obraTocada, clienteTocado)}
+                    </p>
+
+                    <dl className="nuvem__dados">
+                      <div>
+                        <dt>Onde</dt>
+                        <dd>
+                          {clienteTocado?.cidade
+                            ? `${clienteTocado.cidade} — ${clienteTocado.estado}`
+                            : 'Cidade não cadastrada'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Etapa</dt>
+                        <dd>{rotuloEtapa(etapaDaObra(obraTocada))}</dd>
+                      </div>
+                      <div>
+                        <dt>Prazo</dt>
+                        <dd>
+                          {obraTocada.dataConclusao ? dataBR(obraTocada.dataConclusao) : 'Sem prazo'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Situação</dt>
+                        <dd>{fechou ? 'Concluída' : 'Em aberto'}</dd>
+                      </div>
+                    </dl>
+
+                    <div className="nuvem__acoes">
+                      {naNuvem.length > 1 && (
+                        <button
+                          type="button"
+                          className="nuvem__voltar"
+                          onClick={() => setEscolhida(null)}
+                        >
+                          ‹ as {naNuvem.length} obras
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="nuvem__abrir"
+                        onClick={() =>
+                          navegar(
+                            fechou
+                              ? `/app/concluidas/${obraTocada.id}`
+                              : `/app/obras/${obraTocada.id}`,
+                          )
+                        }
+                      >
+                        Abrir a obra
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <IconeClima familia="sol" titulo="" tamanho={54} />
+      )}
       <strong>{titulo}</strong>
-      <p>{texto}</p>
+      {texto && <p>{texto}</p>}
+
+      {/* Sem esta linha os pontos coloridos seriam enfeite: ninguem
+          adivinha que verde e obra fechada. Ela so aparece quando ha o
+          que contar. */}
+      {arte === 'globo' && marcas.length > 0 && (
+        <p className="vaziot__legenda">
+          <span className="vaziot__ponto" data-obra="fechada" aria-hidden="true" />
+          {fechadas} concluída{fechadas === 1 ? '' : 's'}
+          <span className="vaziot__ponto" data-obra="aberta" aria-hidden="true" />
+          {abertas} em aberto
+        </p>
+      )}
+
     </div>
   )
 }

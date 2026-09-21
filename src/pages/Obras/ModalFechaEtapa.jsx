@@ -1,5 +1,6 @@
 import Modal from '@/components/Modal/Modal'
 import { useDados } from '@/context/DadosContext'
+import { nomeProprioDaEtapa } from '@/domain/obras'
 import './ModalFechaEtapa.css'
 
 /**
@@ -30,15 +31,19 @@ export default function ModalFechaEtapa({ aviso, aoFechar }) {
 
   if (!aviso) return null
 
-  const nomeDaEtapa = aviso.nome
-    ? `${rotuloEtapa(aviso.numero)} — ${aviso.nome}`
+  /* "3ª Etapa — 3ª Etapa" era o que saía aqui: a etapa sem nome próprio
+     JÁ se chama "3ª Etapa", e juntar o rótulo ao nome repetia a mesma
+     coisa duas vezes. O nome só entra quando acrescenta alguma coisa. */
+  const proprio = nomeProprioDaEtapa(aviso.nome, rotuloEtapa(aviso.numero))
+  const nomeDaEtapa = proprio
+    ? `${rotuloEtapa(aviso.numero)} — ${proprio}`
     : rotuloEtapa(aviso.numero)
 
   return (
     <Modal
       aberto
       aoFechar={aoFechar}
-      titulo={aviso.fechou ? `${termoEtapa} concluída` : 'Sua parte está concluída'}
+      titulo={aviso.fechou ? `${termoEtapa} concluída` : 'Você concluiu a sua parte'}
       largura={440}
       /* acima de qualquer pop-up que ja esteja aberto: dentro da obra
          este aviso nasce de um clique feito DENTRO do trilho */
@@ -58,8 +63,9 @@ export default function ModalFechaEtapa({ aviso, aoFechar }) {
         ) : (
           <>
             <p className="metapa__texto">
-              Você marcou o último check do seu setor. Para a obra avançar para a{' '}
-              {rotuloEtapa(aviso.numero + 1).toLowerCase()}, ainda é preciso esperar:
+              Você concluiu a <strong>sua parte</strong> desta {termoEtapa.toLowerCase()} — foi o
+              último check do seu setor. A {termoEtapa.toLowerCase()} ainda não fechou: para a obra
+              avançar para a {rotuloEtapa(aviso.numero + 1).toLowerCase()}, ainda é preciso esperar:
             </p>
 
             <ul className="metapa__setores">

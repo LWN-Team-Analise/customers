@@ -89,7 +89,7 @@ export const escapar = (texto) =>
    Outlook Web e quase todo cliente descartam `src="data:..."`.
    ============================================================ */
 
-async function despachar({ para, assunto, html, texto, embutidas = [] }) {
+async function despachar({ para, cco, assunto, html, texto, embutidas = [] }) {
   if (!temEmail()) {
     return { ok: false, motivo: 'O envio de e-mail não está configurado no servidor.' }
   }
@@ -99,13 +99,14 @@ async function despachar({ para, assunto, html, texto, embutidas = [] }) {
 
   /* a API da Microsoft na frente: no tenant da LWN e a unica que sai */
   if (graph.configurado()) {
-    return graph.enviar({ para: lista, assunto, html, texto, embutidas })
+    return graph.enviar({ para: lista, cco, assunto, html, texto, embutidas })
   }
 
   try {
     await conectar().sendMail({
       from: `"LWN Team Análise" <${REMETENTE}>`,
       to: lista.join(', '),
+      ...(cco?.length ? { bcc: (Array.isArray(cco) ? cco : [cco]).join(', ') } : {}),
       subject: assunto,
       text: texto,
       html,
@@ -326,5 +327,77 @@ export async function enviarAviso({ para, obra, cliente, etapa, mensagem, remete
     html: corpo,
     texto: simples,
     embutidas: logo ? [logo] : [],
+  })
+}
+
+/**
+ * A sugestão do LWN Bot — nas duas formas.
+ *
+ * ---------------- Anônima ----------------
+ *
+ * Sai da caixa do sistema PARA A PRÓPRIA caixa do sistema, e quem
+ * precisa ler entra em Cco. Os dois motivos:
+ *
+ *   - o cabeçalho visível fica `lwnteamanalise -> lwnteamanalise`, sem
+ *     um único endereço de pessoa em lugar nenhum;
+ *   - a Excelência recebe assim mesmo, sem aparecer na lista.
+ *
+ * A função não recebe nome, e-mail nem cargo quando é anônima: não tem
+ * como vazar o autor porque nunca soube quem era.
+ *
+ * ---------------- Identificada ----------------
+ *
+ * Vai direto para a Excelência com o nome de quem escreveu, e o e-mail
+ * diz que dá para responder. É a diferença que a pessoa escolheu ao
+ * mandar: quem assina quer resposta.
+ */
+export async function enviarSugestao({ para, texto, autor = null }) {
+  const anonima = !autor
+
+  const corpo = moldura(
+    anonima ? 'Sugestão anônima da equipe' : 'Sugestão da equipe',
+    `
+        <p style="margin:0 0 16px;font-size:15px;color:#33415c;line-height:1.55">
+          Chegou uma sugestão pelo LWN Bot.
+        </p>
+
+        <div style="border:1px solid #e3e8f2;border-radius:12px;padding:18px 20px;margin:0 0 18px;
+                    background:#f8fafd">
+          <p style="margin:0;font-size:15px;color:#0d1b33;line-height:1.6;white-space:pre-wrap">${escapar(
+            texto,
+          )}</p>
+        </div>
+
+        ${
+          anonima
+            ? `<p style="margin:0;font-size:13px;color:#7b8798;line-height:1.55">
+                 <strong style="color:#33415c">Enviada sem identificação.</strong> O sistema não
+                 registra quem escreveu: não há nome, e-mail ou setor para consultar, aqui ou no
+                 banco. A resposta, quando houver, é mudar o processo — não há para quem responder.
+               </p>`
+            : `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">
+                 ${linha('De', autor.nome)}
+                 ${linha('Setor', autor.cargo)}
+                 ${linha('E-mail', autor.email)}
+               </table>
+               <p style="margin:14px 0 0;font-size:13px;color:#7b8798;line-height:1.55">
+                 Quem escreveu escolheu se identificar — dá para responder direto.
+               </p>`
+        }`,
+  )
+
+  return despachar({
+    /* anônima: da caixa do sistema para ela mesma, com quem lê em Cco */
+    para: anonima ? graph.caixaDeSaida() || para : para,
+    cco: anonima ? para : undefined,
+    assunto: anonima ? 'Sugestão anônima da equipe' : `Sugestão de ${autor.nome}`,
+    html: corpo,
+    texto: anonima
+      ? `Sugestão enviada pelo LWN Bot, sem identificação do autor:
+
+${texto}`
+      : `Sugestão de ${autor.nome} (${autor.cargo ?? 'sem setor'}, ${autor.email}):
+
+${texto}`,
   })
 }
