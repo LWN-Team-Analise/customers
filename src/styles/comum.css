@@ -436,3 +436,111 @@
   background: var(--vidro-fundo);
   box-shadow: var(--vidro-sombra);
 }
+
+/* ============================================================
+   O (!) de "falta preencher"
+
+   Mora aqui porque aparece em DOIS lugares que nao se falam: a faixa
+   da tela da obra e o pop-up de cadastro. Sao a mesma pendencia — a
+   obra padrao sem data de conclusao —, e duas copias do desenho
+   acabariam divergindo na primeira vez que uma delas fosse ajustada.
+
+   Ele pisca DEVAGAR (1,6s) e nunca apaga de vez: a opacidade minima e
+   0,35. Um sinal que some inteiro vira um bloco vazio piscando, e no
+   instante em que sumiu ele nao avisa nada. Assim ele pulsa e
+   continua legivel o tempo todo.
+
+   Quem pediu menos movimento no sistema recebe o mesmo sinal, firme.
+   ============================================================ */
+
+.pendencia {
+  position: absolute;
+  top: -7px;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pri-alta);
+  color: #fff;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  animation: pendencia-pisca 1.6s var(--ease-out) infinite;
+}
+
+.pendencia:hover {
+  filter: brightness(1.12);
+}
+
+/* dentro de um formulario ele nao leva a lugar nenhum: o campo esta
+   ali do lado. Vira so o sinal, sem cursor de clique. */
+.pendencia--parada {
+  cursor: default;
+}
+
+@keyframes pendencia-pisca {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pri-alta) 60%, transparent);
+  }
+  50% {
+    opacity: 0.35;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--pri-alta) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pendencia {
+    animation: none;
+  }
+}
+
+/* a moldura que ancora o sinal: o campo dentro dela, o (!) no canto */
+.pendencia__caixa {
+  position: relative;
+}
+
+/* ---- Estrelas como CAMPO ----
+
+   Com `aoEscolher`, cada estrela vira botão: clicar na terceira dá 3.
+   A escala tem cinco degraus, e escolher um clicando nele é mais rápido
+   que digitar — e não deixa digitar 7 numa escala que vai até 5. */
+
+.estrelas--campo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.estrelas__btn {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.estrelas__btn:hover {
+  background: var(--control-bg-hover);
+  transform: scale(1.15);
+}
+
+.estrelas__btn:active {
+  transform: scale(0.95);
+}
+
+.estrelas__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

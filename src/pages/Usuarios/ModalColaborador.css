@@ -65,6 +65,18 @@
 }
 
 .formcolab__semfoto:hover {
+  color: var(--accent);
+}
+
+/* "Ajustar enquadramento" e "Remover foto" na mesma linha, embaixo do
+   nome. So o remover fica vermelho no hover: e o unico que tira algo. */
+.formcolab__fotoacoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.formcolab__fotoacoes .formcolab__semfoto:last-child:hover {
   color: var(--danger);
 }
 

@@ -11,20 +11,45 @@
 
 /* ---------------- Painel de filtros ---------------- */
 
+/* Duas colunas: a fila de filtros a esquerda, os Membros presos na
+   direita, no ALTO.
+
+   Grade, e nao flex, porque isto e o que segura os Membros na primeira
+   linha. Em flex com wrap, os quatro filtros tomam a largura toda e o
+   bloco de Membros cai inteiro para uma linha nova; ali sobra sempre
+   um pouco menos do que ele precisa, entao ele caia sempre. Como
+   coluna propria da grade, ele nao concorre por espaco: a coluna dos
+   filtros e que encolhe (`minmax(0, 1fr)`) e quebra por dentro. */
 .painel {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 20px;
   padding: 15px 18px;
   border-radius: var(--radius-lg);
 }
 
+/* em tela estreita nao ha largura para as duas colunas: ali os
+   Membros descem, de propósito */
+@media (max-width: 760px) {
+  .painel {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A fila dos filtros, Membros incluso — todos na MESMA linha, com o
+   rotulo em cima e o controle embaixo:
+
+     Prioridade      Cliente        Data    Setor pendente    Membros
+     baixa media alta [todos ▾]     ..      diretor comer...  [fotos]
+
+   `align-items: flex-start` e o que alinha os rotulos entre si: sem
+   ele os blocos de alturas diferentes se centrariam e cada rotulo
+   pousaria numa altura. */
 .painel__filtros {
   display: flex;
   align-items: flex-start;
-  gap: 26px;
+  gap: 12px 20px;
   flex-wrap: wrap;
   flex: 1;
   min-width: 0;
@@ -34,6 +59,22 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* por padrao o filtro nao encolhe: o seletor de cliente e o campo de
+     data nao tem como ficar menores sem cortar o proprio conteudo */
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+/* ...menos o de setores, que e o mais largo e o unico que quebra bem.
+   E ele que cede quando falta espaco, e por isso os cinco rotulos
+   continuam na mesma linha. */
+/* A BASE e igual ao mínimo de propósito: quem decide a quebra da linha
+   é a base do flex, não o `min-width`. Com base maior que o mínimo, o
+   bloco descia para a segunda linha antes de tentar encolher — e ele
+   cabia. */
+.filtro--setores {
+  flex: 1 1 180px;
+  min-width: 180px;
 }
 
 .filtro__nome {
@@ -48,11 +89,17 @@
   color: var(--text-faint);
 }
 
+/* A altura de piso é a do controle mais alto da linha — o botão do
+   Seletor, com seus 42px. Sem ela cada filtro tinha a altura do
+   próprio conteúdo, e as pastilhas de Prioridade (31px) ficavam
+   visivelmente mais acima que a lista de clientes e o campo de data
+   ao lado. Com o piso, as três linhas começam e terminam juntas. */
 .filtro__linha {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  min-height: 42px;
 }
 
 .filtro__data {
@@ -106,10 +153,11 @@
 
 /* ---- membros, agora na mesma linha dos filtros ---- */
 
+/* segunda coluna da grade do painel, no alto: o rotulo "Membros" fica
+   na mesma altura de "Prioridade", "Cliente" e "Setor pendente", e as
+   fotos na altura das pastilhas deles */
 .filtro--membros {
   flex-shrink: 0;
-  margin-left: auto;
-  align-items: flex-end;
 }
 
 .equipe {
@@ -185,6 +233,15 @@
   gap: 8px;
   margin-left: auto;
   flex-wrap: wrap;
+}
+
+/* o seletor de ordem precisa caber "Data de conclusão" inteiro */
+.barra__ordem {
+  flex-shrink: 0;
+}
+
+.barra__ordem .sel {
+  min-width: 190px;
 }
 
 /* ---------------- Quadro ---------------- */
@@ -274,6 +331,73 @@
   flex-direction: column;
   gap: 10px;
   min-height: 128px;
+}
+
+/* ---- Os degraus da coluna: um por etapa ----
+
+   As obras da coluna vem separadas pela etapa em que estao, e cada
+   grupo leva um titulo. E o titulo que faz a coluna responder "o que
+   esta parado no Comercial?" sem ninguem abrir card nenhum. */
+
+.etapagrupo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* o risco em cima e o que separa um grupo do outro. Sem ele os
+   titulos flutuam no meio dos cards e a coluna vira uma lista com
+   palavras soltas no meio */
+.etapagrupo__topo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 2px 0;
+  border-top: 1px solid var(--coluna-borda);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* o primeiro grupo encosta no cabecalho da coluna, que ja e uma
+   divisao — dois riscos seguidos ali viram sujeira */
+.etapagrupo:first-child .etapagrupo__topo {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.etapagrupo__numero {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+/* o nome da etapa ("Comercial") vem depois do numero e cede primeiro:
+   e ele que some com reticencias quando a coluna aperta */
+.etapagrupo__nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.etapagrupo__conta {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.etapagrupo__pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
 .coluna__vazio {
@@ -409,11 +533,15 @@
   font-weight: 700;
 }
 
-.quadroobs__mais {
-  display: grid;
-  place-items: center;
-  width: 28px;
+.quadroobs__mais,
+.quadroobs__historico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 28px;
   height: 28px;
+  padding: 0;
   border: 1px solid var(--control-border);
   border-radius: 50%;
   background: var(--control-bg);
@@ -423,13 +551,35 @@
     color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
-.quadroobs__mais:hover {
+.quadroobs__mais:hover,
+.quadroobs__historico:hover {
   background: var(--control-bg-hover);
   color: var(--text-strong);
 }
 
-.quadroobs__mais:active {
+.quadroobs__mais:active,
+.quadroobs__historico:active {
   transform: scale(0.9);
+}
+
+/* o historico e o mais discreto dos dois: escrever vem primeiro,
+   consultar o que venceu vem depois */
+.quadroobs__historico {
+  color: var(--text-muted);
+}
+
+/* com numero ele deixa de ser circulo e vira pilula — a contagem do
+   que venceu cabe dentro do proprio botao */
+.quadroobs__historico.is-contando {
+  padding: 0 9px 0 7px;
+  border-radius: var(--radius-pill);
+}
+
+.quadroobs__historico em {
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .quadroobs__vazio {

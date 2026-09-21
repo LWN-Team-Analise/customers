@@ -72,7 +72,7 @@
   --avatar-anel: transparent;
 }
 
-.cliente.is-aberto {
+.cliente--aberto {
   border-color: var(--control-border);
 }
 
@@ -125,7 +125,7 @@
   transition: transform var(--dur-base) var(--ease-out);
 }
 
-.cliente.is-aberto .cliente__seta {
+.cliente--aberto .cliente__seta {
   transform: rotate(180deg);
 }
 
@@ -267,84 +267,93 @@
    recortado (components/CutoutCard). O que sobra aqui e so o que e
    desta tela — o cartao em si se cuida sozinho. */
 
-/* ---- Abre para baixo, fecha para cima ----
+/* ---- Abre e fecha sem pulo ----
 
-   O cartão se desenrola a partir da linha fechada, como uma persiana
-   que desce: o `clip-path` começa cobrindo tudo pela base e vai
-   liberando o conteúdo de cima para baixo, com a origem da escala
-   presa no topo. Fechar é o mesmo caminho ao contrário — a base sobe
-   até o topo e o cartão se recolhe na linha de onde saiu.
+   O card é UM SÓ nos dois estados, e o cabeçalho nunca sai do lugar:
+   ele fica fora das regiões que abrem, entre elas. O que cresce e
+   encolhe são as duas dobras — a foto, acima do cabeçalho, e o
+   conteúdo, abaixo.
 
+   Cada dobra é uma grade de UMA linha que vai de 0fr a 1fr. É essa a
+   peça que faz a coisa toda funcionar: o navegador interpola a altura
+   real do conteúdo sem ninguém precisar medir nada em JavaScript, e a
+   altura do card acompanha em transição em vez de saltar de um valor
+   para outro. Por isso não há mais estado de "fechando" nem timer:
+   fechar é a mesma transição no sentido contrário, e nada desmonta no
+   meio dela.
+
+   Por cima da altura correm um fade e uma escala curtos (0.98 → 1),
+   que é o que dá a sensação de material — não de um bloco que apareceu.
    A escala parte de 0.98, e não de zero: vindo de zero pareceria um
-   card NOVO nascendo, e o que ele é, é o mesmo card se abrindo.
+   card NOVO nascendo, e o que ele é, é o mesmo card se abrindo. */
+.cliente__dobra {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  /* recolhida, ela sai do caminho do Tab: os botões de dentro (Fechar,
+     Ver no quadro, editar, apagar) continuariam focáveis numa faixa de
+     altura zero. O `0s linear` com atraso só troca a visibilidade
+     quando a transição termina, então nada some no meio dela. */
+  visibility: hidden;
+  transition: grid-template-rows var(--dur-cliente) var(--ease-cliente),
+    opacity 180ms var(--ease-cliente),
+    visibility 0s linear var(--dur-cliente);
+}
 
-   Fechar depende do estado `is-fechando` (Clientes.jsx): a animação de
-   saída só roda enquanto o elemento ainda está no DOM, então o clique
-   marca a classe, espera a animação e só então desmonta. */
+.cliente__dobra[data-aberto='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition: grid-template-rows var(--dur-cliente) var(--ease-cliente),
+    opacity 240ms var(--ease-cliente) 60ms,
+    visibility 0s linear;
+}
+
+.cliente__dobra-int {
+  min-height: 0;
+  overflow: hidden;
+  transform: scale(0.98);
+  transform-origin: top center;
+  transition: transform var(--dur-cliente) var(--ease-cliente);
+}
+
+.cliente__dobra[data-aberto='true'] .cliente__dobra-int {
+  transform: scale(1);
+}
+
+.cliente {
+  /* uma curva só para o card inteiro: saída suave, sem repique */
+  --dur-cliente: 320ms;
+  --ease-cliente: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 .cliente--aberto {
   --corte-raio: var(--radius-lg);
   --avatar-anel: transparent;
-  animation: cliente-abre 340ms var(--ease-out) both;
-  transform-origin: top center;
+  /* aberto, o card inteiro fecha ao clique — a mão precisa saber
+     disso antes de clicar, e é o cursor que conta */
+  cursor: pointer;
 }
 
-@keyframes cliente-abre {
-  from {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.98);
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    clip-path: inset(0 0 0 0);
-  }
+/* ...menos onde há um botão de verdade: ali o clique faz outra coisa */
+.cliente--aberto button,
+.cliente--aberto a,
+.cliente--aberto input,
+.cliente--aberto select,
+.cliente--aberto textarea {
+  cursor: auto;
 }
 
-/* de baixo para cima: a base sobe e o cartão se recolhe */
-.cliente--aberto.is-fechando {
-  animation: cliente-fecha 300ms var(--ease-out) both;
-  /* durante o recolhimento nada mais responde ao clique: um segundo
-     clique no meio da animação só faria o card piscar */
-  pointer-events: none;
-}
-
-@keyframes cliente-fecha {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    clip-path: inset(0 0 0 0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-8px) scale(0.98);
-    clip-path: inset(0 0 100% 0);
-  }
-}
-
-/* a foto entra depois do cartao, escorregando de cima: e o que da a
-   sensacao de que a linha fechada ABRIU e revelou a logo */
-.cliente--aberto .corte__media {
-  animation: cliente-foto 460ms var(--ease-out) both;
-}
-
-/* fechando, a foto sai junto com o cartão e não sozinha, senão ela
-   continuaria descendo enquanto o resto sobe */
-.cliente--aberto.is-fechando .corte__media {
-  animation: none;
-}
-
-@keyframes cliente-foto {
-  from {
-    opacity: 0;
-    transform: translateY(-14px);
-  }
+.cliente--aberto button,
+.cliente--aberto a {
+  cursor: pointer;
 }
 
 /* a linha fechada tambem responde ao ponteiro, para o clique parecer
    um convite e nao um botao escondido */
 .cliente__topo {
-  transition: transform var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-out),
+    padding var(--dur-cliente) var(--ease-cliente);
 }
 
 .cliente:not(.cliente--aberto) .cliente__topo:active {
@@ -352,17 +361,23 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cliente--aberto,
-  .cliente--aberto.is-fechando,
-  .cliente--aberto .corte__media {
-    animation: none;
+  .cliente__dobra,
+  .cliente__dobra-int,
+  .cliente__topo {
+    transition: none;
   }
 }
 
 /* a tarja lateral nao entra no cartao recortado: quem marca a cor da
-   empresa ali e a borda inteira (is-destaque) */
+   empresa ali e a borda inteira (is-destaque). Ela se apaga junto com
+   a abertura em vez de sumir de um quadro para o outro. */
+.cliente::before {
+  opacity: 1;
+  transition: opacity var(--dur-cliente) var(--ease-cliente);
+}
+
 .cliente--aberto::before {
-  content: none;
+  opacity: 0;
 }
 
 /* o cabecalho encosta na foto: sem a tarja, o recuo da esquerda cai */
@@ -615,4 +630,32 @@
 .cliente__semsetor {
   font-style: italic;
   color: var(--text-faint);
+}
+
+/* ---- a nota no cabeçalho do card ----
+   Fica entre o nome e o setor, encolhida: é um dado de leitura rápida
+   na varredura da lista, e não o assunto do cartão. */
+.cliente__nota {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+}
+
+.cliente__nota strong {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+/* em tela estreita o nome já aperta: a nota perde o fundo e fica só o
+   número com as estrelas */
+@media (max-width: 520px) {
+  .cliente__nota {
+    padding: 0;
+    background: transparent;
+  }
 }

@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "concurrently -n api,web -c blue,green -k \"npm:api\" \"npm:dev\"",
+    "dev:all": "concurrently -n api,web -c blue,green -k \"npm:api:dev\" \"npm:dev\"",
     "api": "node server/index.js",
+    "api:dev": "node --watch server/index.js",
     "build": "vite build",
     "preview": "vite preview",
     "db:senha": "node server/scripts/gerar-hash.js",

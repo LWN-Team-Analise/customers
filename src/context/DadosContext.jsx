@@ -5,6 +5,7 @@ import * as roteiroApi from '@/services/roteiroService'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { corAdaptada, textoSobre } from '@/utils/cor'
+import { hojeISO } from '@/utils/formato'
 import { podeFazer } from '@/domain/permissoes'
 import {
   chaveDoCargo,
@@ -41,6 +42,7 @@ const INICIAL = {
   observacoesQuadro: [],
   etiquetas: [],
   cargos: [],
+  titulos: [],
   equipe: [],
   roteiro: [],
   termos: TERMOS_PADRAO,
@@ -77,6 +79,7 @@ export function DadosProvider({ children }) {
         etiquetas: quadro.etiquetas ?? [],
         termos: { ...TERMOS_PADRAO, ...(quadro.termos ?? {}) },
         cargos: equipe.cargos ?? [],
+        titulos: equipe.titulos ?? [],
         equipe: equipe.usuarios ?? [],
         roteiro: roteiro ?? [],
       })
@@ -171,6 +174,31 @@ export function DadosProvider({ children }) {
   )
 
   /* ============================================================
+     Cargos da equipe (o titulo da pessoa dentro do setor)
+
+     Cadastro proprio, sem cor e sem permissao nenhuma. Quem mexe
+     nele — e quem ATRIBUI um cargo a alguem — precisa de
+     `editar_cargo_titulo`; a API confere de novo antes de gravar.
+     ============================================================ */
+
+  const adicionarTitulo = useCallback(
+    (campos) => gravar(() => equipeApi.criarTitulo(campos)),
+    [gravar],
+  )
+
+  const atualizarTitulo = useCallback(
+    (id, campos) => gravar(() => equipeApi.editarTitulo(id, campos)),
+    [gravar],
+  )
+
+  const removerTitulo = useCallback((id) => gravar(() => equipeApi.apagarTitulo(id)), [gravar])
+
+  const tituloPorId = useCallback(
+    (id) => estado.titulos.find((t) => String(t.id) === String(id)) ?? null,
+    [estado.titulos],
+  )
+
+  /* ============================================================
      Clientes
      ============================================================ */
 
@@ -206,12 +234,17 @@ export function DadosProvider({ children }) {
 
   const carregarChatDoSite = useCallback(() => dados.carregarChatDoSite(), [])
 
+  /* campos: { texto, arquivo?, respondeA?, mencoes? } — os mesmos do
+     chat da obra, porque as duas conversas usam a mesma caixa */
   const enviarNoChatDoSite = useCallback(
-    (texto) => dados.enviarNoChatDoSite({ texto, autorNome: user?.name }),
+    (campos) => dados.enviarNoChatDoSite({ ...campos, autorNome: user?.name }),
     [user?.name],
   )
 
-  const apagarDoChatDoSite = useCallback((id) => dados.apagarDoChatDoSite(id), [])
+  const apagarDoChatDoSite = useCallback(
+    (id, escopo = 'mim') => dados.apagarDoChatDoSite(id, escopo),
+    [],
+  )
 
   /* ============================================================
      Obras
@@ -327,14 +360,16 @@ export function DadosProvider({ children }) {
 
   /* ---------------- Observacoes do quadro ---------------- */
 
+  /* campos: { texto, inicioEm?, fimEm? } — as duas datas juntas dao a
+     DURACAO da observacao; sem elas ela vale ate alguem apagar */
   const adicionarObservacaoQuadro = useCallback(
-    (texto) =>
-      gravar(() => dados.criarObservacaoQuadro({ texto, autorNome: user?.name })),
+    (campos) =>
+      gravar(() => dados.criarObservacaoQuadro({ ...campos, autorNome: user?.name })),
     [gravar, user?.name],
   )
 
   const editarObservacaoQuadro = useCallback(
-    (id, texto) => gravar(() => dados.editarObservacaoQuadro(id, texto)),
+    (id, campos) => gravar(() => dados.editarObservacaoQuadro(id, campos)),
     [gravar],
   )
 
@@ -469,6 +504,49 @@ export function DadosProvider({ children }) {
     [etiquetaPorId],
   )
 
+  /* ---------------- Etiquetas do CARD ----------------
+
+     Catalogo a parte. A etiqueta da obra diz o que a obra e; a do
+     card diz o que aquele pedaco do roteiro e. Juntas num catalogo
+     so, a sugestao de uma apareceria na outra e uma renomeada de um
+     lado mexeria no outro sem ninguem pedir.
+
+     Elas ja vem DENTRO do card no /roteiro (nao ha lista solta a
+     resolver por id, como nas obras), e por isso nao ha um
+     `etiquetaCardPorId`. */
+
+  const etiquetarCard = useCallback(
+    (cardId, campos) => gravar(() => roteiroApi.etiquetarCard(cardId, campos)),
+    [gravar],
+  )
+
+  const atualizarEtiquetaCard = useCallback(
+    (id, campos) => gravar(() => roteiroApi.editarEtiquetaCard(id, campos)),
+    [gravar],
+  )
+
+  const tirarEtiquetaCard = useCallback(
+    (cardId, etiquetaId) => gravar(() => roteiroApi.tirarEtiquetaCard(cardId, etiquetaId)),
+    [gravar],
+  )
+
+  /**
+   * Todas as etiquetas de card ja usadas, para a lista de sugestoes.
+   *
+   * Sai do proprio roteiro carregado — nao ha rota de catalogo: uma
+   * etiqueta que ninguem colou em card nenhum nao tem para que ser
+   * sugerida.
+   */
+  const etiquetasDeCard = useMemo(() => {
+    const vistas = new Map()
+    ;(estado.roteiro ?? []).forEach((etapa) =>
+      (etapa.cards ?? []).forEach((card) =>
+        (card.etiquetas ?? []).forEach((e) => vistas.set(String(e.id), e)),
+      ),
+    )
+    return [...vistas.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [estado.roteiro])
+
   /* ---------------- Anexos ---------------- */
 
   const adicionarAnexo = useCallback(
@@ -560,13 +638,15 @@ export function DadosProvider({ children }) {
      nunca mexer nas que ja passaram.
      ============================================================ */
 
+  /* campos: { nome, descricao? } — a descricao e a linha de apoio que
+     aparece embaixo do nome no card da etapa */
   const adicionarEtapa = useCallback(
-    (nome, obraId) => gravar(() => roteiroApi.criarEtapa(nome, obraId)),
+    (campos, obraId) => gravar(() => roteiroApi.criarEtapa({ ...campos, obraId })),
     [gravar],
   )
 
-  const renomearEtapa = useCallback(
-    (id, nome) => gravar(() => roteiroApi.renomearEtapa(id, nome)),
+  const editarEtapa = useCallback(
+    (id, campos) => gravar(() => roteiroApi.editarEtapa(id, campos)),
     [gravar],
   )
 
@@ -759,9 +839,59 @@ export function DadosProvider({ children }) {
     [estado.obras, clientePorId, concluida],
   )
 
+  /* ============================================================
+     Observacoes do quadro: as que valem HOJE e as que venceram
+
+     A observacao pode ter uma DURACAO ("de 01/09 ate 05/09"). Passada
+     a data final, ela sai do painel sozinha — ninguem precisa lembrar
+     de voltar la e apagar, que era o que fazia o quadro virar mural de
+     recado vencido.
+
+     Ela nao e apagada: vai para o HISTORICO, que a aba do pop-up
+     mostra. "O que estava valendo em marco?" e uma pergunta legitima, e
+     a resposta sumiria junto com a linha.
+
+     Observacao SEM duracao nunca vence: fica no painel ate alguem
+     apagar, como sempre foi. E a apagada na mao nao aparece em lugar
+     nenhum — o historico e para o que venceu sozinho; o que a pessoa
+     apagou, ela apagou porque nao queria mais ver.
+
+     O corte usa 'AAAA-MM-DD' comparado como texto. Nessa forma a ordem
+     alfabetica E a ordem cronologica, entao nao ha Date nem fuso no
+     meio para fazer a observacao sumir um dia antes.
+
+     Quem decide a visibilidade e SO a data final. Uma observacao com
+     inicio no futuro ("de 10/09 ate 15/09", escrita hoje) aparece
+     desde ja, com as duas datas impressas no card. E de proposito: o
+     que foi pedido e que ela SUMA na data, e uma observacao que nao
+     aparece quando e salva faz o autor achar que nao gravou.
+     ============================================================ */
+
+  const hoje = hojeISO()
+  const vigente = useCallback((o) => !o.fimEm || o.fimEm >= hoje, [hoje])
+
+  const observacoesQuadro = useMemo(
+    () => estado.observacoesQuadro.filter(vigente),
+    [estado.observacoesQuadro, vigente],
+  )
+
+  /* do que venceu por ultimo para o que venceu primeiro: o historico se
+     le de tras para frente, como toda lista de "o que houve" */
+  const historicoObservacoes = useMemo(
+    () =>
+      estado.observacoesQuadro
+        .filter((o) => !vigente(o))
+        .sort((a, b) => String(b.fimEm).localeCompare(String(a.fimEm))),
+    [estado.observacoesQuadro, vigente],
+  )
+
   const valor = useMemo(
     () => ({
       ...estado,
+      /* depois do spread de proposito: estas duas SUBSTITUEM a lista
+         crua que veio do servidor */
+      observacoesQuadro,
+      historicoObservacoes,
       roteiro,
       roteiroDaObra,
       equipe,
@@ -778,6 +908,11 @@ export function DadosProvider({ children }) {
       corDoCargo,
       corDoTextoNoCargo,
       nomeDoCargo,
+
+      adicionarTitulo,
+      atualizarTitulo,
+      removerTitulo,
+      tituloPorId,
 
       adicionarCliente,
       atualizarCliente,
@@ -820,6 +955,10 @@ export function DadosProvider({ children }) {
       tirarEtiqueta,
       etiquetaPorId,
       etiquetasDaObra,
+      etiquetasDeCard,
+      etiquetarCard,
+      atualizarEtiquetaCard,
+      tirarEtiquetaCard,
 
       adicionarAnexo,
       baixarAnexo,
@@ -839,7 +978,7 @@ export function DadosProvider({ children }) {
       removerPessoa,
 
       adicionarEtapa,
-      renomearEtapa,
+      editarEtapa,
       removerEtapa,
       adicionarCard,
       atualizarCard,
@@ -863,6 +1002,8 @@ export function DadosProvider({ children }) {
     }),
     [
       estado,
+      observacoesQuadro,
+      historicoObservacoes,
       roteiro,
       roteiroDaObra,
       equipe,
@@ -878,6 +1019,10 @@ export function DadosProvider({ children }) {
       corDoCargo,
       corDoTextoNoCargo,
       nomeDoCargo,
+      adicionarTitulo,
+      atualizarTitulo,
+      removerTitulo,
+      tituloPorId,
       adicionarCliente,
       atualizarCliente,
       removerCliente,
@@ -912,6 +1057,10 @@ export function DadosProvider({ children }) {
       tirarEtiqueta,
       etiquetaPorId,
       etiquetasDaObra,
+      etiquetasDeCard,
+      etiquetarCard,
+      atualizarEtiquetaCard,
+      tirarEtiquetaCard,
       adicionarAnexo,
       baixarAnexo,
       removerAnexo,
@@ -926,7 +1075,7 @@ export function DadosProvider({ children }) {
       atualizarPessoa,
       removerPessoa,
       adicionarEtapa,
-      renomearEtapa,
+      editarEtapa,
       removerEtapa,
       adicionarCard,
       atualizarCard,

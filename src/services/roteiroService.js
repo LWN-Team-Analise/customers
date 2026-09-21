@@ -24,13 +24,17 @@ export async function carregarRoteiro() {
 
 /* ---------------- Etapas ---------------- */
 
-export async function criarEtapa(nome, obraId) {
-  const { etapa } = await post('/roteiro/etapas', { nome, obraId })
+export async function criarEtapa({ nome, descricao = '', obraId } = {}) {
+  const { etapa } = await post('/roteiro/etapas', { nome, descricao, obraId })
   return etapa
 }
 
-/** Renomear vale para todas: e a mesma etapa, so mudou o rotulo. */
-export const renomearEtapa = (id, nome) => patch(`/roteiro/etapas/${id}`, { nome })
+/**
+ * Renomear vale para todas: e a mesma etapa, so mudou o rotulo.
+ *
+ * `campos` e { nome?, descricao? } — o que nao vier fica como esta.
+ */
+export const editarEtapa = (id, campos) => patch(`/roteiro/etapas/${id}`, campos)
 
 export const apagarEtapa = (id, obraId) => del(comObra(`/roteiro/etapas/${id}`, obraId))
 
@@ -60,3 +64,23 @@ export async function criarCheck(cardId, campos) {
 
 export const editarCheck = (id, campos) => patch(`/roteiro/checks/${id}`, campos)
 export const apagarCheck = (id, obraId) => del(comObra(`/roteiro/checks/${id}`, obraId))
+
+/* ---------------- Etiquetas do card ---------------- */
+
+/**
+ * Catalogo PROPRIO, separado do das obras: a etiqueta da obra diz o
+ * que a obra e, a do card diz o que aquele pedaco do roteiro e. Sem a
+ * atualizacao 7 do banco a API responde 501, e a tela mostra o recado.
+ */
+export async function etiquetarCard(cardId, { nome, cor, etiquetaId } = {}) {
+  const { etiqueta } = await post(`/roteiro/cards/${cardId}/etiquetas`, { nome, cor, etiquetaId })
+  return etiqueta
+}
+
+export async function editarEtiquetaCard(id, campos) {
+  const { etiqueta } = await patch(`/roteiro/cards/etiquetas/${id}`, campos)
+  return etiqueta
+}
+
+export const tirarEtiquetaCard = (cardId, etiquetaId) =>
+  del(`/roteiro/cards/${cardId}/etiquetas/${etiquetaId}`)

@@ -11,8 +11,10 @@
              duzia de outras sem mudar nada do que o sistema
              faz. Na TELA, ele se chama Setor.
      CARGO — o que a pessoa e dentro do setor (Analista,
-             Coordenador). Texto livre no cadastro; nao decide
-             permissao nenhuma.
+             Coordenador). Tem cadastro proprio (tabela
+             `cargo_titulo`), nao tem cor e nao decide permissao
+             nenhuma. Quem cadastra e quem ATRIBUI um cargo a
+             alguem e so quem tem `editar_cargo_titulo`.
 
    Sao dois grupos de permissao:
 
@@ -55,6 +57,12 @@ export const ALTERACAO = [
     nota: 'Sem esta, a pessoa só edita o próprio cadastro em Configurações (e nunca o CPF).',
   },
   { chave: 'editar_cargo', rotulo: 'Adicionar / editar setor', dependeDe: null },
+  {
+    chave: 'editar_cargo_titulo',
+    rotulo: 'Adicionar / editar cargo',
+    dependeDe: null,
+    nota: 'É ela também que permite ATRIBUIR o cargo de alguém — sem ela, ninguém escolhe o próprio cargo no perfil.',
+  },
   { chave: 'editar_avaliacoes', rotulo: 'Adicionar / editar avaliações', dependeDe: 'ver_avaliacoes' },
   { chave: 'editar_clientes', rotulo: 'Adicionar / editar clientes', dependeDe: 'ver_clientes' },
   { chave: 'editar_obras', rotulo: 'Adicionar / editar obras', dependeDe: 'ver_obras' },

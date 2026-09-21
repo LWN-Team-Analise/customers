@@ -80,7 +80,7 @@
   transform: none;
 }
 
-/* ---------------- Novo cargo ---------------- */
+/* ---------------- Novo setor ---------------- */
 
 .cargos__novo {
   display: inline-flex;
@@ -102,15 +102,6 @@
 .cargos__novo:hover {
   border-color: var(--accent);
   color: var(--text-strong);
-}
-
-.cargos__legenda {
-  margin: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  font-size: 0.77rem;
-  line-height: 1.5;
-  color: var(--text-faint);
 }
 
 /* ============================================================

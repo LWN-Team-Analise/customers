@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
@@ -303,10 +303,6 @@ function iniciais(nome) {
     .toUpperCase()
 }
 
-/* quanto tempo a animação de fechar dura; precisa bater com o
-   `cliente-fecha` do CSS, senão o card some antes de terminar */
-const MS_FECHANDO = 300
-
 /**
  * Card do cliente, em dois estados.
  *
@@ -317,46 +313,64 @@ const MS_FECHANDO = 300
  * a cidade fica na tarja vazada de baixo e a contagem de obras no selo
  * de cima. Foi o pedido: o cartao recortado e o do cliente ABERTO.
  *
- * A passagem entre os dois e animada NOS DOIS SENTIDOS:
+ * A PASSAGEM entre os dois: o card e UM SO nos dois estados, e o
+ * cabecalho nunca sai do lugar.
  *
- *   abrindo  — o cartao se desenrola de cima para baixo, como uma
- *              persiana que desce a partir da linha fechada;
- *   fechando — ele se recolhe de baixo para cima, pelo mesmo caminho.
+ * Antes ele era dois cards diferentes — uma linha, que desmontava, e um
+ * cartao, que nascia no lugar dela. Nenhuma animacao segurava esse
+ * troco: o <li> mudava de altura no mesmo quadro em que o cartao
+ * comecava a aparecer, e o resultado era o pulo. Fechar era pior ainda,
+ * porque a animacao de saida precisava de um timer para o React so
+ * desmontar depois — e no fim do timer a altura despencava de uma vez.
  *
- * Fechar precisa do estado `fechando` porque a animacao de saida so
- * roda enquanto o elemento AINDA ESTA na tela: sem ele, o React tira o
- * cartao do DOM no mesmo instante do clique e nao ha o que animar. Por
- * isso o clique nao fecha na hora — ele marca `fechando`, deixa a
- * animacao correr e so entao desmonta.
+ * Agora o cabecalho fica montado o tempo todo e as duas partes que
+ * entram e saem (a foto em cima, o conteudo embaixo) vivem em regioes
+ * que crescem de 0fr a 1fr. A altura do card e sempre a soma delas, em
+ * transicao, entao nada salta: o cabecalho fica parado enquanto o resto
+ * se abre em volta dele, com um fade e uma escala curtos por cima.
  *
- * Fecha por dois caminhos, e os dois valem: o botao "Fechar" sobre a
- * foto e o proprio cabecalho (a faixa da logo com o nome). Clicar de
- * novo onde se clicou para abrir e o gesto que a mao ja espera.
+ * Sem timer, sem estado de "fechando" e sem desmontar nada — fechar e
+ * exatamente a mesma transicao no sentido contrario.
+ *
+ * Fecha por tres caminhos, e os tres valem: o botao "Fechar" sobre a
+ * foto, o proprio cabecalho (a faixa da logo com o nome) e QUALQUER
+ * ponto do card aberto que nao seja um botao. Clicar de novo onde se
+ * clicou para abrir e o gesto que a mao ja espera — e o resto do
+ * cartao, que antes era area morta, agora responde igual.
  */
 function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApagar, aoVer }) {
   const cor = useCorDaLogo(cliente.logo, cliente.nome)
   const [aberto, setAberto] = useState(false)
-  const [fechando, setFechando] = useState(false)
   /* a lista das obras avaliadas fica fechada ate alguem pedir: o card ja
      mostra a media, e a media e o que responde "esse cliente foi bem?" */
   const [verNotas, setVerNotas] = useState(false)
 
-  /* ao desmontar no meio da animacao, o timer nao pode chamar setState */
-  const timer = useRef(null)
-  useEffect(() => () => clearTimeout(timer.current), [])
-
   const fechar = () => {
-    if (fechando) return
-    setFechando(true)
-    timer.current = setTimeout(() => {
-      setAberto(false)
-      setFechando(false)
-      /* a lista de notas volta recolhida na próxima abertura */
-      setVerNotas(false)
-    }, MS_FECHANDO)
+    setAberto(false)
+    /* a lista de notas volta recolhida na próxima abertura */
+    setVerNotas(false)
   }
 
   const alternar = () => (aberto ? fechar() : setAberto(true))
+
+  /**
+   * Com o card ABERTO, clicar em QUALQUER lugar dele fecha.
+   *
+   * Antes só a faixa do cabeçalho (a que tem a setinha) fechava, e o
+   * resto do cartão — a foto, o endereço, a avaliação — era uma área
+   * morta: a mão clicava, nada acontecia, e era preciso procurar de
+   * volta a setinha lá em cima.
+   *
+   * O que continua clicável é o que tem função própria: os botões
+   * (editar, apagar, "Ver no quadro", abrir as notas), os links e os
+   * campos. Por isso o clique só fecha quando NÃO saiu de um desses —
+   * senão apagar um cliente fecharia o card no mesmo gesto.
+   */
+  const cliqueNoCard = (evento) => {
+    if (!aberto) return
+    if (evento.target.closest('button, a, input, textarea, select, [role="button"]')) return
+    fechar()
+  }
 
   const cabeca = (
     <button
@@ -368,6 +382,26 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
     >
       <Avatar nome={cliente.nome} foto={cliente.logo} tamanho={40} quadrado titulo={cliente.nome} />
       <h2 className="cliente__nome">{cliente.nome}</h2>
+
+      {/* ---- a nota, na linha do nome ----
+          Antes ela só existia dentro do card aberto, no pino sobre a
+          foto. Mas "esse cliente foi bem?" é a pergunta que se faz
+          VARRENDO a lista, e não abrindo cliente por cliente para
+          descobrir — então ela sobe para o cabeçalho, que é a única
+          parte sempre visível. Dentro do card ela continua, com as
+          notas obra a obra. */}
+      {nota && (
+        <span
+          className="cliente__nota"
+          title={`Média de ${nota.quantas} obra${nota.quantas === 1 ? '' : 's'} avaliada${
+            nota.quantas === 1 ? '' : 's'
+          }`}
+        >
+          <Estrelas nota={nota.media} tamanho={12} />
+          <strong>{nota.media.toFixed(1)}</strong>
+        </span>
+      )}
+
       {setor && (
         <span className="cliente__setor" style={{ '--setor-cor': setor.cor }}>
           {setor.nome}
@@ -381,60 +415,63 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
     </button>
   )
 
-  if (!aberto) {
-    return (
-      <li className="cliente" style={{ '--cor-logo': cor }}>
-        {cabeca}
-      </li>
-    )
-  }
-
   return (
     <li>
       <CutoutCard
-        className={`cliente cliente--aberto ${fechando ? 'is-fechando' : ''}`.trim()}
+        className={`cliente ${aberto ? 'cliente--aberto' : ''}`.trim()}
         style={{ '--cor-logo': cor, '--corte-cor': cor }}
-        destaque
+        destaque={aberto}
+        onClick={cliqueNoCard}
       >
-        <CutoutCardMedia altura={170}>
-          <CutoutCardImage
-            src={cliente.logo}
-            alt=""
-            iniciais={iniciais(cliente.nome)}
-            cor={cor}
-          />
-          <CutoutCardOverlay />
+        {/* a foto entra por cima do cabeçalho, e é a primeira das duas
+            regiões que crescem */}
+        <div className="cliente__dobra" data-aberto={aberto}>
+          <div className="cliente__dobra-int">
+            <CutoutCardMedia altura={170}>
+              <CutoutCardImage
+                src={cliente.logo}
+                alt=""
+                iniciais={iniciais(cliente.nome)}
+                cor={cor}
+              />
+              <CutoutCardOverlay />
 
-          <CutoutCardPin>
-            {/* a nota vale mais que a contagem no canto: e o primeiro numero
-                que se procura ao abrir um cliente */}
-            {nota ? (
-              <span className="cliente__pino cliente__pino--nota">
-                <Estrelas nota={nota.media} tamanho={12} />
-                {nota.media.toFixed(1)}
-              </span>
-            ) : (
-              <span className="cliente__pino">
-                {numeros.total} obra{numeros.total === 1 ? '' : 's'}
-              </span>
-            )}
-          </CutoutCardPin>
+              <CutoutCardPin>
+                {/* a nota vale mais que a contagem no canto: e o primeiro numero
+                    que se procura ao abrir um cliente */}
+                {nota ? (
+                  <span className="cliente__pino cliente__pino--nota">
+                    <Estrelas nota={nota.media} tamanho={12} />
+                    {nota.media.toFixed(1)}
+                  </span>
+                ) : (
+                  <span className="cliente__pino">
+                    {numeros.total} obra{numeros.total === 1 ? '' : 's'}
+                  </span>
+                )}
+              </CutoutCardPin>
 
-          <CutoutCardInsetLabel>
-            <Icone.pino />
-            {cliente.cidade}
-            {cliente.estado ? `/${cliente.estado}` : ''}
-          </CutoutCardInsetLabel>
+              <CutoutCardInsetLabel>
+                <Icone.pino />
+                {cliente.cidade}
+                {cliente.estado ? `/${cliente.estado}` : ''}
+              </CutoutCardInsetLabel>
 
-          <CutoutCardAction>
-            <button type="button" className="cliente__fechar" onClick={fechar}>
-              Fechar
-            </button>
-          </CutoutCardAction>
-        </CutoutCardMedia>
+              <CutoutCardAction>
+                <button type="button" className="cliente__fechar" onClick={fechar}>
+                  Fechar
+                </button>
+              </CutoutCardAction>
+            </CutoutCardMedia>
+          </div>
+        </div>
 
+        {/* o cabeçalho é o ponto fixo: ele não entra em região nenhuma,
+            então não se mexe quando o card abre ou fecha */}
         {cabeca}
 
+        <div className="cliente__dobra" data-aberto={aberto}>
+          <div className="cliente__dobra-int">
         <CutoutCardContent>
           <dl className="cliente__dados">
             <div>
@@ -574,6 +611,8 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
             Ver no quadro
           </button>
         </CutoutCardFooter>
+          </div>
+        </div>
       </CutoutCard>
     </li>
   )

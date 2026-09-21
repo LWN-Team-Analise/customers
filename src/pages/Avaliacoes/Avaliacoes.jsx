@@ -4,22 +4,14 @@ import Avatar from '@/components/Avatar/Avatar'
 import Estrelas from '@/components/Estrelas/Estrelas'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
-import {
-  CutoutCard,
-  CutoutCardAction,
-  CutoutCardContent,
-  CutoutCardFooter,
-  CutoutCardImage,
-  CutoutCardInsetLabel,
-  CutoutCardMedia,
-  CutoutCardOverlay,
-  CutoutCardPin,
-} from '@/components/CutoutCard/CutoutCard'
 import { CampoArea } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import { tituloDaObra } from '@/domain/obras'
 import useCorDaLogo from '@/hooks/useCorDaLogo'
 import { dataBR, dataHora } from '@/utils/formato'
+
+/** 'AAAA-MM-DD' de um carimbo ISO — o que `dataBR` sabe ler. */
+const soDia = (valor) => (valor ? String(valor).slice(0, 10) : null)
 import './Avaliacoes.css'
 
 const FILTROS = [
@@ -28,8 +20,12 @@ const FILTROS = [
   { valor: 'com', rotulo: 'Avaliadas' },
 ]
 
-/** As duas notas que toda obra costuma ter. O + acrescenta outras. */
-const ROTULOS = ['Diretor', 'Cliente']
+/* A escala. Cinco degraus, um por estrela — antes ia ate 10 e a
+   estrela valia dois pontos, o que obrigava a traduzir "8" para "quatro
+   estrelas" de cabeca a cada leitura. O banco aceita ate 10, entao a
+   faixa nova cabe na antiga sem migracao; as notas velhas continuam
+   gravadas como estao e aparecem no teto das cinco estrelas. */
+const NOTA_MAXIMA = 5
 
 const Mais = ({ tamanho = 15 }) => (
   <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -129,25 +125,17 @@ export default function Avaliacoes() {
   )
 }
 
-/** Duas letras do nome da empresa, para o card sem logo. */
-function iniciais(nome) {
-  return String(nome ?? '?')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((parte) => parte[0] ?? '')
-    .join('')
-    .toUpperCase()
-}
-
 /**
- * O card da lista, em cartao de quinas recortadas.
+ * O card da lista.
  *
- * A logo do cliente ocupa o topo; a nota fica na tarja vazada do canto
- * de baixo, e o tipo da obra no selo do canto de cima. Cliente sem
- * logo entra com as iniciais na cor predominante do nome — a MESMA cor
- * do card dele na aba Clientes, para a empresa se reconhecer de longe
- * nas duas telas.
+ * Ele mostra a OBRA, e nao a empresa: a tela avalia obra, e o card que
+ * so trazia a logo do cliente obrigava a abrir para saber qual das
+ * cinco obras daquele cliente era.
+ *
+ * Saiu o cabecalho de imagem — uma faixa de 150px com a logo em cima
+ * de cada card — e com ele a maior parte da altura. A logo continua,
+ * pequena, ao lado do nome: ela identifica a empresa de relance sem
+ * gastar meia tela por card.
  */
 function CardAvaliacao({ obra, cliente, participantes, aoAbrir }) {
   const cor = useCorDaLogo(cliente?.logo, cliente?.nome)
@@ -155,10 +143,9 @@ function CardAvaliacao({ obra, cliente, participantes, aoAbrir }) {
 
   return (
     <li>
-      <CutoutCard
+      <article
         className={`avaobra ${obra.avaliacao ? 'is-avaliada' : ''}`.trim()}
-        style={{ '--corte-cor': cor, '--cor-empresa': cor }}
-        destaque={Boolean(obra.avaliacao)}
+        style={{ '--cor-empresa': cor }}
         role="button"
         tabIndex={0}
         onClick={aoAbrir}
@@ -168,62 +155,53 @@ function CardAvaliacao({ obra, cliente, participantes, aoAbrir }) {
             aoAbrir()
           }
         }}
-        aria-label={`Avaliação de ${nome}`}
+        aria-label={`Avaliação de ${tituloDaObra(obra, cliente)}`}
       >
-        <CutoutCardMedia altura={150}>
-          <CutoutCardImage
-            src={cliente?.logo}
-            alt=""
-            iniciais={iniciais(nome)}
-            cor={cor}
-          />
-          <CutoutCardOverlay />
+        <header className="avaobra__topo">
+          <Avatar nome={nome} foto={cliente?.logo} tamanho={30} quadrado />
+          <span className="avaobra__quem">
+            <strong className="avaobra__titulo">{tituloDaObra(obra, cliente)}</strong>
+            <span className="avaobra__empresa">{nome}</span>
+          </span>
+          <span className="avaobra__selo" data-tipo={obra.tipo}>
+            {obra.tipo === 'emergencia' ? 'emergência' : 'padrão'}
+          </span>
+        </header>
 
-          <CutoutCardPin>
-            <span className="avaobra__selo" data-tipo={obra.tipo}>
-              {obra.tipo === 'emergencia' ? 'emergência' : 'padrão'}
+        {obra.descricao && <p className="avaobra__desc">{obra.descricao}</p>}
+
+        <p className="avaobra__datas">
+          <span>
+            início <strong>{dataBR(obra.dataInicio) || '—'}</strong>
+          </span>
+          <span>
+            conclusão <strong>{dataBR(soDia(obra.concluidaEm) ?? obra.dataConclusao) || '—'}</strong>
+          </span>
+        </p>
+
+        <footer className="avaobra__base">
+          {obra.avaliacao ? (
+            <span className="avaobra__nota">
+              <Estrelas nota={obra.avaliacao.nota} tamanho={14} />
+              <strong>{Number(obra.avaliacao.nota).toFixed(1)}</strong>
+              {obra.notas?.length > 1 && <em>de {obra.notas.length} notas</em>}
             </span>
-          </CutoutCardPin>
-
-          <CutoutCardInsetLabel>
-            {obra.avaliacao ? (
-              <>
-                <Estrelas nota={obra.avaliacao.nota} tamanho={15} />
-                <strong>{Number(obra.avaliacao.nota).toFixed(1)}</strong>
-              </>
-            ) : (
-              <span className="avaobra__sem">Sem avaliação</span>
-            )}
-          </CutoutCardInsetLabel>
-
-          <CutoutCardAction>
-            <span className="avaobra__abrir">
-              {obra.avaliacao ? 'Ver notas' : 'Avaliar'}
-            </span>
-          </CutoutCardAction>
-        </CutoutCardMedia>
-
-        <CutoutCardContent>
-          <strong className="avaobra__empresa">{nome}</strong>
-          {obra.notas?.length > 1 && (
-            <span className="avaobra__quantas">média de {obra.notas.length} avaliações</span>
+          ) : (
+            <span className="avaobra__sem">Sem avaliação</span>
           )}
-        </CutoutCardContent>
 
-        {/* so os rostos: os nomes e o resto aparecem ao abrir */}
-        {participantes.length > 0 && (
-          <CutoutCardFooter>
+          {participantes.length > 0 && (
             <span className="avaobra__avatares">
-              {participantes.slice(0, 6).map((p) => (
-                <Avatar key={p.id} nome={p.nome} foto={p.foto} tamanho={24} titulo={p.nome} />
+              {participantes.slice(0, 4).map((p) => (
+                <Avatar key={p.id} nome={p.nome} foto={p.foto} tamanho={20} titulo={p.nome} />
               ))}
+              {participantes.length > 4 && (
+                <span className="avaobra__resto">+{participantes.length - 4}</span>
+              )}
             </span>
-            {participantes.length > 6 && (
-              <span className="avaobra__resto">+{participantes.length - 6}</span>
-            )}
-          </CutoutCardFooter>
-        )}
-      </CutoutCard>
+          )}
+        </footer>
+      </article>
     </li>
   )
 }
@@ -247,6 +225,8 @@ function ModalAvaliar({ obraId, aoFechar }) {
     removerAvaliacao,
     limparAvaliacao,
     mediaDoUsuario,
+    roteiroDaObra,
+    rotuloEtapa,
     pode,
   } = useDados()
 
@@ -260,22 +240,47 @@ function ModalAvaliar({ obraId, aoFechar }) {
 
   const podeAvaliar = pode('editar_avaliacoes')
 
+  /**
+   * Uma linha por ETAPA do roteiro da obra, e todas obrigatorias.
+   *
+   * Antes eram duas linhas livres ("Diretor" e "Cliente") e bastava
+   * uma nota para a obra ficar avaliada. So que a obra passa por
+   * cinco setores, e uma nota so nao diz em qual deles ela travou —
+   * a media saia de uma impressao geral, nao do caminho que a obra
+   * fez. Com uma nota por etapa, a media continua sendo a nota da
+   * obra e passa a ter de onde sair.
+   *
+   * Obra ja avaliada mantem as linhas que ela tem, com os rotulos
+   * que ela tem: reescrever historico para caber no formato novo
+   * apagaria avaliacao que alguem deu.
+   */
   useEffect(() => {
     if (!obra) return
-    setLinhas(
-      obra.notas?.length > 0
-        ? obra.notas.map((n) => ({
-            id: n.id,
-            rotulo: n.rotulo,
-            nota: String(n.nota),
-            descricao: n.descricao ?? '',
-            avaliadaEm: n.avaliadaEm,
-          }))
-        : /* obra ainda sem nota: comeca com as duas de sempre, em branco */
-          ROTULOS.map((rotulo) => ({ rotulo, nota: '', descricao: '' })),
-    )
+
+    if (obra.notas?.length > 0) {
+      setLinhas(
+        obra.notas.map((n) => ({
+          id: n.id,
+          rotulo: n.rotulo,
+          nota: Number(n.nota) || 0,
+          descricao: n.descricao ?? '',
+          avaliadaEm: n.avaliadaEm,
+          verDescricao: Boolean(n.descricao),
+        })),
+      )
+    } else {
+      const etapas = roteiroDaObra(obra)
+      setLinhas(
+        (etapas.length > 0 ? etapas : []).map((e) => ({
+          rotulo: e.nome || rotuloEtapa(e.numero),
+          nota: 0,
+          descricao: '',
+          verDescricao: false,
+        })),
+      )
+    }
     setErro('')
-  }, [obraId, obra])
+  }, [obraId, obra, roteiroDaObra, rotuloEtapa])
 
   if (!obra) return null
 
@@ -287,8 +292,13 @@ function ModalAvaliar({ obraId, aoFechar }) {
       atual.map((l, i) => (i === indice ? { ...l, [campo]: valor } : l)),
     )
 
+  /* uma linha a mais, fora do roteiro — para a nota do cliente ou da
+     diretoria, que nao sao etapa de obra nenhuma */
   const acrescentar = () =>
-    setLinhas((atual) => [...atual, { rotulo: `Avaliação ${atual.length + 1}`, nota: '', descricao: '' }])
+    setLinhas((atual) => [
+      ...atual,
+      { rotulo: `Avaliação ${atual.length + 1}`, nota: 0, descricao: '', verDescricao: false, avulsa: true },
+    ])
 
   const tirar = async (indice) => {
     const linha = linhas[indice]
@@ -315,8 +325,8 @@ function ModalAvaliar({ obraId, aoFechar }) {
   /* a media do que esta na tela, para a pessoa ver o resultado antes
      mesmo de salvar */
   const preenchidas = linhas
-    .map((l) => Number(String(l.nota).replace(',', '.')))
-    .filter((n) => Number.isFinite(n) && n >= 0 && n <= 10)
+    .map((l) => Number(l.nota))
+    .filter((n) => Number.isFinite(n) && n > 0 && n <= NOTA_MAXIMA)
   const previa =
     preenchidas.length > 0
       ? Math.round((preenchidas.reduce((s, n) => s + n, 0) / preenchidas.length) * 10) / 10
@@ -325,26 +335,37 @@ function ModalAvaliar({ obraId, aoFechar }) {
   const salvar = async (evento) => {
     evento.preventDefault()
 
-    const validas = linhas.filter((l) => String(l.nota).trim() !== '')
-    if (validas.length === 0) {
-      setErro('Informe ao menos uma nota, de 0 a 10.')
+    if (linhas.length === 0) {
+      setErro('Esta obra não tem etapas no roteiro para avaliar.')
       return
     }
-    const foraDaFaixa = validas.some((l) => {
-      const n = Number(String(l.nota).replace(',', '.'))
-      return !Number.isFinite(n) || n < 0 || n > 10
-    })
-    if (foraDaFaixa) {
-      setErro('As notas vão de 0 a 10.')
+
+    /* TODAS, e nao "ao menos uma": a media da obra sai das etapas, e
+       uma media tirada de tres de cinco etapas nao e a nota da obra —
+       e a nota das tres que alguem lembrou de avaliar */
+    const semNome = linhas.filter((l) => !String(l.rotulo).trim())
+    if (semNome.length > 0) {
+      setErro('Toda avaliação precisa de um nome.')
       return
     }
+
+    const faltando = linhas.filter((l) => !(Number(l.nota) > 0))
+    if (faltando.length > 0) {
+      setErro(
+        faltando.length === linhas.length
+          ? 'Dê uma nota para cada etapa antes de salvar.'
+          : `Falta a nota de: ${faltando.map((l) => l.rotulo).join(', ')}.`,
+      )
+      return
+    }
+    const validas = linhas
 
     setSalvando(true)
     try {
       for (const linha of validas) {
         const campos = {
-          rotulo: linha.rotulo,
-          nota: Number(String(linha.nota).replace(',', '.')),
+          rotulo: String(linha.rotulo).trim(),
+          nota: Number(linha.nota),
           descricao: linha.descricao,
         }
         if (linha.id) await atualizarAvaliacao(linha.id, campos)
@@ -415,37 +436,55 @@ function ModalAvaliar({ obraId, aoFechar }) {
             )}
           </header>
 
+          {linhas.length === 0 && (
+            <p className="formava__ninguem">
+              Esta obra não tem etapas no roteiro — não há o que avaliar.
+            </p>
+          )}
+
           {linhas.map((linha, i) => (
             // eslint-disable-next-line react/no-array-index-key
             <article key={linha.id ?? `nova-${i}`} className="notaitem">
+              {/* O nome e EDITAVEL, inclusive nas linhas que nasceram das
+                  etapas do roteiro. Elas entram preenchidas porque e o
+                  esqueleto certo na maioria das obras, e nao porque sao
+                  fixas: "Comercial" pode virar "Comercial — proposta
+                  revisada" numa obra em que isso importa, e a nota
+                  continua sendo daquela etapa. O que vai para o banco e
+                  o texto que estiver aqui. */}
               <input
                 className="notaitem__rotulo"
                 value={linha.rotulo}
                 onChange={(e) => mudar(i, 'rotulo')(e.target.value)}
                 placeholder="De quem é a nota"
-                aria-label="Rótulo da avaliação"
+                aria-label="Nome da avaliação"
+                maxLength={60}
                 disabled={!podeAvaliar}
+                title={linha.rotulo}
               />
 
-              <input
-                className="notaitem__nota"
-                type="number"
-                min="0"
-                max="10"
-                step="0.1"
-                value={linha.nota}
-                onChange={(e) => {
-                  mudar(i, 'nota')(e.target.value)
-                  setErro('')
-                }}
-                placeholder="—"
-                aria-label={`Nota de ${linha.rotulo}`}
-                disabled={!podeAvaliar}
+              {/* a nota se da CLICANDO na estrela. A caixa de numero
+                  saiu: numa escala de cinco degraus, apontar o degrau e
+                  mais rapido que digitar — e nao deixa digitar 7. */}
+              <Estrelas
+                nota={linha.nota}
+                tamanho={20}
+                rotulo={`Nota de ${linha.rotulo}`}
+                aoEscolher={
+                  podeAvaliar
+                    ? (n) => {
+                        mudar(i, 'nota')(n)
+                        setErro('')
+                      }
+                    : undefined
+                }
               />
 
-              <Estrelas nota={Number(String(linha.nota).replace(',', '.')) || 0} tamanho={15} />
+              <span className="notaitem__valor" data-vazio={linha.nota > 0 ? undefined : 'sim'}>
+                {linha.nota > 0 ? `${linha.nota} de ${NOTA_MAXIMA}` : 'sem nota'}
+              </span>
 
-              {podeAvaliar && linhas.length > 1 && (
+              {podeAvaliar && linha.id && linhas.length > 1 && (
                 <button
                   type="button"
                   className="notaitem__tirar"
@@ -457,14 +496,31 @@ function ModalAvaliar({ obraId, aoFechar }) {
                 </button>
               )}
 
-              <CampoArea
-                largo
-                linhas={2}
-                placeholder={`O que ${linha.rotulo.toLowerCase()} comentou?`}
-                value={linha.descricao}
-                onChange={(e) => mudar(i, 'descricao')(e.target.value)}
-                disabled={!podeAvaliar}
-              />
+              {/* a descricao e OPCIONAL, e por isso ela comeca fechada:
+                  um campo de texto aberto embaixo de cada etapa faz o
+                  formulario parecer que pede cinco redacoes */}
+              {linha.verDescricao ? (
+                <CampoArea
+                  largo
+                  linhas={2}
+                  autoFocus={!linha.descricao}
+                  placeholder={`O que houve na ${linha.rotulo.toLowerCase()}?`}
+                  value={linha.descricao}
+                  onChange={(e) => mudar(i, 'descricao')(e.target.value)}
+                  disabled={!podeAvaliar}
+                />
+              ) : (
+                podeAvaliar && (
+                  <button
+                    type="button"
+                    className="notaitem__descricao"
+                    onClick={() => mudar(i, 'verDescricao')(true)}
+                  >
+                    <Mais tamanho={13} />
+                    Adicionar descrição
+                  </button>
+                )
+              )}
 
               {linha.avaliadaEm && (
                 <span className="notaitem__data">registrada em {dataHora(linha.avaliadaEm)}</span>

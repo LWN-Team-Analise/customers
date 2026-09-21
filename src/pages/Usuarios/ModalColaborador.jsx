@@ -3,15 +3,20 @@ import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import Confirma from '@/components/Confirma/Confirma'
 import Avatar from '@/components/Avatar/Avatar'
+import EditorImagem from '@/components/EditorImagem/EditorImagem'
 import { CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import { podeEditarCpf } from '@/domain/obras'
 import { ALTERACAO, VISUALIZACAO } from '@/domain/permissoes'
-import { SENHA_PADRAO } from '@/services/equipeService'
+import { SENHA_PADRAO, carregarFotoOriginal } from '@/services/equipeService'
 import { validateCPF, validateEmail } from '@/services/authService'
 import { formatarCPF, formatarTelefone, soDigitos } from '@/utils/formato'
 import { prepararImagem } from '@/utils/imagem'
 import './ModalColaborador.css'
+
+/* a imagem inteira e guardada maior que o avatar recortado: e dela que
+   o editor parte quando alguem reenquadra a foto depois */
+const LADO_ORIGINAL = 1024
 
 const VAZIO = {
   nome: '',
@@ -19,9 +24,11 @@ const VAZIO = {
   cpf: '',
   email: '',
   cargo: '',
-  cargoTitulo: '',
+  cargoTituloId: '',
   telefone: '',
   foto: null,
+  fotoOriginal: null,
+  recorteFoto: null,
 }
 
 /**
@@ -35,14 +42,17 @@ const VAZIO = {
  *           avisos chegam para ela. Obrigatorio, e escolhido de uma
  *           lista (`form.cargo`, que e a chave do setor no banco).
  *   CARGO — "Analista de Qualidade", "Coordenador de Obras". E o titulo
- *           dela dentro do setor. Texto livre, opcional, e nao muda
- *           nenhuma permissao — dois analistas e um coordenador do mesmo
- *           setor podem exatamente as mesmas coisas.
+ *           dela dentro do setor. Sai do cadastro de Cargos, e opcional
+ *           e nao muda nenhuma permissao — dois analistas e um
+ *           coordenador do mesmo setor podem exatamente as mesmas
+ *           coisas. ATRIBUIR um cargo, porem, pede permissao propria
+ *           (`editar_cargo_titulo`): sem ela o campo fica travado.
  *
- * OBRIGATORIOS: nome, data de nascimento, CPF e setor.
- * OPCIONAIS: e-mail, telefone, cargo e foto. E-mail e telefone eram
- * obrigatorios e travavam o cadastro de quem trabalha em campo e nao tem
- * e-mail corporativo — quem nao tem e-mail entra pelo CPF.
+ * OBRIGATORIOS: CPF, nome e setor — os tres marcados com asterisco.
+ * TODO O RESTO E OPCIONAL e salva vazio: nascimento, e-mail, telefone,
+ * cargo e foto. Eles travavam o cadastro de quem trabalha em campo e
+ * nao tem e-mail corporativo nem documento a mao — quem nao tem e-mail
+ * entra pelo CPF.
  *
  * O CPF e travado para todo mundo, com UMA excecao: a diretoria. E trava
  * de setor, nao permissao configuravel — a API recusa do mesmo jeito, e
@@ -57,8 +67,14 @@ export default function ModalColaborador({
   aoFechar,
   aoSalvar,
 }) {
-  const { cargos } = useDados()
+  const { cargos, titulos, pode } = useDados()
   const entradaFoto = useRef(null)
+  /* a imagem que o editor de enquadramento esta ajustando; null = fechado */
+  const [ajustando, setAjustando] = useState(null)
+  /* a foto so vai junto na gravacao quando alguem mexeu nela: a imagem
+     inteira nao vem na carga, e manda-la vazia apagaria o original de
+     quem so veio corrigir o telefone */
+  const [fotoMexida, setFotoMexida] = useState(false)
 
   const [form, setForm] = useState(VAZIO)
   const [erros, setErros] = useState({})
@@ -66,6 +82,7 @@ export default function ModalColaborador({
 
   const editando = Boolean(colaborador)
   const cpfLiberado = podeEditarCpf(usuarioLogado)
+  const podeCargo = pode('editar_cargo_titulo')
 
   useEffect(() => {
     if (!aberto) return
@@ -77,10 +94,13 @@ export default function ModalColaborador({
             cpf: formatarCPF(colaborador.cpf ?? ''),
             telefone: formatarTelefone(colaborador.telefone ?? ''),
             nascimento: colaborador.nascimento ?? '',
+            cargoTituloId: colaborador.cargoTituloId ?? '',
           }
         : VAZIO,
     )
     setErros({})
+    setAjustando(null)
+    setFotoMexida(false)
   }, [aberto, colaborador])
 
   const mudar = (campo) => (evento) => {
@@ -95,14 +115,31 @@ export default function ModalColaborador({
     setErros((atual) => ({ ...atual, [campo]: undefined }))
   }
 
+  /* escolher o arquivo NAO grava a foto: abre o editor de
+     enquadramento. Sair de la e que grava o recorte. */
   const escolherFoto = async (evento) => {
     const arquivo = evento.target.files?.[0]
     evento.target.value = ''
     if (!arquivo) return
     try {
-      const foto = await prepararImagem(arquivo)
-      setForm((atual) => ({ ...atual, foto }))
       setErros((atual) => ({ ...atual, geral: undefined }))
+      setAjustando({ imagem: await prepararImagem(arquivo, { lado: LADO_ORIGINAL }), nova: true })
+    } catch (e) {
+      setErros((atual) => ({ ...atual, geral: e.message }))
+    }
+  }
+
+  /* Reenquadrar parte da imagem INTEIRA, e nao do avatar ja recortado:
+     senao cada ajuste recortaria o recorte anterior.
+
+     Ela nao vem na carga da equipe (pesada demais para viajar por
+     pessoa em toda leitura), entao e buscada aqui, no clique. Cadastro
+     antigo nao tem original guardado — a API devolve a propria foto,
+     que e o melhor que existe ali. */
+  const reenquadrar = async () => {
+    try {
+      const origem = form.fotoOriginal ?? (colaborador ? await carregarFotoOriginal(colaborador.id) : form.foto)
+      if (origem) setAjustando({ imagem: origem, nova: false })
     } catch (e) {
       setErros((atual) => ({ ...atual, geral: e.message }))
     }
@@ -115,9 +152,9 @@ export default function ModalColaborador({
   const enviar = (evento) => {
     evento.preventDefault()
 
+    /* so os tres marcados com asterisco travam o cadastro */
     const novos = {}
     if (!form.nome.trim()) novos.nome = 'Informe o nome completo.'
-    if (!form.nascimento) novos.nascimento = 'Informe a data de nascimento.'
     if (!form.cargo) novos.cargo = 'Escolha o setor.'
     // no cadastro o CPF e obrigatorio; na edicao, so quem pode mexer valida
     if ((!editando || cpfLiberado) && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
@@ -139,11 +176,19 @@ export default function ModalColaborador({
       nome: form.nome.trim(),
       email: form.email.trim(),
       telefone: soDigitos(form.telefone),
-      nascimento: form.nascimento,
+      nascimento: form.nascimento || null,
       cargo: form.cargo,
-      cargoTitulo: form.cargoTitulo.trim(),
-      foto: form.foto,
     }
+    /* a foto so viaja quando alguem mexeu nela: a imagem inteira nao
+       vem na carga, e manda-la vazia apagaria o original guardado */
+    if (!editando || fotoMexida) {
+      campos.foto = form.foto
+      campos.fotoOriginal = form.fotoOriginal
+      campos.recorteFoto = form.recorteFoto
+    }
+    /* o cargo so viaja para quem pode defini-lo: mandar o campo sem a
+       permissao faria a API recusar a gravacao inteira */
+    if (podeCargo) campos.cargoTituloId = form.cargoTituloId || ''
     /* o CPF so viaja quando pode mudar: na edicao por quem nao e da
        diretoria, mandar o campo faria a API recusar a gravacao inteira */
     if (!editando || (cpfLiberado && soDigitos(form.cpf) !== soDigitos(colaborador?.cpf))) {
@@ -172,9 +217,6 @@ export default function ModalColaborador({
       aberto={aberto}
       aoFechar={aoFechar}
       titulo={editando ? 'Editar colaborador' : 'Adicionar colaborador'}
-      subtitulo={
-        editando ? undefined : `Entra com a senha ${SENHA_PADRAO} e troca no primeiro acesso.`
-      }
       largura={580}
     >
       <form className="formcolab" onSubmit={enviar} noValidate>
@@ -200,20 +242,28 @@ export default function ModalColaborador({
 
           <div className="formcolab__nome">
             <CampoTexto
-              rotulo="Nome completo"
+              rotulo="Nome completo *"
               placeholder="Nome e sobrenome"
               value={form.nome}
               onChange={mudar('nome')}
               erro={erros.nome}
             />
             {form.foto && (
-              <button
-                type="button"
-                className="formcolab__semfoto"
-                onClick={() => setForm((a) => ({ ...a, foto: null }))}
-              >
-                Remover foto
-              </button>
+              <span className="formcolab__fotoacoes">
+                <button type="button" className="formcolab__semfoto" onClick={reenquadrar}>
+                  Ajustar enquadramento
+                </button>
+                <button
+                  type="button"
+                  className="formcolab__semfoto"
+                  onClick={() => {
+                    setForm((a) => ({ ...a, foto: null, fotoOriginal: null, recorteFoto: null }))
+                    setFotoMexida(true)
+                  }}
+                >
+                  Remover foto
+                </button>
+              </span>
             )}
           </div>
         </div>
@@ -228,7 +278,7 @@ export default function ModalColaborador({
           />
 
           <CampoTexto
-            rotulo="CPF"
+            rotulo="CPF *"
             inputMode="numeric"
             placeholder="000.000.000-00"
             value={form.cpf}
@@ -244,7 +294,6 @@ export default function ModalColaborador({
             value={form.email}
             onChange={mudar('email')}
             erro={erros.email}
-            dica="Opcional — sem e-mail, o acesso é pelo CPF."
           />
 
           <CampoTexto
@@ -254,30 +303,37 @@ export default function ModalColaborador({
             value={form.telefone}
             onChange={mudar('telefone')}
             erro={erros.telefone}
-            dica="Opcional."
           />
 
-          {/* SETOR: obrigatório, e é ele que decide o que a pessoa pode */}
+          {/* Setor e Cargo lado a lado, nesta ordem: o setor diz de que
+              grupo a pessoa é (e é o que decide o que ela pode fazer);
+              o cargo, o que ela é dentro dele. Só o setor tem cor. */}
           <CampoSelecao
-            rotulo="Setor"
-            largo
+            rotulo="Setor *"
             value={form.cargo}
             onChange={mudar('cargo')}
             erro={erros.cargo}
             vazio="Escolha o setor..."
             opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
-            dica="É o setor que define as permissões desta pessoa."
           />
 
-          {/* CARGO: o título dentro do setor. Não muda permissão nenhuma. */}
-          <CampoTexto
+          {/* CARGO: sai do cadastro de Cargos e não muda permissão
+              nenhuma — mas ATRIBUIR um pede permissão própria, senão
+              qualquer um se daria o cargo que quisesse. */}
+          <CampoSelecao
             rotulo="Cargo"
-            largo
-            placeholder="Ex.: Analista de Qualidade"
-            value={form.cargoTitulo}
-            onChange={mudar('cargoTitulo')}
-            erro={erros.cargoTitulo}
-            dica="Opcional — o cargo específico dentro do setor."
+            value={form.cargoTituloId ?? ''}
+            onChange={mudar('cargoTituloId')}
+            erro={erros.cargoTituloId}
+            disabled={!podeCargo}
+            vazio={
+              !podeCargo
+                ? 'Somente quem define cargos'
+                : titulos.length === 0
+                  ? 'Nenhum cargo cadastrado ainda'
+                  : 'Sem cargo'
+            }
+            opcoes={titulos.map((t) => ({ valor: String(t.id), rotulo: t.nome }))}
           />
         </div>
 
@@ -313,10 +369,30 @@ export default function ModalColaborador({
             ? 'Os dados abaixo passam a valer para esta pessoa.'
             : `A pessoa entra com a senha ${SENHA_PADRAO} e troca no primeiro acesso.`
         }
-        detalhes={<ResumoDoCargo campos={conferindo} cargos={cargos} />}
+        detalhes={<ResumoDoCargo campos={conferindo} cargos={cargos} titulos={titulos} />}
         rotuloConfirmar={editando ? 'Salvar' : 'Cadastrar'}
         aoConfirmar={gravar}
         aoFechar={() => setConferindo(null)}
+      />
+
+      {/* Colaborador NAO tem header: a foto dele nunca abre tela
+          nenhuma. Por isso o editor vem sem o painel de header — esse
+          é só do cliente. */}
+      <EditorImagem
+        aberto={Boolean(ajustando)}
+        imagem={ajustando?.imagem}
+        nome={form.nome}
+        recorteInicial={ajustando?.nova ? null : form.recorteFoto}
+        aoConfirmar={({ original, imagem, recorte }) => {
+          setForm((atual) => ({
+            ...atual,
+            foto: imagem,
+            fotoOriginal: original,
+            recorteFoto: recorte,
+          }))
+          setFotoMexida(true)
+        }}
+        aoFechar={() => setAjustando(null)}
       />
     </Modal>
   )
@@ -326,10 +402,11 @@ export default function ModalColaborador({
  * O resumo que aparece na confirmacao: quem e a pessoa e, principalmente, o
  * que o SETOR escolhido libera para ela.
  */
-function ResumoDoCargo({ campos, cargos }) {
+function ResumoDoCargo({ campos, cargos, titulos = [] }) {
   if (!campos) return null
 
   const cargo = cargos.find((c) => c.chave === campos.cargo)
+  const titulo = titulos.find((t) => String(t.id) === String(campos.cargoTituloId))
   const chaves = cargo?.permissoes ?? []
   const rotulo = (chave) =>
     [...VISUALIZACAO, ...ALTERACAO].find((p) => p.chave === chave)?.rotulo ?? chave
@@ -346,7 +423,7 @@ function ResumoDoCargo({ campos, cargos }) {
       <dd>{cargo?.nome ?? campos.cargo}</dd>
 
       <dt>Cargo</dt>
-      <dd>{campos.cargoTitulo || <em>não informado</em>}</dd>
+      <dd>{titulo?.nome || <em>não informado</em>}</dd>
 
       <dt>Pode</dt>
       <dd>

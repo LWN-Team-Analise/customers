@@ -116,3 +116,39 @@
 .confirma__ok:active {
   transform: scale(0.98);
 }
+
+/* ---- O segundo passo ----
+
+   Só aparece quando a confirmação pede ciência. É para o que não tem
+   desfazer: um clique só, num botão que já estava debaixo do cursor,
+   não é decisão suficiente para apagar o registro de uma obra. */
+
+.confirma__ciencia {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-base);
+  cursor: pointer;
+}
+
+.confirma__ciencia input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+
+/* o botão desligado enquanto a caixinha não é marcada: é ele que
+   mostra que ainda falta um passo */
+.confirma__ok:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

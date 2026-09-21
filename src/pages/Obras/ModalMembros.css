@@ -116,11 +116,27 @@
   white-space: nowrap;
 }
 
+/* a etapa agora abre a linha, entao ela precisa de forma propria:
+   solta a esquerda do nome ela seria lida como parte do nome */
 .membros__etapa {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
   flex-shrink: 0;
-  font-size: 0.73rem;
+  min-width: 30px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  font-size: 0.72rem;
+  font-weight: 700;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.membros__etapa em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--text-faint);
 }
 
 .membros__estado {

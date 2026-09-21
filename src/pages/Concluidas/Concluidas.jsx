@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
-import Confirma from '@/components/Confirma/Confirma'
+import Modal from '@/components/Modal/Modal'
 import { useDados } from '@/context/DadosContext'
 import { tituloDaObra } from '@/domain/obras'
 import { dataBR, dataHora } from '@/utils/formato'
@@ -31,12 +31,6 @@ const SetaDir = () => (
   </svg>
 )
 
-const Lixo = () => (
-  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
-  </svg>
-)
-
 /* os dois tipos de obra, na ordem em que se leem no quadro */
 const GRUPOS = [
   { id: 'padrao', rotulo: 'Obras padrão' },
@@ -56,25 +50,19 @@ function quandoFechou(obra) {
 }
 
 export default function Concluidas() {
-  const { obras, clientePorId, pessoaPorId, concluida, removerObra, pode } = useDados()
+  const { obras, clientePorId, pessoaPorId, concluida } = useDados()
   const navigate = useNavigate()
 
   const [ano, setAno] = useState(null)
   const [mesAberto, setMesAberto] = useState(null)
-  /* a obra que esta esperando confirmacao de exclusao */
-  const [apagando, setApagando] = useState(null)
 
-  /**
-   * Apagar obra concluida tem permissao PROPRIA.
-   *
-   * Nao e a mesma coisa que "editar obras": aqui nao se mexe em trabalho
-   * em andamento, apaga-se o REGISTRO do que a empresa entregou — com o
-   * chat, os anexos, a rastreabilidade e as avaliacoes junto. Quem toca
-   * o quadro no dia a dia nao precisa disso; quem precisa, recebe a
-   * permissao marcada no setor. Sem ela o botao nem aparece, e a API
-   * recusa do mesmo jeito.
-   */
-  const podeExcluir = pode('excluir_concluidas')
+  /* Excluir obra concluida MUDOU DE LUGAR: o botao agora vive no
+     cabecalho da propria obra, ao lado de Anexos, e pede um segundo
+     passo antes de apagar. Aqui ele era um lixo por linha numa lista
+     de doze — um clique errado esperando acontecer, ao lado do botao
+     de abrir. A permissao ('excluir_concluidas') continua a mesma, e
+     agora e a tela da obra que a consulta.
+  */
 
   /* agrupa as concluidas por ano e, dentro dele, por mes */
   const { anos, porAno } = useMemo(() => {
@@ -167,7 +155,15 @@ export default function Concluidas() {
 
                 Os doze aparecem sempre, e nao so os que tem obra: e assim que
                 se le um calendario, e o mes vazio tambem informa — foi um mes
-                em que nada fechou. O mes sem obra nao abre.  */}
+                em que nada fechou. O mes sem obra nao abre.
+
+                A grade ocupa a tela inteira, na largura e na altura: os
+                cards crescem para preencher o que sobra em vez de ficar
+                uma faixa de botoes no topo e o resto da pagina vazio.
+                As obras do mes escolhido abrem em pop-up — antes elas
+                nasciam ABAIXO da grade, e num calendario que agora vai
+                ate o rodape isso significaria rolar a pagina para ver o
+                que se acabou de clicar. */}
             <div className="calendario">
               {MESES_CURTOS.map((nome, m) => {
                 const doMes = meses[m] ?? []
@@ -196,44 +192,50 @@ export default function Concluidas() {
               })}
             </div>
 
-            {/* ---------------- o mes escolhido, aberto ---------------- */}
-            {mesAberto !== null && meses[mesAberto]?.length > 0 && (
-              <section className="mesaberto">
-                <header className="mesaberto__topo">
-                  <h2 className="mesaberto__titulo">
-                    {MESES[mesAberto]} de {anoAtual}
-                  </h2>
-                  <span className="mesaberto__resumo">
-                    {(() => {
-                      const doMes = meses[mesAberto]
-                      const avaliadas = doMes.filter((o) => o.avaliacao)
-                      const media =
-                        avaliadas.length > 0
-                          ? avaliadas.reduce((sm, o) => sm + Number(o.avaliacao.nota), 0) /
-                            avaliadas.length
-                          : null
-                      return media === null
-                        ? "sem avaliação"
-                        : `nota média ${media.toFixed(1)}`
-                    })()}
-                  </span>
-                </header>
+          </>
+        )}
+      </section>
 
-                {/* Padrao e emergencia em blocos separados: sao dois tipos de
-                    trabalho diferentes, e misturados na mesma lista a conta de
-                    emergencias do mes se perde. */}
-                {GRUPOS.map((grupo) => {
-                  const doGrupo = meses[mesAberto].filter((o) => o.tipo === grupo.id)
-                  if (doGrupo.length === 0) return null
-                  return (
-                    <div key={grupo.id} className="grupo" data-tipo={grupo.id}>
-                      <h3 className="grupo__titulo">
-                        {grupo.rotulo}
-                        <span className="grupo__quantas">{doGrupo.length}</span>
-                      </h3>
+      {/* ---------------- o mes escolhido, em pop-up ----------------
 
-                      <ul className="mes__obras">
-                        {doGrupo.map((obra) => {
+          Clicar no mes abre a lista das obras dele; clicar em uma leva
+          para a tela da obra. */}
+      <Modal
+        aberto={mesAberto !== null && (meses[mesAberto]?.length ?? 0) > 0}
+        aoFechar={() => setMesAberto(null)}
+        titulo={mesAberto === null ? '' : `${MESES[mesAberto]} de ${anoAtual}`}
+        subtitulo={(() => {
+          const doMes = mesAberto === null ? [] : (meses[mesAberto] ?? [])
+          if (doMes.length === 0) return undefined
+          const avaliadas = doMes.filter((o) => o.avaliacao)
+          const media =
+            avaliadas.length > 0
+              ? avaliadas.reduce((sm, o) => sm + Number(o.avaliacao.nota), 0) / avaliadas.length
+              : null
+          const quantas = `${doMes.length} obra${doMes.length === 1 ? '' : 's'}`
+          return media === null
+            ? `${quantas} · sem avaliação`
+            : `${quantas} · nota média ${media.toFixed(1)}`
+        })()}
+        largura={780}
+      >
+        {mesAberto !== null && (
+          <div className="mesaberto">
+            {/* Padrao e emergencia em blocos separados: sao dois tipos de
+                trabalho diferentes, e misturados na mesma lista a conta de
+                emergencias do mes se perde. */}
+            {GRUPOS.map((grupo) => {
+              const doGrupo = (meses[mesAberto] ?? []).filter((o) => o.tipo === grupo.id)
+              if (doGrupo.length === 0) return null
+              return (
+                <div key={grupo.id} className="grupo" data-tipo={grupo.id}>
+                  <h3 className="grupo__titulo">
+                    {grupo.rotulo}
+                    <span className="grupo__quantas">{doGrupo.length}</span>
+                  </h3>
+
+                  <ul className="mes__obras">
+                    {doGrupo.map((obra) => {
                           const cliente = clientePorId(obra.clienteId)
                           const pessoas = obra.membros.map(pessoaPorId).filter(Boolean)
                           return (
@@ -283,58 +285,17 @@ export default function Concluidas() {
                                 </span>
                               </button>
 
-                              {/* fora do botão de abrir, e não dentro: um
-                                  clique no lixo não pode virar um clique
-                                  em "abrir a obra" por um pixel de erro */}
-                              {podeExcluir && (
-                                <button
-                                  type="button"
-                                  className="fechada__apagar"
-                                  onClick={() => setApagando(obra)}
-                                  title="Excluir esta obra"
-                                  aria-label={`Excluir a obra ${tituloDaObra(obra, cliente)}`}
-                                >
-                                  <Lixo />
-                                </button>
-                              )}
                             </li>
                           )
                         })}
-                      </ul>
-                    </div>
-                  )
-                })}
-              </section>
-            )}
-          </>
+                  </ul>
+                </div>
+              )
+            })}
+          </div>
         )}
-      </section>
+      </Modal>
 
-      {/* Excluir obra concluída apaga o registro inteiro dela — e por isso
-          a confirmação lista o que vai junto. Não há desfazer. */}
-      <Confirma
-        aberto={Boolean(apagando)}
-        titulo="Excluir esta obra concluída?"
-        mensagem="Ela sai da lista de concluídas e não dá para recuperar."
-        detalhes={
-          apagando && (
-            <dl>
-              <dt>Obra</dt>
-              <dd>{tituloDaObra(apagando, clientePorId(apagando.clienteId))}</dd>
-
-              <dt>Concluída em</dt>
-              <dd>{dataHora(apagando.concluidaEm) || '—'}</dd>
-
-              <dt>Concluída por</dt>
-              <dd>{apagando.concluidaPorNome ?? '—'}</dd>
-            </dl>
-          )
-        }
-        aviso="Vão junto a rastreabilidade dos checks, o chat, as observações, as etiquetas, os anexos e as avaliações desta obra."
-        rotuloConfirmar="Excluir obra"
-        aoConfirmar={() => removerObra(apagando.id)}
-        aoFechar={() => setApagando(null)}
-      />
     </AppShell>
   )
 }

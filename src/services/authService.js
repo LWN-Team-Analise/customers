@@ -149,16 +149,40 @@ export const redefinirSenha = (permissao, nova) => falar('redefinir', { permissa
    foto. Aqui so ficam as chamadas.
    ============================================================ */
 
-/** O botao do Outlook so aparece quando o servidor esta configurado. */
-export async function outlookConfigurado() {
-  try {
-    const resposta = await fetch('/api/auth/outlook/config')
-    if (!resposta.ok) return false
-    const { configurado } = await resposta.json()
-    return Boolean(configurado)
-  } catch {
-    return false
-  }
+/**
+ * O botao do Outlook so aparece quando o servidor esta configurado.
+ *
+ * A resposta e guardada pela vida da pagina, e a promessa (nao o valor)
+ * e o que fica no cache: o `ProtectedRoute` pergunta isso a CADA troca
+ * de rota, e sem o cache seriam N requisicoes iguais — algumas delas
+ * simultaneas, no primeiro pintar.
+ *
+ * Guardar so o valor nao bastaria: duas chamadas no mesmo tique
+ * disparariam dois fetch antes de qualquer uma responder. Guardando a
+ * promessa, a segunda espera a primeira.
+ *
+ * O que o servidor responde aqui so muda quando ele reinicia — e nesse
+ * caso a pagina tambem recarrega, porque o front nao sobrevive a uma
+ * API que sumiu no meio.
+ */
+let configuracaoDoOutlook = null
+
+export function outlookConfigurado() {
+  configuracaoDoOutlook ??= (async () => {
+    try {
+      const resposta = await fetch('/api/auth/outlook/config')
+      if (!resposta.ok) return false
+      const { configurado } = await resposta.json()
+      return Boolean(configurado)
+    } catch {
+      /* servidor fora do ar: nao da para afirmar que ha login com
+         Outlook, e o `false` deixa o sistema seguir sem o portao.
+         O cache e limpo para a proxima tentativa nao herdar o erro. */
+      configuracaoDoOutlook = null
+      return false
+    }
+  })()
+  return configuracaoDoOutlook
 }
 
 export const inicioDoOutlook = (redirecionar) => falar('outlook/inicio', { redirecionar })

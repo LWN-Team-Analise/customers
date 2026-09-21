@@ -24,6 +24,9 @@ const ARQUIVOS = [
   'db/setores-e-chat.sql.txt',
   'db/atualizacao-2.sql.txt',
   'db/atualizacao-3.sql.txt',
+  'db/atualizacao-4.sql.txt',
+  'db/atualizacao-5.sql.txt',
+  'db/atualizacao-6.sql.txt',
 ]
 
 /**
@@ -50,6 +53,21 @@ const CONFERENCIA = [
   ['termo_etapa', "SELECT EXISTS (SELECT 1 FROM configuracao WHERE chave='termo_etapa') AS ok"],
   ['obra_chat.apagada_em', col('obra_chat', 'apagada_em')],
   ['obra_chat_oculta', "SELECT to_regclass('public.obra_chat_oculta') IS NOT NULL AS ok"],
+  ['cargo_titulo', "SELECT to_regclass('public.cargo_titulo') IS NOT NULL AS ok"],
+  ['usuario.cargo_titulo_id', col('usuario', 'cargo_titulo_id')],
+  ['cliente.capa', col('cliente', 'capa')],
+  ['cliente.logo_original', col('cliente', 'logo_original')],
+  ['usuario.foto_original', col('usuario', 'foto_original')],
+  ['usuario.data_nascimento aceita NULL', nulavel('usuario', 'data_nascimento')],
+  ['etapa.descricao', col('etapa', 'descricao')],
+  ['observacao_quadro.inicio_em', col('observacao_quadro', 'inicio_em')],
+  ['observacao_quadro.fim_em', col('observacao_quadro', 'fim_em')],
+  ['usuario.avisos_email', col('usuario', 'avisos_email')],
+  ['chat_site.arquivo_conteudo', col('chat_site', 'arquivo_conteudo')],
+  ['chat_site.responde_a', col('chat_site', 'responde_a')],
+  ['chat_site.texto aceita NULL', nulavel('chat_site', 'texto')],
+  ['chat_site_mencao', "SELECT to_regclass('public.chat_site_mencao') IS NOT NULL AS ok"],
+  ['chat_site_oculta', "SELECT to_regclass('public.chat_site_oculta') IS NOT NULL AS ok"],
 ]
 
 function col(tabela, coluna) {

@@ -49,6 +49,31 @@
   color: var(--text-faint);
 }
 
+/* As duas linhas do card da etapa, como elas vao aparecer no quadro:
+   o nome em cima, a descricao embaixo. Mesmos tamanhos e mesmas cores
+   de .etapa__titulo e .etapa__desc — uma previa que nao bate com o
+   resultado e pior que previa nenhuma. */
+.formrot__previaetapa {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.formrot__previaetapa strong {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.formrot__previaetapa em {
+  font-size: 0.76rem;
+  font-style: normal;
+  line-height: 1.4;
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+}
+
 /* a amostra usa o mesmo fundo do card de verdade: e o gradiente que
    o usuario vai ver na etapa depois de salvar */
 .formrot__amostra {

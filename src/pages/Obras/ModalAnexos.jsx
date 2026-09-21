@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
+import { chaveDoCargo } from '@/domain/obras'
 import { dataHora } from '@/utils/formato'
 import './ModalAnexos.css'
 
@@ -67,7 +68,16 @@ function lerArquivo(arquivo) {
 
 export default function ModalAnexos({ aberto, obra, somenteLeitura = false, aoFechar }) {
   const { user } = useAuth()
-  const { adicionarAnexo, baixarAnexo, removerAnexo, pode } = useDados()
+  const {
+    adicionarAnexo,
+    baixarAnexo,
+    removerAnexo,
+    pode,
+    cargos,
+    pessoaPorId,
+    corDoCargo,
+    nomeDoCargo,
+  } = useDados()
 
   const entrada = useRef(null)
   const [erro, setErro] = useState('')
@@ -76,6 +86,47 @@ export default function ModalAnexos({ aberto, obra, somenteLeitura = false, aoFe
 
   const podeMexer = !somenteLeitura && pode('editar_obras')
   const anexos = obra?.anexos ?? []
+
+  /* ---- Os documentos, por SETOR ----
+
+     O setor de um anexo e o de QUEM O ENVIOU. Sai do carimbo de
+     autoria que ja existia (`enviadoPor`), e nao de uma coluna nova:
+     dois campos dizendo a mesma coisa acabam divergindo.
+
+     Entram na lista os setores que tem documento, mais o SEU — mesmo
+     vazio, porque e nele que fica o botao de anexar. Os cinco setores
+     da empresa em toda obra dariam quatro secoes vazias so para
+     mostrar que estao vazias. */
+  const meuSetor = chaveDoCargo(user)
+
+  const secoes = useMemo(() => {
+    const porSetor = new Map()
+    if (meuSetor) porSetor.set(meuSetor, [])
+
+    anexos.forEach((a) => {
+      const chave = chaveDoCargo(pessoaPorId(a.enviadoPor)) ?? 'sem-setor'
+      if (!porSetor.has(chave)) porSetor.set(chave, [])
+      porSetor.get(chave).push(a)
+    })
+
+    const ordem = cargos.map((c) => c.chave)
+    return [...porSetor.entries()]
+      .map(([chave, itens]) => ({
+        chave,
+        rotulo: chave === 'sem-setor' ? 'Sem setor' : nomeDoCargo(chave),
+        cor: chave === 'sem-setor' ? 'var(--text-faint)' : corDoCargo(chave),
+        meu: chave === meuSetor,
+        itens: [...itens].sort((a, b) =>
+          String(b.enviadoEm ?? '').localeCompare(String(a.enviadoEm ?? '')),
+        ),
+      }))
+      /* o seu setor na frente — e o unico em que ha o que fazer —, e o
+         resto na ordem da configuracao da empresa */
+      .sort((a, b) => {
+        if (a.meu !== b.meu) return Number(b.meu) - Number(a.meu)
+        return ordem.indexOf(a.chave) - ordem.indexOf(b.chave)
+      })
+  }, [anexos, meuSetor, cargos, pessoaPorId, corDoCargo, nomeDoCargo])
 
   const escolher = async (evento) => {
     const arquivos = [...(evento.target.files ?? [])]
@@ -139,33 +190,22 @@ export default function ModalAnexos({ aberto, obra, somenteLeitura = false, aoFe
       titulo="Anexos da obra"
       subtitulo={
         somenteLeitura
-          ? 'Obra concluída: dá para baixar os documentos, não para mexer neles.'
+          ? undefined
           : 'Os documentos ficam guardados nesta obra. Até 4 MB por arquivo.'
       }
       largura={520}
     >
       <div className="anexos">
-        {podeMexer && (
-          <>
-            <button
-              type="button"
-              className="anexos__novo"
-              onClick={() => entrada.current?.click()}
-              disabled={enviando}
-            >
-              <Icone.mais />
-              {enviando ? 'Enviando...' : 'Anexar documento'}
-            </button>
-            <input
-              ref={entrada}
-              type="file"
-              multiple
-              className="sr-only"
-              onChange={escolher}
-              tabIndex={-1}
-            />
-          </>
-        )}
+        {/* a entrada de arquivo e uma so, escondida: quem a dispara e o
+            botao da secao do seu setor */}
+        <input
+          ref={entrada}
+          type="file"
+          multiple
+          className="sr-only"
+          onChange={escolher}
+          tabIndex={-1}
+        />
 
         {erro && (
           <p className="anexos__erro" role="alert">
@@ -173,64 +213,104 @@ export default function ModalAnexos({ aberto, obra, somenteLeitura = false, aoFe
           </p>
         )}
 
-        {anexos.length === 0 ? (
+        {secoes.map((secao) => (
+          <section
+            key={secao.chave}
+            className="anexos__setor"
+            data-meu={secao.meu ? 'sim' : undefined}
+            style={{ '--setor-cor': secao.cor }}
+          >
+            <header className="anexos__setortopo">
+              <span className="anexos__setornome">{secao.rotulo}</span>
+
+              {/* Anexar so no SEU setor. Nos outros nao ha botao nenhum —
+                  um botao desabilitado por setor encheria a caixa de
+                  acoes que ninguem pode usar. */}
+              {secao.meu && podeMexer ? (
+                <button
+                  type="button"
+                  className="anexos__novo"
+                  onClick={() => entrada.current?.click()}
+                  disabled={enviando}
+                >
+                  <Icone.mais />
+                  {enviando ? 'Enviando...' : 'Anexar'}
+                </button>
+              ) : (
+                <span className="anexos__conta">{secao.itens.length}</span>
+              )}
+            </header>
+
+            {secao.itens.length === 0 ? (
+              <p className="anexos__vazio">
+                {secao.meu
+                  ? 'Nenhum documento do seu setor nesta obra ainda.'
+                  : 'Nenhum documento deste setor.'}
+              </p>
+            ) : (
+              <ul className="anexos__lista">
+                {secao.itens.map((a) => (
+                  <li key={a.id}>
+                    <span className="anexos__icone" aria-hidden="true">
+                      <Icone.papel />
+                    </span>
+
+                    <span className="anexos__quem">
+                      <strong>{a.nome}</strong>
+                      <span>
+                        {tamanhoLegivel(a.tamanho)} · {a.autorNome} · {dataHora(a.enviadoEm)}
+                      </span>
+                    </span>
+
+                    {/* baixar vale em QUALQUER setor: e para isso que o
+                        documento esta guardado na obra e nao na pasta de
+                        alguem */}
+                    <button
+                      type="button"
+                      className="anexos__acao"
+                      onClick={() => abrir(a)}
+                      title="Baixar"
+                      aria-label={`Baixar ${a.nome}`}
+                    >
+                      <Icone.baixar />
+                    </button>
+
+                    {/* apaga quem pode editar a obra, ou quem enviou o
+                        arquivo — e ninguem, se a obra ja foi concluida */}
+                    {!somenteLeitura &&
+                      (podeMexer || String(a.enviadoPor) === String(user?.id)) &&
+                      (apagando === a.id ? (
+                        <button
+                          type="button"
+                          className="anexos__acao anexos__acao--confirma"
+                          onClick={() => excluir(a)}
+                        >
+                          Confirmar
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="anexos__acao anexos__acao--perigo"
+                          onClick={() => setApagando(a.id)}
+                          title="Excluir"
+                          aria-label={`Excluir ${a.nome}`}
+                        >
+                          <Icone.lixo />
+                        </button>
+                      ))}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
+
+        {secoes.length === 0 && (
           <p className="anexos__vazio">
             {somenteLeitura
               ? 'Esta obra foi concluída sem nenhum documento anexado.'
               : 'Nenhum documento anexado ainda.'}
-            {podeMexer ? ' Use o botão acima para enviar o primeiro.' : ''}
           </p>
-        ) : (
-          <ul className="anexos__lista">
-            {anexos.map((a) => (
-              <li key={a.id}>
-                <span className="anexos__icone" aria-hidden="true">
-                  <Icone.papel />
-                </span>
-
-                <span className="anexos__quem">
-                  <strong>{a.nome}</strong>
-                  <span>
-                    {tamanhoLegivel(a.tamanho)} · {a.autorNome} · {dataHora(a.enviadoEm)}
-                  </span>
-                </span>
-
-                <button
-                  type="button"
-                  className="anexos__acao"
-                  onClick={() => abrir(a)}
-                  title="Baixar"
-                  aria-label={`Baixar ${a.nome}`}
-                >
-                  <Icone.baixar />
-                </button>
-
-                {/* apaga quem pode editar a obra, ou quem enviou o arquivo —
-                    e ninguem, se a obra ja foi concluida */}
-                {!somenteLeitura &&
-                  (podeMexer || String(a.enviadoPor) === String(user?.id)) &&
-                  (apagando === a.id ? (
-                    <button
-                      type="button"
-                      className="anexos__acao anexos__acao--confirma"
-                      onClick={() => excluir(a)}
-                    >
-                      Confirmar
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="anexos__acao anexos__acao--perigo"
-                      onClick={() => setApagando(a.id)}
-                      title="Excluir"
-                      aria-label={`Excluir ${a.nome}`}
-                    >
-                      <Icone.lixo />
-                    </button>
-                  ))}
-              </li>
-            ))}
-          </ul>
         )}
       </div>
     </Modal>

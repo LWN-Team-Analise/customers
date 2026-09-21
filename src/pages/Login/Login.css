@@ -578,3 +578,21 @@
   font-size: 0.8rem;
   line-height: 1.45;
 }
+
+/* No celular o cabecalho do login ("Acesse sua conta") fica POR CIMA da
+   vitrine, e uma placa clara passando atras apagava a linha de apoio.
+
+   O degrade e fundo do PROPRIO bloco, e nao um veu por cima: fundo fica
+   atras do texto do elemento sem precisar de z-index, e z-index negativo
+   em pseudo-elemento depende de quem criou contexto de empilhamento
+   acima — aqui ele passava na frente e sumia com o titulo inteiro.
+
+   As margens negativas levam o degrade ate as bordas da tela; o padding
+   devolve o recuo ao texto. */
+@media (max-width: 768px) {
+  .hero__brand {
+    margin: 0 -22px;
+    padding: 26px 22px 0;
+    background: linear-gradient(180deg, transparent, var(--page-bg) 52%);
+  }
+}

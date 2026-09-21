@@ -47,7 +47,8 @@ export function tratar(erro, res, onde) {
     return res.status(503).json({
       erro:
         'O banco ainda não tem as tabelas novas. Rode, na ordem, os arquivos de db/: ' +
-        'atualizacao.sql.txt, atualizacao-2.sql.txt e atualizacao-3.sql.txt.',
+        'atualizacao.sql.txt, atualizacao-2.sql.txt, atualizacao-3.sql.txt, ' +
+        'atualizacao-4.sql.txt e atualizacao-5.sql.txt. Ou, de uma vez: npm run db:atualizar.',
     })
   }
   console.error(`[${onde}]`, erro)

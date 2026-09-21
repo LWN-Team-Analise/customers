@@ -158,6 +158,124 @@ router.delete('/cargos/:id', exigeSessao, exige('editar_cargo'), async (req, res
 })
 
 /* ------------------------------------------------------------
+   Cargos da equipe (tabela cargo_titulo)
+
+   Aqui e o CARGO de verdade — "Analista de Qualidade",
+   "Coordenador de Obras" —, e nao o setor. Ele nao tem cor e nao
+   decide permissao nenhuma: serve para a pessoa aparecer com o
+   titulo certo no card e nos relatorios.
+
+   Quem mexe (e quem ATRIBUI um cargo a alguem) precisa de
+   `editar_cargo_titulo`. Sem ela ninguem se promove sozinho no
+   proprio perfil, que era o buraco de deixar o campo aberto.
+   ------------------------------------------------------------ */
+
+const paraTitulo = (l) => ({
+  id: String(l.id),
+  nome: l.nome,
+  ordem: l.ordem,
+})
+
+/**
+ * O cargo escolhido no cadastro, pelo id.
+ *
+ * Aceita tambem o nome, que e o que os cadastros antigos mandavam:
+ * assim uma tela desatualizada continua gravando o cargo certo em vez
+ * de silenciosamente limpar o campo.
+ *
+ * Devolve null quando nao veio nada — cargo e opcional.
+ */
+async function acharTitulo(id, nome) {
+  const porId = texto(id)
+  if (porId) {
+    const { rows } = await query('SELECT id, nome FROM cargo_titulo WHERE id = $1', [porId])
+    return rows[0] ?? null
+  }
+  const porNome = texto(nome)
+  if (!porNome) return null
+  const { rows } = await query(
+    'SELECT id, nome FROM cargo_titulo WHERE lower(nome) = lower($1)',
+    [porNome],
+  )
+  return rows[0] ?? null
+}
+
+router.get('/titulos', exigeSessao, async (_req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM cargo_titulo ORDER BY ordem, nome')
+    return res.json({ titulos: rows.map(paraTitulo) })
+  } catch (erro) {
+    /* banco sem a atualizacao-4 ainda: a tela abre com a lista vazia
+       em vez de quebrar inteira por causa de um cadastro novo */
+    if (erro.code === '42P01') return res.json({ titulos: [] })
+    return tratar(erro, res, 'equipe/titulos')
+  }
+})
+
+router.post('/titulos', exigeSessao, exige('editar_cargo_titulo'), async (req, res) => {
+  const nome = texto(req.body?.nome)
+  if (!nome) return res.status(400).json({ erro: 'Informe o nome do cargo.' })
+
+  try {
+    const { rows } = await query(
+      'INSERT INTO cargo_titulo (nome) VALUES ($1) RETURNING *',
+      [nome],
+    )
+    return res.status(201).json({ titulo: paraTitulo(rows[0]) })
+  } catch (erro) {
+    if (erro.code === '23505') {
+      return res.status(409).json({ erro: 'Já existe um cargo com esse nome.' })
+    }
+    return tratar(erro, res, 'equipe/titulos-criar')
+  }
+})
+
+router.patch('/titulos/:id', exigeSessao, exige('editar_cargo_titulo'), async (req, res) => {
+  const nome = texto(req.body?.nome)
+  if (!nome) return res.status(400).json({ erro: 'Informe o nome do cargo.' })
+
+  try {
+    const { rows } = await query(
+      'UPDATE cargo_titulo SET nome = $1 WHERE id = $2 RETURNING *',
+      [nome, req.params.id],
+    )
+    if (!rows[0]) return res.status(404).json({ erro: 'Cargo não encontrado.' })
+    /* a coluna de texto do usuario acompanha: e ela que as telas leem,
+       e renomear um cargo tem de valer para quem ja esta nele */
+    await query('UPDATE usuario SET cargo_titulo = $1 WHERE cargo_titulo_id = $2', [
+      nome,
+      req.params.id,
+    ])
+    return res.json({ titulo: paraTitulo(rows[0]) })
+  } catch (erro) {
+    if (erro.code === '23505') {
+      return res.status(409).json({ erro: 'Já existe um cargo com esse nome.' })
+    }
+    return tratar(erro, res, 'equipe/titulos-editar')
+  }
+})
+
+router.delete('/titulos/:id', exigeSessao, exige('editar_cargo_titulo'), async (req, res) => {
+  try {
+    const emUso = await query(
+      'SELECT count(*)::int AS n FROM usuario WHERE cargo_titulo_id = $1',
+      [req.params.id],
+    )
+    if (emUso.rows[0].n > 0) {
+      return res.status(409).json({
+        erro: `Há ${emUso.rows[0].n} pessoa(s) neste cargo. Troque o cargo delas antes.`,
+      })
+    }
+
+    const { rowCount } = await query('DELETE FROM cargo_titulo WHERE id = $1', [req.params.id])
+    if (rowCount === 0) return res.status(404).json({ erro: 'Cargo não encontrado.' })
+    return res.status(204).end()
+  } catch (erro) {
+    return tratar(erro, res, 'equipe/titulos-apagar')
+  }
+})
+
+/* ------------------------------------------------------------
    Usuarios — com o cargo e a media das obras avaliadas
    ------------------------------------------------------------ */
 
@@ -174,14 +292,16 @@ router.delete('/cargos/:id', exigeSessao, exige('editar_cargo'), async (req, res
    outras tabelas sem mudar nada do que o sistema faz. */
 const CONSULTA_USUARIOS = `
   SELECT u.id, u.name, u.email, u.telefone, u.cpf, u.foto, u.data_nascimento,
-         u.senha_temporaria, u.cargo_titulo,
+         u.senha_temporaria, u.cargo_titulo, u.cargo_titulo_id, u.recorte_foto,
          u.outlook, u.outlook_email,
          c.id AS cargo_id, c.chave AS cargo_chave, c.nome AS cargo_nome,
          c.cor AS cargo_cor, c.curto AS cargo_curto, c.acesso_total, c.permissoes,
+         t.nome AS titulo_nome,
          m.media, m.obras_avaliadas
     FROM usuario u
-    LEFT JOIN cargo c         ON c.id = u.cargo_id
-    LEFT JOIN usuario_media m ON m.usuario_id = u.id
+    LEFT JOIN cargo c          ON c.id = u.cargo_id
+    LEFT JOIN cargo_titulo t   ON t.id = u.cargo_titulo_id
+    LEFT JOIN usuario_media m  ON m.usuario_id = u.id
    WHERE u.ativo
 `
 
@@ -193,6 +313,11 @@ const paraUsuario = (l) => ({
   cpf: l.cpf,
   nascimento: l.data_nascimento,
   foto: l.foto,
+  /* O enquadramento vem; a imagem INTEIRA nao. Ela so serve para
+     reabrir o editor, e uma copia dela por pessoa em toda carga da
+     equipe pesaria a lista inteira por causa de um clique que quase
+     nunca acontece. Quem precisa dela busca em /usuarios/:id/foto. */
+  recorteFoto: l.recorte_foto ?? null,
   /* `cargo`/`cargoNome`/`cargoCor` continuam sendo o SETOR: e assim que
      umas trinta telas os leem, e trocar o nome do campo aqui nao mudaria
      nada alem de quebrar todas elas de uma vez */
@@ -201,8 +326,12 @@ const paraUsuario = (l) => ({
   cargoNome: l.cargo_nome,
   cargoCor: l.cargo_cor,
   cargoCurto: l.cargo_curto,
-  // o cargo especifico da pessoa; '' quando ninguem preencheu
-  cargoTitulo: l.cargo_titulo ?? '',
+  /* o cargo especifico da pessoa; '' quando ninguem preencheu. O nome
+     vem do cadastro (cargo_titulo) quando ha vinculo — assim renomear
+     um cargo la vale aqui na hora — e cai no texto antigo para quem
+     ainda nao foi migrado */
+  cargoTituloId: l.cargo_titulo_id ? String(l.cargo_titulo_id) : null,
+  cargoTitulo: l.titulo_nome ?? l.cargo_titulo ?? '',
   acessoTotal: l.acesso_total ?? false,
   cargoPermissoes: normalizar(l.permissoes ?? []),
   outlook: l.outlook ?? false,
@@ -219,6 +348,27 @@ router.get('/usuarios', exigeSessao, async (_req, res) => {
     return res.json({ usuarios: rows.map(paraUsuario) })
   } catch (erro) {
     return tratar(erro, res, 'equipe/usuarios')
+  }
+})
+
+/**
+ * A foto INTEIRA da pessoa — a que o editor precisa para reenquadrar
+ * sem recortar o recorte anterior.
+ *
+ * Rota propria porque ela e pesada e serve a um clique so. Cadastro
+ * antigo nao tem original: volta a propria foto, que e o melhor que
+ * existe ali.
+ */
+router.get('/usuarios/:id/foto', exigeSessao, async (req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT coalesce(foto_original, foto) AS original FROM usuario WHERE id = $1',
+      [req.params.id],
+    )
+    if (!rows[0]) return res.status(404).json({ erro: 'Usuário não encontrado.' })
+    return res.json({ fotoOriginal: rows[0].original })
+  } catch (erro) {
+    return tratar(erro, res, 'equipe/usuario-foto')
   }
 })
 
@@ -242,12 +392,11 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
     const nascimento = req.body?.nascimento || null
     const telefone = soDigitos(req.body?.telefone)
     const chaveCargo = texto(req.body?.cargo)
-    const cargoTitulo = texto(req.body?.cargoTitulo)
 
-    /* Obrigatorios: nome, nascimento, CPF e SETOR. E-mail e telefone
-       sao opcionais — nem todo colaborador tem e-mail corporativo, e o
-       cadastro nao pode parar por causa disso. Vindo preenchido,
-       continua tendo de ser valido. */
+    /* OBRIGATORIOS: CPF, nome e SETOR — so esses tres. Todo o resto
+       (nascimento, e-mail, telefone, cargo, foto) pode ficar vazio: o
+       cadastro nao pode parar por causa de um dado que ninguem tem na
+       mao na hora. Vindo preenchido, continua tendo de ser valido. */
     if (!nome) return res.status(400).json({ erro: 'Informe o nome completo.' })
     if (email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
       return res.status(400).json({ erro: 'E-mail inválido.' })
@@ -256,17 +405,23 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
       return res.status(400).json({ erro: 'Telefone incompleto: informe o DDD e o número.' })
     }
     if (cpf.length !== 11) return res.status(400).json({ erro: 'O CPF precisa ter 11 dígitos.' })
-    if (!nascimento) return res.status(400).json({ erro: 'Informe a data de nascimento.' })
 
     const cargo = await query('SELECT id, nome FROM cargo WHERE chave = $1', [chaveCargo])
     if (!cargo.rows[0]) return res.status(400).json({ erro: 'Escolha o setor.' })
+
+    /* atribuir CARGO e permissao a parte: quem nao a tem cadastra a
+       pessoa do mesmo jeito, so que sem cargo */
+    const titulo = cargoPode(meu, 'editar_cargo_titulo')
+      ? await acharTitulo(req.body?.cargoTituloId, req.body?.cargoTitulo)
+      : null
 
     const hash = await bcrypt.hash(SENHA_PADRAO, 12)
 
     const { rows } = await query(
       `INSERT INTO usuario (name, email, cpf, data_nascimento, telefone,
-                            cargo, cargo_id, cargo_titulo, foto, senha_hash, senha_temporaria)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+                            cargo, cargo_id, cargo_titulo, cargo_titulo_id,
+                            foto, foto_original, recorte_foto, senha_hash, senha_temporaria)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
        RETURNING id`,
       [
         nome,
@@ -277,8 +432,11 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
         telefone || null,
         cargo.rows[0].nome,
         cargo.rows[0].id,
-        cargoTitulo || null,
+        titulo?.nome ?? null,
+        titulo?.id ?? null,
         req.body?.foto || null,
+        req.body?.fotoOriginal || null,
+        req.body?.recorteFoto ? JSON.stringify(req.body.recorteFoto) : null,
         hash,
       ],
     )
@@ -348,11 +506,24 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
       por('telefone', telefone || null)
     }
     if (req.body?.foto !== undefined) por('foto', req.body.foto || null)
+    if (req.body?.fotoOriginal !== undefined) por('foto_original', req.body.fotoOriginal || null)
+    if (req.body?.recorteFoto !== undefined) {
+      por('recorte_foto', req.body.recorteFoto ? JSON.stringify(req.body.recorteFoto) : null)
+    }
     if (req.body?.nascimento !== undefined) por('data_nascimento', req.body.nascimento || null)
     /* o CARGO especifico ("Coordenador de Obras"). Nao confundir com o
-       campo `cargo` logo abaixo, que e o SETOR e vem por chave. */
-    if (req.body?.cargoTitulo !== undefined) {
-      por('cargo_titulo', texto(req.body.cargoTitulo) || null)
+       campo `cargo` logo abaixo, que e o SETOR e vem por chave.
+
+       Atribuir cargo pede `editar_cargo_titulo`, e a trava vale
+       INCLUSIVE para o proprio cadastro: sem ela, qualquer um se daria
+       o cargo que quisesse em Configuracoes. */
+    if (req.body?.cargoTitulo !== undefined || req.body?.cargoTituloId !== undefined) {
+      if (!cargoPode(meu, 'editar_cargo_titulo')) {
+        return res.status(403).json({ erro: 'Seu setor não pode definir o cargo de alguém.' })
+      }
+      const titulo = await acharTitulo(req.body?.cargoTituloId, req.body?.cargoTitulo)
+      por('cargo_titulo_id', titulo?.id ?? null)
+      por('cargo_titulo', titulo?.nome ?? null)
     }
     if (req.body?.cargo !== undefined) {
       const cargo = await query('SELECT id, nome FROM cargo WHERE chave = $1', [req.body.cargo])

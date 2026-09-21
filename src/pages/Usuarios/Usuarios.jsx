@@ -8,14 +8,29 @@ import Estrelas from '@/components/Estrelas/Estrelas'
 import { SENHA_PADRAO } from '@/services/equipeService'
 import { formatarTelefone } from '@/utils/formato'
 import ModalCargos from './ModalCargos'
+import ModalTitulos from './ModalTitulos'
 import ModalColaborador from './ModalColaborador'
 import './Usuarios.css'
 
 const Icone = {
-  etiqueta: () => (
+  /* Setor: o organograma — um bloco em cima e os grupos pendurados
+     nele. Diz "grupo da equipe", que e o que o setor e; a etiqueta que
+     ficava aqui dizia "marcador", e marcador virou o cargo. */
+  setor: () => (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12.5V5a2 2 0 0 1 2-2h7.5L21 11.5 12.5 20z" />
-      <circle cx="7.5" cy="7.5" r="1.4" />
+      <rect x="9" y="3" width="6" height="5" rx="1.2" />
+      <rect x="3" y="16" width="6" height="5" rx="1.2" />
+      <rect x="15" y="16" width="6" height="5" rx="1.2" />
+      <path d="M12 8v4M6 16v-2.5a1.5 1.5 0 0 1 1.5-1.5h9a1.5 1.5 0 0 1 1.5 1.5V16" />
+    </svg>
+  ),
+  /* Cargo: o cracha — o titulo que a pessoa usa dentro do setor */
+  cargo: () => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="6.5" width="18" height="13" rx="2" />
+      <path d="M9 3.5h6v3H9z" />
+      <circle cx="9.5" cy="12" r="1.9" />
+      <path d="M6.4 16.6a3.4 3.4 0 0 1 6.2 0M15 11h3.5M15 14.5h2.5" />
     </svg>
   ),
   mais: () => (
@@ -74,8 +89,12 @@ export default function Usuarios() {
      cargo — so nao ve os botoes de cadastrar e editar os outros */
   const podeUsuarios = pode('editar_usuario')
   const podeCargos = pode('editar_cargo')
+  /* atribuir cargo tem permissao propria: sem ela ninguem escolhe o
+     cargo de ninguem — nem o proprio, em Configuracoes */
+  const podeTitulos = pode('editar_cargo_titulo')
 
   const [modalCargos, setModalCargos] = useState(false)
+  const [modalTitulos, setModalTitulos] = useState(false)
   const [modalColab, setModalColab] = useState(false)
   const [editando, setEditando] = useState(null)
   const [apagando, setApagando] = useState(null)
@@ -137,8 +156,22 @@ export default function Usuarios() {
                 className="acao acao--fraca"
                 onClick={() => setModalCargos(true)}
               >
-                <Icone.etiqueta />
-                Setores
+                <Icone.setor />
+                Setor
+              </button>
+            )}
+            {/* Cargos anda ao lado de Setor porque as duas listas se
+                leem juntas: o setor diz de que grupo a pessoa e, o
+                cargo diz o que ela e dentro dele. Quem nao pode
+                atribuir cargo tambem nao vê este botão. */}
+            {podeTitulos && (
+              <button
+                type="button"
+                className="acao acao--fraca"
+                onClick={() => setModalTitulos(true)}
+              >
+                <Icone.cargo />
+                Cargos
               </button>
             )}
             {podeUsuarios && (
@@ -316,6 +349,8 @@ export default function Usuarios() {
       </section>
 
       <ModalCargos aberto={modalCargos} aoFechar={() => setModalCargos(false)} />
+
+      <ModalTitulos aberto={modalTitulos} aoFechar={() => setModalTitulos(false)} />
 
       <ModalColaborador
         aberto={modalColab}

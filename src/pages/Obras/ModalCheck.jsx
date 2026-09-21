@@ -107,18 +107,6 @@ export default function ModalCheck({
             aria-label="Setores que podem marcar este check"
             opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
           />
-          {/* em branco o campo ja diz "Segue o card (...)"; so quando
-              alguem escolhe um dono proprio e que vale explicar */}
-          {donos.length > 0 && (
-            <>
-              <p className="formrot__dica">
-                Só estes setores marcam este check. Os outros checks do card não mudam.
-              </p>
-              <button type="button" className="formrot__limpar" onClick={() => setDonos([])}>
-                Voltar a seguir o card
-              </button>
-            </>
-          )}
         </div>
 
         {erro && (

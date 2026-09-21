@@ -133,9 +133,7 @@ export default function ModalEtiquetas({ aberto, obra, somenteLeitura = false, a
       aoFechar={aoFechar}
       titulo="Etiquetas"
       subtitulo={
-        somenteLeitura
-          ? 'Obra concluída: as etiquetas ficam para consulta.'
-          : 'Rótulos desta obra. A mesma etiqueta pode marcar várias obras.'
+        somenteLeitura ? undefined : 'Rótulos desta obra. A mesma etiqueta pode marcar várias obras.'
       }
       largura={470}
     >
