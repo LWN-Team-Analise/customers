@@ -164,6 +164,17 @@ export const redefinirSenha = (permissao, nova) => falar('redefinir', { permissa
  * O que o servidor responde aqui so muda quando ele reinicia — e nesse
  * caso a pagina tambem recarrega, porque o front nao sobrevive a uma
  * API que sumiu no meio.
+ *
+ * A resposta tem TRES valores, e nao dois, porque as duas maneiras de
+ * nao ter Outlook pedem recados diferentes:
+ *
+ *   'sim'          o servidor tem as chaves;
+ *   'nao'          o servidor respondeu que nao tem;
+ *   'sem-resposta' a API nao respondeu.
+ *
+ * Enquanto isso era um booleano so, API fora do ar virava "peça para a
+ * diretoria preencher OUTLOOK_CLIENT_ID no .env" — e mandava procurar
+ * defeito numa configuracao que estava certa o tempo todo.
  */
 let configuracaoDoOutlook = null
 
@@ -171,15 +182,14 @@ export function outlookConfigurado() {
   configuracaoDoOutlook ??= (async () => {
     try {
       const resposta = await fetch('/api/auth/outlook/config')
-      if (!resposta.ok) return false
+      if (!resposta.ok) return 'sem-resposta'
       const { configurado } = await resposta.json()
-      return Boolean(configurado)
+      return configurado ? 'sim' : 'nao'
     } catch {
-      /* servidor fora do ar: nao da para afirmar que ha login com
-         Outlook, e o `false` deixa o sistema seguir sem o portao.
-         O cache e limpo para a proxima tentativa nao herdar o erro. */
+      /* servidor fora do ar. O cache e limpo para a proxima tentativa
+         nao herdar o erro. */
       configuracaoDoOutlook = null
-      return false
+      return 'sem-resposta'
     }
   })()
   return configuracaoDoOutlook

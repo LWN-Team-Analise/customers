@@ -13,7 +13,12 @@
 
 .ilha {
   position: fixed;
-  top: 12px;
+  /* Instalado como aplicativo, a tela comeca embaixo da barra de status
+     e `top: 12px` jogava a pilula por cima do relogio e da propria
+     Dynamic Island. Com a area segura ela pousa logo ABAIXO da ilha de
+     verdade, encostada nela. No navegador comum a conta da o mesmo 12px
+     de antes, porque ali o inset e zero. */
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
   left: 50%;
   z-index: 60;
   transform: translateX(-50%);

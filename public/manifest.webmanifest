@@ -1,0 +1,26 @@
+{
+  "name": "Trajetória de Clientes — LWN Team Análise",
+  "short_name": "Customers",
+  "description": "Gestão e rastreabilidade de clientes e obras.",
+  "lang": "pt-BR",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#04122c",
+  "theme_color": "#04122c",
+  "icons": [
+    {
+      "src": "/icone-lwn.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icone-lwn.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

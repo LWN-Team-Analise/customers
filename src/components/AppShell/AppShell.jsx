@@ -4,12 +4,12 @@ import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { useDados } from '@/context/DadosContext'
 import Avatar from '@/components/Avatar/Avatar'
-import ParticleInterlock from '@/components/ParticleInterlock/ParticleInterlock'
+import Busca from '@/components/Busca/Busca'
 import ChatSite from '@/components/ChatSite/ChatSite'
 import IlhaAviso from '@/components/IlhaAviso/IlhaAviso'
 import ChatBot from '@/components/ChatBot/ChatBot'
 import Confirma from '@/components/Confirma/Confirma'
-import { ehIphone } from '@/utils/dispositivo'
+import { ehAplicativo } from '@/utils/dispositivo'
 import { primeiroNome, saudacao } from '@/utils/pessoa'
 import { dataHora } from '@/utils/formato'
 /* O nome do arquivo diz para QUAL FUNDO a logo foi feita:
@@ -87,6 +87,17 @@ const Icone = {
       <path d="M12 5v14M5 12h14" />
     </svg>
   ),
+  /* Tres barras, e nao um desenho: separadas, cada uma gira por conta
+     propria. Abrindo, o conjunto inteiro da meia volta enquanto a de
+     cima e a de baixo se cruzam e a do meio some — o X nasce girando,
+     que e bem diferente de duas linhas que simplesmente viram X. */
+  hamburguer: () => (
+    <span className="ham" aria-hidden="true">
+      <span className="ham__bar ham__bar--1" />
+      <span className="ham__bar ham__bar--2" />
+      <span className="ham__bar ham__bar--3" />
+    </span>
+  ),
   nota: () => (
     <svg viewBox="0 0 24 24" width="17" height="17" {...traco}>
       <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
@@ -147,8 +158,45 @@ const MENU = [
   },
 ]
 
+/* ------------------------------------------------------------
+   As tres que ficam na barra do celular
+
+   No computador a bolha e vertical e cabe o menu inteiro. No
+   celular ela deita no rodape, e seis itens ali so cabiam rolando
+   de lado — uma barra que rola e uma barra onde ninguem acha o
+   quarto item, porque nada indica que ha um quarto item.
+
+   Entao ficam quatro, que sao as telas do dia a dia, e o resto
+   entra na gaveta do botao do meio. A gaveta abre ACIMA da barra,
+   colada nela: e a continuacao do mesmo menu, e nao um pop-up que
+   tapa a tela e precisa ser fechado.
+
+   A ORDEM na barra nao e a do menu: ela e
+
+       inicio · obras · [ mais ] · concluidas · clientes
+
+   com o botao redondo no meio, onde o polegar chega sem esticar. Quem
+   poe cada um no seu lugar e o `order` do CSS, a partir do `data-id`
+   de cada item — o HTML continua na ordem do menu, que e a que o
+   teclado e o leitor de tela seguem.
+   ------------------------------------------------------------ */
+const PRINCIPAIS = ['inicio', 'obras', 'concluidas', 'clientes']
+
 /** Avatar do rodape: abre o menu de Configuracoes / Sair. */
-function MenuUsuario() {
+/**
+ * `naBarra` e a copia que mora DENTRO da barra de cima, no celular.
+ *
+ * A outra copia flutua no canto, em `position: fixed`. Flutuando, ela
+ * passava por cima do campo de busca — e onde ela cai depende do
+ * recorte do aparelho (a area segura do iPhone), entao nao havia conta
+ * que a deixasse alinhada em todo telefone.
+ *
+ * Dentro da barra ela e um item como os outros: nao ha o que alinhar, e
+ * nao ha como sobrepor. As duas copias existem ao mesmo tempo no HTML e
+ * o CSS mostra uma de cada vez — a do canto no computador, a da barra
+ * no celular.
+ */
+function MenuUsuario({ naBarra = false }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [aberto, setAberto] = useState(false)
@@ -181,7 +229,7 @@ function MenuUsuario() {
   }
 
   return (
-    <div className="euzinho" ref={caixa}>
+    <div className={`euzinho ${naBarra ? 'euzinho--barra' : ''}`.trim()} ref={caixa}>
       {aberto && (
         <div className="euzinho__menu" role="menu">
           <p className="euzinho__quem">
@@ -618,14 +666,12 @@ export default function AppShell({
   const { isDark } = useTheme()
   const { erro, limparErro, pode } = useDados()
   const navegar = useNavigate()
-  const [buscaLocal, setBuscaLocal] = useState('')
   const [chatAberto, setChatAberto] = useState(false)
   const [botAberto, setBotAberto] = useState(false)
 
-  /* a tela pode assumir o campo de busca; se nao assumir, ele fica local */
+  /* a tela pode assumir o campo de busca; se nao assumir, ele e do
+     sistema e abre a lista de resultados por conta propria */
   const controlada = typeof busca === 'string'
-  const valorBusca = controlada ? busca : buscaLocal
-  const mudarBusca = controlada ? aoBuscar : setBuscaLocal
 
   /* cada cargo enxerga so as abas que a permissao dele abre */
   const abas = useMemo(
@@ -635,6 +681,14 @@ export default function AppShell({
       ),
     [pode],
   )
+
+  /* as que saem da barra no celular e vao para a gaveta */
+  const escondidas = useMemo(() => abas.filter((i) => !PRINCIPAIS.includes(i.id)), [abas])
+
+  /* A ilha do aviso de senha. So no modo APLICATIVO — ver o comentario
+     la embaixo, onde ela e desenhada. O shell precisa saber disso aqui
+     em cima porque e ele quem reserva o espaco dela no alto da tela. */
+  const avisoDeSenha = Boolean(user?.senhaTemporaria) && ehAplicativo()
 
   /* ------------------------------------------------------------
      Onde a marca do item atual tem que estar
@@ -650,6 +704,14 @@ export default function AppShell({
   const lista = useRef(null)
   const local = useLocation()
   const [marca, setMarca] = useState({ x: 0, y: 0, l: 0, a: 0, pronta: false })
+  /* a gaveta do hamburguer (so existe no celular; ver AppShell.css) */
+  const [gaveta, setGaveta] = useState(false)
+
+  /* trocou de tela, fecha: deixar aberta esconderia a tela que a
+     pessoa acabou de escolher */
+  useEffect(() => {
+    setGaveta(false)
+  }, [local.pathname])
 
   useLayoutEffect(() => {
     const caixa = lista.current
@@ -657,7 +719,11 @@ export default function AppShell({
 
     const medir = () => {
       const atual = caixa.querySelector('.rail__btn.is-atual')
-      if (!atual) {
+      /* `offsetParent` nulo = o botao esta escondido. Acontece no
+         celular quando a tela aberta e uma das que foram para a
+         gaveta: sem esta guarda o anel media 0x0 e ia encolher no
+         canto da barra, parecendo defeito. */
+      if (!atual || atual.offsetParent === null) {
         setMarca((m) => ({ ...m, pronta: false }))
         return
       }
@@ -684,13 +750,44 @@ export default function AppShell({
   }, [local.pathname, abas])
 
   return (
-    <div className="shell">
+    <div className={`shell ${avisoDeSenha ? 'tem-ilha' : ''}`.trim()}>
       {/* logo e avatar vivem fora da bolha, mas alinhados ao centro dela */}
       <Link to="/app" className="marca" aria-label="Página inicial">
         <img src={isDark ? logoModoEscuro : logoModoClaro} alt="LWN" />
       </Link>
 
-      <nav className="rail vidro" aria-label="Navegação principal">
+      <nav
+        className="rail vidro"
+        aria-label="Navegação principal"
+        /* as medidas do item atual moram na BARRA, e nao so na marca:
+           a camada liquida do celular le as mesmas para saber onde
+           pousar a bolha */
+        style={{
+          '--marca-x': `${marca.x}px`,
+          '--marca-y': `${marca.y}px`,
+          '--marca-l': `${marca.l}px`,
+          '--marca-a': `${marca.a}px`,
+        }}
+      >
+        {/* ---------------- o indicador (so no celular) ----------------
+
+            Um circulo DA COR DA BARRA que desliza ate o item escolhido.
+            Ele sobe metade para fora da faixa, e duas pecas nas laterais
+            preenchem o vinco que sobraria entre o circulo e a linha reta
+            da barra — e o que faz a silhueta subir em curva em vez de
+            ter um circulo encostado num retangulo.
+
+            A cor viva nao esta aqui: quem acende e o PROPRIO icone do
+            item, que sobe para dentro deste circulo um instante depois
+            de ele chegar. Essa espera e o efeito. */}
+        <span
+          className={`rail__indicador ${marca.pronta ? 'is-pronta' : ''}`.trim()}
+          aria-hidden="true"
+        />
+
+        {/* o mesmo encaixe, parado, para o botao do meio */}
+        {escondidas.length > 0 && <span className="rail__encaixe" aria-hidden="true" />}
+
         <ul className="rail__lista" ref={lista}>
           {/* Uma peca so, que MUDA DE LUGAR — e o que faz o anel deslizar de
               um item para o outro em vez de piscar no destino. Ela e irma dos
@@ -698,12 +795,6 @@ export default function AppShell({
               que animar entre eles. */}
           <span
             className={`rail__marca ${marca.pronta ? 'is-pronta' : ''}`.trim()}
-            style={{
-              '--marca-x': `${marca.x}px`,
-              '--marca-y': `${marca.y}px`,
-              '--marca-l': `${marca.l}px`,
-              '--marca-a': `${marca.a}px`,
-            }}
             aria-hidden="true"
           >
             <span className="rail__marca-anel" />
@@ -712,7 +803,13 @@ export default function AppShell({
           {abas.map((item) => {
             const Glifo = Icone[item.id]
             return (
-              <li key={item.id}>
+              /* `data-principal` e o que o CSS le para esconder, no
+                 celular, quem nao e uma das tres */
+              <li
+                key={item.id}
+                data-id={item.id}
+                data-principal={PRINCIPAIS.includes(item.id) ? 'sim' : 'nao'}
+              >
                 <NavLink
                   to={item.rota}
                   end={item.exato}
@@ -727,7 +824,70 @@ export default function AppShell({
               </li>
             )
           })}
+
+          {/* O hamburguer. So aparece no celular, e so quando ha o que
+              guardar: com duas abas liberadas pelo cargo, as duas cabem
+              na barra e um botao "Mais" que abre o vazio seria pior que
+              botao nenhum. */}
+          {escondidas.length > 0 && (
+            <li className="rail__somobile">
+              {/* `is-atual` de proposito FORA daqui: essa classe e o que o
+                  anel deslizante persegue, e ele nao tem o que fazer em
+                  volta de um botao redondo que ja e destaque por si. O
+                  estado aberto se ve no proprio botao. */}
+              <button
+                type="button"
+                className="rail__btn rail__mais"
+                onClick={() => setGaveta((v) => !v)}
+                aria-expanded={gaveta}
+                aria-controls="rail-gaveta"
+                aria-label="Mais telas"
+                title="Mais telas"
+              >
+                <span className="rail__glifo">
+                  <Icone.hamburguer />
+                </span>
+                <span className="rail__rotulo">Mais</span>
+              </button>
+            </li>
+          )}
         </ul>
+
+        {/* A gaveta: o resto do menu, numa faixa colada por cima da
+            barra. Nao e pop-up — nao escurece a tela nem toma o foco;
+            e o mesmo menu, continuando para cima.
+
+            Ela fica MONTADA mesmo fechada, escondida por `visibility`.
+            Desmontando, o fechar era instantaneo: a peca sumia do DOM
+            antes de qualquer transicao rodar, e era isso que dava o
+            estalo seco. Montada, os dois sentidos animam. */}
+        {escondidas.length > 0 && (
+          <div
+            className={`rail__gaveta ${gaveta ? 'is-aberta' : ''}`.trim()}
+            id="rail-gaveta"
+            aria-hidden={!gaveta}
+          >
+            {escondidas.map((item) => {
+              const Glifo = Icone[item.id]
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.rota}
+                  end={item.exato}
+                  className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
+                  onClick={() => setGaveta(false)}
+                  /* fechada, ela sai tambem do caminho do Tab */
+                  tabIndex={gaveta ? undefined : -1}
+                >
+                  <span className="rail__glifo">
+                    <Glifo />
+                  </span>
+                  {item.rotulo}
+                </NavLink>
+              )
+            })}
+          </div>
+        )}
       </nav>
 
       <MenuUsuario />
@@ -738,30 +898,19 @@ export default function AppShell({
             {saudacao()}, <strong>{primeiroNome(user?.name)}</strong>!
           </p>
 
-          <form className="omni" onSubmit={(evento) => evento.preventDefault()} role="search">
-            {/* o orbe se anima pelo relogio, nao pelo nascimento do
-                elemento: trocar de aba remonta o header e a volta
-                continua de onde estava */}
-            <ParticleInterlock
-              className="omni__orb"
-              tamanho={26}
-              cor={isDark ? '#e8f0ff' : '#1b4386'}
-              destaque={isDark ? '#7db4ff' : '#4d8ff0'}
-              densidade={96}
-              pontoTamanho={112}
-            />
-            <input
-              className="omni__campo"
-              value={valorBusca}
-              onChange={(evento) => mudarBusca?.(evento.target.value)}
-              placeholder={placeholderBusca ?? 'Buscar cliente, obra ou configurações'}
-              aria-label="Buscar"
-            />
-          </form>
+          {/* Procura em cliente, obra, pessoa, tela e ajuste de uma vez
+              só. A tela que quiser o campo para si passa `busca` e
+              `aoBuscar`; sem isso ele é do sistema inteiro. */}
+          <Busca
+            valor={controlada ? busca : undefined}
+            aoMudar={controlada ? aoBuscar : undefined}
+            placeholder={placeholderBusca}
+          />
 
           {/* a escolha de tema mora so em Configuracoes > Aparencia */}
           <div className="topbar__acoes">
             <Notificacoes />
+            <MenuUsuario naBarra />
           </div>
         </header>
 
@@ -803,13 +952,19 @@ export default function AppShell({
 
           SO NO IPHONE. A ilha e a citacao de uma peca que so existe la:
           no iPhone ela pousa onde o aparelho ja tem uma, e a pessoa
-          reconhece o gesto antes de ler o texto. No Android e no
-          computador a mesma pastilha preta no alto da tela nao cita
-          nada — e so uma tarja cobrindo a barra de cima.
+          reconhece o gesto antes de ler o texto.
 
-          O aviso em si nao se perde: o bloco Senha, em Configuracoes,
-          diz a mesma coisa em toda tela e em todo aparelho. */}
-      {user?.senhaTemporaria && ehIphone() && (
+          SO NO MODO APLICATIVO. No navegador comum ela dividia o alto
+          da tela com a barra de endereco e com a propria barra de
+          busca do sistema, e o que se via era uma pastilha preta por
+          cima do campo de procurar. Instalado na tela de inicio nao ha
+          barra de endereco: o alto da tela e so do aviso, e o resto do
+          sistema comeca abaixo dele (ver `.shell.tem-ilha` no CSS).
+
+          O aviso nao se perde para quem usa pelo navegador: o bloco
+          Senha, em Configuracoes, diz a mesma coisa em toda tela e em
+          todo aparelho. */}
+      {avisoDeSenha && (
         <IlhaAviso
           chave="customers.ilha-senha"
           Glifo={Icone.cadeado}

@@ -613,16 +613,26 @@
   margin-top: -4px;
 }
 
-/* a etiqueta do setor: fundo translucido da cor, letra do tema — assim
-   ela se le no claro e no escuro sem precisar de duas cores */
+/* A etiqueta do setor: fundo translucido da cor, letra do tema — assim
+   ela se le no claro e no escuro sem precisar de duas cores.
+
+   Tres coisas mudaram porque ela estava ilegivel:
+
+     - a cor chega ja ADAPTADA ao tema (ver Clientes.jsx). Antes vinha
+       crua do cadastro, e setor escuro sobre fundo escuro nao aparecia;
+     - o fundo subiu de 18% para 26% e a borda de 50% para 70%: com 18%
+       de uma cor ja apagada nao sobrava contorno nenhum;
+     - a letra passou a ser `--text-strong` e cresceu de 0.68 para
+       0.74rem — em 0.68rem, com a fonte do celular ja reduzida, o nome
+       do setor tinha menos de 10px. */
 .cliente__setor {
   flex-shrink: 0;
-  padding: 2px 10px;
-  border: 1px solid color-mix(in srgb, var(--setor-cor) 50%, transparent);
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--setor-cor) 70%, transparent);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--setor-cor) 18%, transparent);
-  color: var(--text-base);
-  font-size: 0.68rem;
+  background: color-mix(in srgb, var(--setor-cor) 26%, transparent);
+  color: var(--text-strong);
+  font-size: 0.74rem;
   font-weight: 700;
   white-space: nowrap;
 }

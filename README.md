@@ -28,10 +28,79 @@ O Vite faz proxy de tudo que comeca com `/api` para a API (vale no `dev` e no
 | ------------------- | ------------------------------------------------------ |
 | `npm run dev`       | front em desenvolvimento (HMR)                         |
 | `npm run api`       | API Express + PostgreSQL                               |
+| `npm run api:dev`   | a mesma API, recarregando a cada mudanca em `server/`  |
 | `npm run build`     | build de producao em `dist/`                           |
 | `npm run preview`   | serve o build gerado                                   |
 | `npm run db:senha`  | gera o hash bcrypt de uma senha                        |
 | `npm run db:validar`| roda o SQL num banco descartavel e confere tudo        |
+
+## Publicando (Vercel + Neon)
+
+O sistema roda hospedado na **Vercel**, com o banco no **Neon** (Postgres
+gerenciado). Sao duas diferencas em relacao a maquina local, e as duas ja
+estao resolvidas no repositorio:
+
+**1. Nao ha processo ouvindo uma porta.** Na Vercel cada chamada acorda uma
+funcao, responde e morre. Por isso as rotas moram em `server/app.js`, que nao
+sabe nada de porta nenhuma, e quem liga elas ao mundo sao dois arquivos
+diferentes:
+
+| Arquivo          | Onde vale       | O que faz                          |
+| ---------------- | --------------- | ---------------------------------- |
+| `server/app.js`  | os dois         | as rotas, e so                     |
+| `server/index.js`| maquina local   | `listen` na porta + conferencias   |
+| `api/index.js`   | Vercel          | entrega o mesmo `app` para a nuvem |
+
+O desvio de `/api/...` para essa funcao, o `dist/` do front e o fallback do
+SPA estao no `vercel.json`.
+
+**2. O banco vem de uma variavel so.** Com `DATABASE_URL` preenchida, o
+`server/db.js` usa ela e ignora `DB_HOST`/`DB_USER`/etc. — que continuam
+valendo para quem roda local. Use sempre a connection string do endpoint
+**pooler** do Neon (o host com `-pooler`): em serverless cada chamada abre a
+propria conexao, e sem o pooler o limite do banco estoura antes de chegar
+gente de verdade.
+
+### O que precisa estar configurado na Vercel
+
+`DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES`, `APP_URL` (o endereco publico do
+site — e dele que sai o link do "esqueci minha senha"), `GRAPH_TENANT_ID`,
+`GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `MAIL_USUARIO` e, se o login com
+Outlook estiver ligado, `OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET` e
+`OUTLOOK_TENANT`.
+
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME` **nao** vao para a
+Vercel: elas apontam para o Postgres da sua maquina, que a nuvem nao alcanca.
+
+### O Chat LWN em producao
+
+O modelo roda no Ollama, que vive na maquina de quem desenvolve — na Vercel
+nao ha maquina nossa do outro lado. Os assuntos do manual continuam
+respondendo normalmente; a pergunta que dependeria do modelo volta dizendo
+que ele nao esta ligado nesta hospedagem, em vez de esperar o tempo acabar.
+Para ligar o modelo em producao, aponte `OLLAMA_URL` para um endereco publico
+que a Vercel alcance.
+
+### Migrando o banco da maquina para o Neon
+
+Mesma versao maior dos dois lados (Postgres 18), entao o caminho e direto:
+
+```bash
+pg_dump --no-owner --no-privileges --no-tablespaces --schema=public \
+        --dbname=TrajetoClientes --file=local.sql
+```
+
+Tire do arquivo gerado as duas linhas `CREATE SCHEMA public;` e
+`COMMENT ON SCHEMA public ...` — o schema ja existe no Neon — e restaure:
+
+```bash
+psql -v ON_ERROR_STOP=1 --single-transaction -d "$DATABASE_URL" -f local.sql
+```
+
+Depois confira a view `obra_conclusao`: se o banco de origem tiver rodado o
+`sistema.sql.txt` depois do `atualizacao.sql.txt`, ela volta na versao antiga,
+a que cobra da obra ate os checks criados depois dela. A definicao certa esta
+no `db/atualizacao.sql.txt`.
 
 ## A esfera de clientes (tela de login)
 

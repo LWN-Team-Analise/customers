@@ -25,11 +25,22 @@ import './IlhaAviso.css'
  * precisa de um aviso que some tem a faixa de erro do AppShell ou o
  * pop-up; a ilha e o degrau acima.
  *
- * `chave` guarda o estado recolhido na SESSAO do navegador, e nao no
- * componente: cada tela monta o seu AppShell, entao sem isso a ilha
- * voltaria escancarada a cada clique no menu. Guardado na sessao, o
- * recolher vale ate a pessoa sair — no proximo login ela abre de novo,
- * que e o ponto de um aviso que nao aceita nao.
+ * `chave` guarda na SESSAO do navegador se ela foi aberta, e nao no
+ * componente: cada tela monta o seu AppShell, e sem isso o estado se
+ * perderia a cada clique no menu.
+ *
+ * ---------------- Por que ela nasce RECOLHIDA ----------------
+ *
+ * Aberta, ela e um cartao de uns 280px — e caia bem em cima da barra
+ * de busca, que mora no mesmo alto da tela. Quem entrava no sistema
+ * encontrava o campo de procurar tapado por um aviso que nao pediu
+ * naquele instante.
+ *
+ * Recolhida ela continua dizendo a mesma coisa ("Troque a sua senha",
+ * com o cadeado), ocupa a faixa que o sistema ja reservou para ela e
+ * nao cobre nada. Quem quiser o texto inteiro e as opcoes toca nela —
+ * e ai o cartao passa por cima do conteudo, que e aceitavel porque foi
+ * a propria pessoa que pediu.
  *
  * Toda acao recolhe a ilha depois de rodar: a pessoa acabou de decidir
  * o que fazer, e o cartao aberto por cima do que ela pediu so atrapalha.
@@ -37,10 +48,10 @@ import './IlhaAviso.css'
 export default function IlhaAviso({ chave, Glifo, titulo, subtitulo, acoes = [] }) {
   const [aberta, setAberta] = useState(() => {
     try {
-      return sessionStorage.getItem(chave) !== 'recolhida'
+      return sessionStorage.getItem(chave) === 'aberta'
     } catch {
-      /* modo privado / storage bloqueado: abre, que e o padrao */
-      return true
+      /* modo privado / storage bloqueado: recolhida, que e o padrao */
+      return false
     }
   })
 
@@ -48,8 +59,8 @@ export default function IlhaAviso({ chave, Glifo, titulo, subtitulo, acoes = [] 
     (proxima) => {
       setAberta(proxima)
       try {
-        if (proxima) sessionStorage.removeItem(chave)
-        else sessionStorage.setItem(chave, 'recolhida')
+        if (proxima) sessionStorage.setItem(chave, 'aberta')
+        else sessionStorage.removeItem(chave)
       } catch {
         /* sem storage a ilha continua funcionando, so nao lembra */
       }

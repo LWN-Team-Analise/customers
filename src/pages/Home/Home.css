@@ -1051,21 +1051,15 @@
   color: var(--text-faint);
 }
 
+/* O pingo da legenda, do mesmo azul dos pingos do globo. O valor esta
+   escrito a mao nos dois lugares de proposito: o canvas nao le variavel
+   de CSS, entao a cor de la e texto — e duas cores parecidas seriam pior
+   que uma repetida. */
 .vaziot__ponto {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-}
-
-.vaziot__ponto[data-obra='fechada'] {
-  background: #3ddc97;
-}
-
-/* o ponto da obra aberta ganha um respiro a esquerda: sem ele os dois
-   pares grudam e a linha vira uma coisa so */
-.vaziot__ponto[data-obra='aberta'] {
-  margin-left: 9px;
-  background: #ff9f43;
+  background: #4d8ff0;
 }
 
 /* ============================================================
@@ -1153,90 +1147,8 @@
   }
 }
 
-/* ---------------- a ficha da obra tocada no globo ---------------- */
-
-.vaziot__ficha {
-  width: min(100%, 360px);
-  margin-top: 6px;
-  padding: 12px 14px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  text-align: left;
-}
-
-.vaziot__fichatopo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.vaziot__fichatopo strong {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.88rem;
-  color: var(--text-strong);
-}
-
-.vaziot__fechar {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--control-bg);
-  color: var(--text-muted);
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.vaziot__fechar:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.vaziot__fichadados {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 14px;
-  margin: 12px 0 0;
-}
-
-.vaziot__fichadados dt {
-  font-size: 0.63rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.vaziot__fichadados dd {
-  margin: 2px 0 0;
-  font-size: 0.81rem;
-  color: var(--text-base);
-}
-
-.vaziot__abrir {
-  width: 100%;
-  margin-top: 14px;
-  padding: 9px 14px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-bg);
-  color: var(--text-strong);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
-}
-
-.vaziot__abrir:hover {
-  background: var(--control-bg-hover);
-}
-
-/* o globo fica clicavel: o cursor precisa dizer isso */
+/* o globo gira no arrasto — e so isso. O pingo nao abre nada, entao o
+   cursor nao promete clique: ele mostra a mao de arrastar e mais nada. */
 .vaziot__globo canvas {
   cursor: grab;
 }
@@ -1256,240 +1168,12 @@
   margin-bottom: 12px;
 }
 
-/* ============================================================
-   A NUVEM DO GLOBO
-
-   Uma nuvem de verdade — massa fofa, sem contorno. As tentativas
-   anteriores erravam pelo mesmo motivo: desenhavam a BORDA. Bolha
-   depois de bolha, todas do mesmo tamanho, com uma linha grossa em
-   volta — que e exatamente como se desenha nuvem no papel, e nao como
-   nuvem nenhuma se parece.
-
-   Aqui nao ha linha. Ha uma massa de elipses que passa por um filtro de
-   turbulencia (no JSX), vira mascara, e a mascara recorta o vidro. A
-   borda sai irregular e desfocada porque o ruido empurrou cada ponto
-   dela para um lado diferente.
-
-   Tres camadas:
-
-     .nuvem__sombra   so existe para a sombra seguir o alfa do filho
-                      mascarado, em vez de contornar um retangulo.
-     .nuvem__massa    o vidro do site, recortado na forma.
-     .nuvem__corpo    o texto, num miolo BEM interno — a borda de uma
-                      nuvem e difusa, entao o texto precisa parar muito
-                      antes dela para nao parecer que esta escapando.
-   ============================================================ */
-
-.vaziot {
-  position: relative;
-}
-
-.nuvem {
-  position: absolute;
-  z-index: 3;
-  /* os mesmos numeros do NUVEM_L / NUVEM_A la do Home.jsx */
-  width: 440px;
-  height: 340px;
-  animation: nuvem-nasce var(--dur-base) var(--ease-out);
-}
-
-@keyframes nuvem-nasce {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
+/* No celular o seletor de mês só existe no Dashboard — ver o comentário
+   do `SeletorMes`, em Home.jsx. Na Grade e no Quadro ele saía como mais
+   um controle disputando a largura da barra sem filtrar o que está na
+   tela. */
+@media (max-width: 860px) {
+  .mes[data-fora-do-painel='sim'] {
+    display: none;
   }
-}
-
-/* o <svg> que so carrega o filtro e a mascara nao ocupa espaco */
-.nuvem__oculto {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-.nuvem__sombra {
-  position: absolute;
-  inset: 0;
-  /* a sombra le o alfa do que esta dentro: como o filho e mascarado,
-     ela sai no formato da nuvem */
-  filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.22))
-    drop-shadow(0 2px 6px rgba(0, 0, 0, 0.1));
-}
-
-.nuvem__massa {
-  position: absolute;
-  inset: 0;
-  /* mais solida que o vidro comum: nuvem branca sobre fundo claro
-     precisa de corpo proprio, senao some no papel */
-  /* A luz vem de cima, como numa nuvem iluminada pelo sol — sem esse
-     gradiente a massa fica chapada.
-
-     O fundo e o vidro COMUM, e nao o forte: a nuvem tem de deixar o
-     globo aparecer por tras dela, desfocado. Nuvem opaca vira adesivo
-     colado em cima do mapa. */
-  background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.14),
-      rgba(255, 255, 255, 0) 60%
-    ),
-    var(--vidro-fundo-forte, var(--vidro-fundo));
-  backdrop-filter: blur(calc(var(--glass-blur) * 1.9)) saturate(185%);
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.9)) saturate(185%);
-  mask: url(#nuvem-mascara);
-  -webkit-mask: url(#nuvem-mascara);
-}
-
-/* ---- o miolo do texto ----
-   Bem para dentro: numa borda difusa nao ha linha que segure a leitura,
-   entao o respiro precisa ser generoso. O que sobra de area util e
-   menor que a nuvem inteira — e e de proposito. */
-.nuvem__corpo {
-  position: absolute;
-  left: 25%;
-  right: 24%;
-  top: 28%;
-  bottom: 30%;
-  display: flex;
-  flex-direction: column;
-  /* no meio-meio: a nuvem e uma forma redonda, e conteudo encostado no
-     topo dela parece que escorregou */
-  justify-content: center;
-  gap: 8px;
-  overflow: hidden;
-  /* o painel do vazio centraliza tudo; aqui dentro o texto volta a
-     comecar na margem */
-  text-align: left;
-}
-
-.nuvem__fechar {
-  position: absolute;
-  top: -4px;
-  right: -6px;
-  z-index: 2;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 1.15rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.nuvem__fechar:hover {
-  color: var(--text-strong);
-}
-
-.nuvem__titulo {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0 20px 3px 0;
-  font-size: 0.88rem;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--text-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nuvem__lista {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow-y: auto;
-}
-
-.nuvem__lista button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-base);
-  font: inherit;
-  font-size: 0.82rem;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-.nuvem__lista button:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-}
-
-.nuvem__dados {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px 12px;
-  margin: 0;
-}
-
-.nuvem__dados dt {
-  font-size: 0.57rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.nuvem__dados dd {
-  margin: 1px 0 0;
-  font-size: 0.77rem;
-  line-height: 1.25;
-  color: var(--text-base);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.nuvem__acoes {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 3px;
-}
-
-.nuvem__voltar {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.71rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.nuvem__voltar:hover {
-  color: var(--text-strong);
-}
-
-.nuvem__abrir {
-  margin-left: auto;
-  padding: 6px 13px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-pill);
-  background: var(--control-bg);
-  color: var(--text-strong);
-  font: inherit;
-  font-size: 0.74rem;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.nuvem__abrir:hover {
-  background: var(--control-bg-hover);
 }

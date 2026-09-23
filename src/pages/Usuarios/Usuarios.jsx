@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
+import { useTheme } from '@/context/ThemeContext'
+import { corAdaptada, textoSobre } from '@/utils/cor'
 import Avatar from '@/components/Avatar/Avatar'
 import Confirma from '@/components/Confirma/Confirma'
 import { useDados } from '@/context/DadosContext'
@@ -72,6 +75,7 @@ const semAcento = (texto) =>
  * ("Analista de Qualidade") quando ela tem um cadastrado.
  */
 export default function Usuarios() {
+  const { isDark } = useTheme()
   const {
     equipe,
     cargos,
@@ -100,8 +104,14 @@ export default function Usuarios() {
   const [apagando, setApagando] = useState(null)
   const [recado, setRecado] = useState('')
 
-  /* dois filtros que se somam: o nome digitado e os setores marcados */
-  const [busca, setBusca] = useState('')
+  /* dois filtros que se somam: o nome digitado e os setores marcados.
+     O nome pode chegar pronto da busca do topo — ver Clientes.jsx. */
+  const { state } = useLocation()
+  const [busca, setBusca] = useState(state?.busca ?? '')
+
+  useEffect(() => {
+    if (state?.busca) setBusca(state.busca)
+  }, [state])
   const [filtros, setFiltros] = useState([])
 
   const alternarCargo = (chave) =>
@@ -220,7 +230,13 @@ export default function Usuarios() {
                   key={c.id}
                   type="button"
                   className={`chip ${ativo ? 'is-atual' : ''}`.trim()}
-                  style={ativo ? { '--tom': c.cor, '--tom-fg': '#fff' } : undefined}
+                  /* mesmo ajuste da tela de Clientes: cor adaptada ao
+                     tema e texto escolhido por contraste */
+                  style={
+                    ativo
+                      ? { '--tom': corAdaptada(c.cor, isDark), '--tom-fg': textoSobre(c.cor, isDark) }
+                      : undefined
+                  }
                   aria-pressed={ativo}
                   onClick={() => alternarCargo(c.chave)}
                 >
