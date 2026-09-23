@@ -455,8 +455,75 @@
     padding: 14px;
   }
 
+  /* ---- os filtros, dois a dois ----
+     Em `flex-wrap` cada um tinha a largura do proprio conteudo, e o que
+     saia era uma escada: um filtro largo sozinho numa linha, dois
+     apertados na outra, um terceiro sobrando. Em GRADE de duas colunas
+     eles ficam lado a lado, do mesmo tamanho, comecando e terminando
+     juntos. */
+  .painel__filtros {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 12px;
+  }
+
+  /* `min-width: 0` desfaz o `flex-shrink: 0` herdado: na grade quem nao
+     pode encolher estoura a coluna */
+  .painel__filtros > .filtro {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  /* As tres pastilhas de prioridade dividem a linha inteira entre
+     elas. Do tamanho do proprio texto, sobrava metade da faixa vazia a
+     direita — e um filtro com um buraco do lado parece filtro cortado. */
+  .filtro--prioridade .filtro__linha > .chip {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* os dois de criar obra dividem a linha meio a meio */
+  .barra__criar {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .barra__criar .acao {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* Os filtros de PASTILHA tomam a linha inteira; so os dois de
+     controle unico (a lista de clientes e o campo de data) e que
+     dividem a linha. Espremida em meia tela, uma fila de pastilhas
+     quebra em duas ou tres alturas e desalinha tudo a volta. */
+  .filtro--prioridade,
+  .filtro--setores,
   .filtro--membros {
+    grid-column: 1 / -1;
     margin-left: 0;
+    width: auto;
+  }
+
+  /* os controles cedem a largura da coluna em vez de impor a propria:
+     sem isto o campo de data (232px) e a lista de clientes (180px)
+     estouravam a metade da tela e a grade voltava para uma coluna so */
+  .filtro__linha {
+    min-width: 0;
+  }
+
+  .filtro__linha > * {
+    max-width: 100%;
+  }
+
+  .filtro__data,
+  .filtro__linha .sel,
+  .filtro__linha .sel__botao {
+    width: 100%;
+    min-width: 0;
   }
 
   .barra__direita {
@@ -464,9 +531,14 @@
     width: 100%;
   }
 
+  /* `min-width: 0` e o que autoriza o botao a encolher. Sem ele um item
+     flex nunca fica menor que o proprio texto — e era assim que
+     "Adicionar obra emergência" passava da borda. */
   .acao {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     justify-content: center;
+    text-align: center;
   }
 }
 
@@ -477,8 +549,16 @@
     flex-basis: 100%;
   }
 
-  .filtro--membros {
-    width: 100%;
+  /* Uma coluna so abaixo de 340px. O limite era 380 e pegava o iPhone
+     comum, de 375px — justo o aparelho que precisava das duas. */
+  .painel__filtros {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 340px) {
+  .painel__filtros {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -675,4 +755,19 @@
     position: static;
     max-height: none;
   }
+}
+
+/* A fila de setores não quebra: o que não couber na linha vira o "+N".
+   Quem conta quantas cabem é o próprio componente, medindo a caixa —
+   ver `FilaDeSetores`, em Obras.jsx. O `overflow: hidden` aqui é só a
+   rede de segurança para o quadro entre a primeira pintura e a medida. */
+.filtro__linha--fila {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 6px;
+}
+
+.filtro__linha--fila .chip {
+  flex: none;
+  white-space: nowrap;
 }

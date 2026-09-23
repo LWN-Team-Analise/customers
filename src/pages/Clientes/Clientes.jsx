@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
+import { useTheme } from '@/context/ThemeContext'
+import { corAdaptada, textoSobre } from '@/utils/cor'
 import Avatar from '@/components/Avatar/Avatar'
 import {
   CutoutCard,
@@ -53,6 +55,7 @@ const Icone = {
 }
 
 export default function Clientes() {
+  const { isDark } = useTheme()
   const {
     clientes,
     setores,
@@ -72,7 +75,19 @@ export default function Clientes() {
 
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState(null)
-  const [busca, setBusca] = useState('')
+  /* A busca do topo manda o nome procurado no estado da rota: quem
+     clicou em "Eurofirma" la em cima chega aqui com a lista ja
+     filtrada nela, em vez de receber o cadastro inteiro e ter de
+     procurar de novo o que acabou de digitar. */
+  const { state } = useLocation()
+  const [busca, setBusca] = useState(state?.busca ?? '')
+
+  /* o efeito cuida da segunda vez: ja estando nesta tela, o estado
+     inicial do useState nao roda de novo e o filtro ficaria no nome
+     anterior */
+  useEffect(() => {
+    if (state?.busca) setBusca(state.busca)
+  }, [state])
   const [apagando, setApagando] = useState(null)
   const [modalSetores, setModalSetores] = useState(false)
   /* null = todos os setores; um id filtra; "sem" mostra os nao classificados */
@@ -183,10 +198,15 @@ export default function Clientes() {
             />
           </label>
 
+          {/* `acao--fraca`, e nao `acao` pelada: a classe base traz
+              `color: #fff` e nenhum fundo — ela existe para receber uma
+              variante que pinte o botao. Sozinha, o que saia era texto
+              branco por cima do que estivesse atras, que no tema claro
+              e branco tambem. Era o unico botao do sistema assim. */}
           {podeMexer && (
             <button
               type="button"
-              className="acao"
+              className="acao acao--fraca"
               onClick={() => setModalSetores(true)}
               title="Criar, editar ou excluir setores"
             >
@@ -220,7 +240,12 @@ export default function Clientes() {
                 key={s.id}
                 type="button"
                 className={`chip ${String(setorFiltro) === String(s.id) ? 'is-atual' : ''}`.trim()}
-                style={{ '--tom': s.cor, '--tom-fg': '#fff' }}
+                /* a cor CRUA nao serve: um setor escuro some no tema
+                   escuro e um claro some no claro. `corAdaptada` clareia
+                   ou escurece sem mudar o matiz, e `textoSobre` escolhe
+                   entre preto e branco por cima dela — em vez do branco
+                   fixo, que sumia em cima de setor amarelo ou bege. */
+                style={{ '--tom': corAdaptada(s.cor, isDark), '--tom-fg': textoSobre(s.cor, isDark) }}
                 onClick={() =>
                   setSetorFiltro((atual) =>
                     String(atual) === String(s.id) ? null : String(s.id),
@@ -339,6 +364,7 @@ function iniciais(nome) {
  * cartao, que antes era area morta, agora responde igual.
  */
 function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApagar, aoVer }) {
+  const { isDark } = useTheme()
   const cor = useCorDaLogo(cliente.logo, cliente.nome)
   const [aberto, setAberto] = useState(false)
   /* a lista das obras avaliadas fica fechada ate alguem pedir: o card ja
@@ -403,7 +429,7 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
       )}
 
       {setor && (
-        <span className="cliente__setor" style={{ '--setor-cor': setor.cor }}>
+        <span className="cliente__setor" style={{ '--setor-cor': corAdaptada(setor.cor, isDark) }}>
           {setor.nome}
         </span>
       )}
@@ -490,7 +516,7 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
               <dt>Setor</dt>
               <dd>
                 {setor ? (
-                  <span className="cliente__setor" style={{ '--setor-cor': setor.cor }}>
+                  <span className="cliente__setor" style={{ '--setor-cor': corAdaptada(setor.cor, isDark) }}>
                     {setor.nome}
                   </span>
                 ) : (

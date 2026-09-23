@@ -438,3 +438,14 @@
   --aviso-de-emerg: linear-gradient(135deg, #e0602c 0%, #e0602c 46%, #f2892a 70%, #ffd93d 100%);
   --aviso-veu: linear-gradient(135deg, rgba(0, 0, 0, 0) 62%, rgba(40, 28, 0, 0.44) 100%);
 }
+
+/* A cor da barra do celular. É uma superfície própria, e não o vidro:
+   dentro do filtro que a deixa líquida (ver AppShell.css) o
+   `backdrop-filter` não sobrevive. */
+:root {
+  --barra-cor: #ffffff;
+}
+
+:root[data-theme='dark'] {
+  --barra-cor: #1b1f27;
+}

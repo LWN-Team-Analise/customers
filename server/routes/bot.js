@@ -148,6 +148,17 @@ class SemModelo extends Error {}
 
 /** A única função que fala com o modelo. */
 async function perguntarAoModelo(mensagens) {
+  /* Na Vercel nao ha maquina nossa do outro lado: "localhost" ali e a
+     propria funcao, que nao roda modelo nenhum. Sem esta guarda a
+     pergunta atravessava tudo so para voltar "nao consegui falar com o
+     Ollama em http://localhost:11434" — recado que faz sentido para
+     quem cuida do servidor e nenhum para quem esta usando o site. */
+  if (process.env.VERCEL && /(localhost|127\.0\.0\.1)/.test(SERVIDOR)) {
+    throw new SemModelo(
+      'O modelo de IA não está ligado nesta hospedagem. O Chat LWN continua respondendo pelo manual do sistema; para o resto, fale com a equipe.',
+    )
+  }
+
   let resposta
   try {
     resposta = await fetch(`${SERVIDOR}/api/chat`, {

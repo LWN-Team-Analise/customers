@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
@@ -23,7 +23,114 @@ const ORDENACOES = [
 ]
 
 /* o filtro de setor mostra ate cinco cargos; o resto vai para o "+N" */
-const LIMITE_SETORES = 5
+/**
+ * A fila de setores que cabe em UMA linha.
+ *
+ * O limite era um numero fixo (cinco). Numa tela larga sobrava espaco
+ * para todos e mesmo assim aparecia o "+1"; num celular nem tres
+ * cabiam, e a fila quebrava em duas alturas — que e o que se via.
+ *
+ * Aqui quem decide e a regua. O componente mede a largura de cada
+ * pastilha uma vez (elas nao mudam de tamanho: o texto e fixo e nao
+ * quebra), guarda as medidas, e a cada mudanca de largura da caixa
+ * refaz a conta: quantas cabem, ja descontando o lugar do proprio
+ * "+N". O numero no botao e o que sobrou de verdade.
+ *
+ * As escolhidas vem na frente da fila, mesmo que estivessem escondidas:
+ * quem marca um setor pelo "+N" precisa ver a marca na linha, e nao
+ * continuar atras do botao.
+ */
+function FilaDeSetores({ cargos, setores, aoAlternar, aoVerTodos }) {
+  const linha = useRef(null)
+  const medidas = useRef(new Map())
+  const [cabem, setCabem] = useState(cargos.length)
+
+  const ordenados = useMemo(() => {
+    const escolhidos = cargos.filter((c) => setores.includes(c.chave))
+    const resto = cargos.filter((c) => !setores.includes(c.chave))
+    return [...escolhidos, ...resto]
+  }, [cargos, setores])
+
+  useLayoutEffect(() => {
+    const caixa = linha.current
+    if (!caixa) return undefined
+
+    const contar = () => {
+      /* guarda a largura de tudo que esta a vista; o que ja saiu da
+         linha antes continua valendo pela medida guardada */
+      for (const el of caixa.querySelectorAll('[data-chave]')) {
+        medidas.current.set(el.dataset.chave, el.offsetWidth)
+      }
+      const botaoMais = caixa.querySelector('[data-mais]')
+      const larguraMais = botaoMais?.offsetWidth ?? 44
+
+      const folga = 6 // o mesmo gap do CSS
+      const total = caixa.clientWidth
+      let usado = 0
+      let quantas = 0
+
+      for (const cargo of ordenados) {
+        const largura = medidas.current.get(cargo.chave)
+        /* sem medida ainda (primeira pintura): conta como cabendo, e a
+           proxima passada corrige */
+        if (largura == null) {
+          quantas += 1
+          continue
+        }
+        const proximo = usado + (quantas ? folga : 0) + largura
+        /* se ainda vai sobrar gente, o "+N" precisa de lugar tambem */
+        const precisaDoMais = quantas + 1 < ordenados.length
+        const teto = total - (precisaDoMais ? larguraMais + folga : 0)
+        if (proximo > teto) break
+        usado = proximo
+        quantas += 1
+      }
+
+      setCabem(Math.max(1, quantas))
+    }
+
+    contar()
+    const observador = new ResizeObserver(contar)
+    observador.observe(caixa)
+    return () => observador.disconnect()
+  }, [ordenados])
+
+  const visiveis = ordenados.slice(0, cabem)
+  const sobraram = ordenados.length - visiveis.length
+
+  return (
+    <div className="filtro__linha filtro__linha--fila" ref={linha}>
+      {visiveis.map((cargo) => {
+        const ativo = setores.includes(cargo.chave)
+        return (
+          <button
+            key={cargo.id}
+            type="button"
+            data-chave={cargo.chave}
+            className={`chip ${ativo ? 'is-atual' : ''}`.trim()}
+            style={ativo ? { '--tom': cargo.cor, '--tom-fg': '#fff' } : undefined}
+            aria-pressed={ativo}
+            onClick={() => aoAlternar(cargo.chave)}
+          >
+            {cargo.nome}
+          </button>
+        )
+      })}
+
+      {sobraram > 0 && (
+        <button
+          type="button"
+          data-mais=""
+          className="chip chip--mais"
+          onClick={aoVerTodos}
+          title={`Mais ${sobraram} setor${sobraram > 1 ? 'es' : ''} — ver todos`}
+        >
+          +{sobraram}
+        </button>
+      )}
+    </div>
+  )
+}
 
 const Mais = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -101,22 +208,6 @@ export default function Obras() {
   const [ordem, setOrdem] = useState('prioridade')
 
   /**
-   * Os cargos que aparecem na linha do filtro.
-   *
-   * Cargo filtrado vem sempre na frente, mesmo que ele estivesse fora
-   * dos cinco primeiros: quem escolhe um cargo pelo "+N" precisa ver a
-   * escolha na linha, e nao continuar escondida atras do botao. Quem sai
-   * da linha e um dos que NAO foram filtrados.
-   */
-  const cargosVisiveis = useMemo(() => {
-    const escolhidos = cargos.filter((c) => setores.includes(c.chave))
-    const resto = cargos.filter((c) => !setores.includes(c.chave))
-    return [...escolhidos, ...resto].slice(0, Math.max(LIMITE_SETORES, escolhidos.length))
-  }, [cargos, setores])
-
-  const cargosRestantes = Math.max(0, cargos.length - cargosVisiveis.length)
-
-  /**
    * Os clientes que aparecem no filtro: so os que tem obra ABERTA.
    *
    * A lista vinha do cadastro inteiro, e num cadastro de sessenta
@@ -139,21 +230,6 @@ export default function Obras() {
 
   const alternarSetor = (id) =>
     setSetores((atual) => (atual.includes(id) ? atual.filter((s) => s !== id) : [...atual, id]))
-
-  const limparFiltros = () => {
-    setPrioridade(null)
-    setAteData('')
-    setSetores([])
-    setClienteId('')
-    setBusca('')
-  }
-
-  const filtrosAtivos =
-    (prioridade ? 1 : 0) +
-    (ateData ? 1 : 0) +
-    setores.length +
-    (clienteId ? 1 : 0) +
-    (busca.trim() ? 1 : 0)
 
   /* ------- filtro + ordenacao (as obras concluidas saem do quadro) ------- */
   const visiveis = useMemo(() => {
@@ -347,10 +423,19 @@ export default function Obras() {
             que escondia este painel; ele saiu porque escondia
             justamente o que a tela usa o tempo todo — e um filtro
             fechado e um filtro esquecido ligado, que faz a pessoa
-            procurar a obra que "sumiu". O "Limpar" continua ali. */}
+            procurar a obra que "sumiu".
+
+            Cada filtro se desfaz nele mesmo — clicar de novo na pastilha
+            marcada a solta, e a lista de clientes tem o "Todos". O botao
+            de limpar tudo saiu: ele so aparecia quando havia filtro
+            ligado, entao entrava e saia da barra e empurrava o que
+            estava do lado a cada clique. */}
         <div className="painel vidro">
             <div className="painel__filtros">
-              <div className="filtro">
+              {/* `--prioridade` existe so para o celular: la ele toma a
+                  linha inteira, porque as tres pastilhas cabem numa linha
+                  so e os outros filtros se arrumam em duas colunas. */}
+              <div className="filtro filtro--prioridade">
                 <span className="filtro__nome">Prioridade</span>
                 <div className="filtro__linha">
                   {PRIORIDADES.map((p) => (
@@ -403,44 +488,16 @@ export default function Obras() {
                 </div>
               </div>
 
-              {/* mostra ate 5 cargos; o que for filtrado pelo "+N" sobe
-                  para a frente da linha e passa a aparecer aqui.
-
-                  E o unico filtro ELASTICO da fila (`--setores`): ele e
-                  o mais largo e o unico cujo conteudo quebra bem, entao
-                  e ele que cede quando falta espaco — as pastilhas
-                  passam para uma segunda linha dentro do proprio bloco
-                  e os cinco rotulos continuam alinhados em cima. */}
+              {/* uma linha SO: o que nao couber vira o "+N" (ver
+                  `FilaDeSetores`, no alto do arquivo) */}
               <div className="filtro filtro--setores">
                 <span className="filtro__nome">Setor pendente</span>
-                <div className="filtro__linha">
-                  {cargosVisiveis.map((cargo) => {
-                    const ativo = setores.includes(cargo.chave)
-                    return (
-                      <button
-                        key={cargo.id}
-                        type="button"
-                        className={`chip ${ativo ? 'is-atual' : ''}`.trim()}
-                        style={ativo ? { '--tom': cargo.cor, '--tom-fg': '#fff' } : undefined}
-                        aria-pressed={ativo}
-                        onClick={() => alternarSetor(cargo.chave)}
-                      >
-                        {cargo.nome}
-                      </button>
-                    )
-                  })}
-
-                  {cargosRestantes > 0 && (
-                    <button
-                      type="button"
-                      className="chip chip--mais"
-                      onClick={() => setModalSetores(true)}
-                      title="Ver todos os setores e o que falta em cada um"
-                    >
-                      +{cargosRestantes}
-                    </button>
-                  )}
-                </div>
+                <FilaDeSetores
+                  cargos={cargos}
+                  setores={setores}
+                  aoAlternar={alternarSetor}
+                  aoVerTodos={() => setModalSetores(true)}
+                />
               </div>
             </div>
 
@@ -489,25 +546,35 @@ export default function Obras() {
             <strong>{visiveis.length}</strong> Obras
           </p>
 
+          {/* Os dois ANDAM JUNTOS, dentro da mesma caixa: eles sao a
+              mesma decisao — criar obra — vista de dois lados, e no
+              celular e essa caixa que os divide meio a meio.
+
+              "Adicionar" saiu do rotulo. Com ele, os dois nao cabiam na
+              mesma linha de um telefone, e o que sobrava era um botao
+              embaixo do outro ocupando duas alturas para dizer quase a
+              mesma coisa. O "+" na frente ja diz que e para adicionar. */}
           {podeCriarObra && (
-            <>
+            <div className="barra__criar">
               <button
                 type="button"
                 className="acao acao--padrao"
                 onClick={() => setModalObra('padrao')}
+                title="Adicionar obra padrão"
               >
                 <Mais />
-                Adicionar obra padrão
+                Obra padrão
               </button>
               <button
                 type="button"
                 className="acao acao--emergencia"
                 onClick={() => setModalObra('emergencia')}
+                title="Adicionar obra emergência"
               >
                 <Mais />
-                Adicionar obra emergência
+                Obra emergência
               </button>
-            </>
+            </div>
           )}
 
           <div className="barra__direita">
@@ -523,12 +590,6 @@ export default function Obras() {
                 aria-label="Buscar obra ou empresa"
               />
             </label>
-
-            {filtrosAtivos > 0 && (
-              <button type="button" className="ferramenta ferramenta--fraca" onClick={limparFiltros}>
-                Limpar {filtrosAtivos} filtro{filtrosAtivos > 1 ? 's' : ''}
-              </button>
-            )}
 
             {/* largura fixa: "Data de conclusão" e a opcao mais longa, e
                 sem espaco para ela o botao cortava o proprio rotulo com

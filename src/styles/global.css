@@ -178,3 +178,126 @@ a:hover {
     stroke var(--dur-theme) var(--ease-out),
     opacity var(--dur-theme) var(--ease-out) !important;
 }
+
+/* ============================================================
+   O CELULAR
+
+   Tres coisas, e as tres vieram do mesmo defeito: a tela foi
+   desenhada no computador, onde sobra largura.
+
+   1. A FONTE. Tudo aqui e medido em `rem`, entao mexer na raiz
+      encolhe o sistema inteiro de uma vez — texto, botao e
+      pastilha na mesma proporcao. Encolher cada regra a mao
+      daria um site com dois tamanhos brigando.
+
+   2. A LARGURA. `overflow-x: clip` no #root corta o que passar
+      da borda sem criar barra de rolagem lateral. E `clip`, e
+      nao `hidden`, de proposito: `hidden` faz do elemento um
+      container de rolagem e quebra o `position: sticky` do
+      header e das colunas de Obras.
+
+   3. O TEXTO DENTRO DO BOTAO. Palavra comprida em botao estreito
+      vazava por baixo do fundo dele. `overflow-wrap` faz a
+      palavra quebrar quando nao couber, em vez de passar por
+      cima da borda.
+   ============================================================ */
+
+#root {
+  overflow-x: clip;
+}
+
+/* nada mais largo que a tela: imagem, tabela e bloco de codigo
+   respeitam a caixa em vez de empurrar a pagina para o lado */
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  html {
+    font-size: 15px;
+  }
+
+  body {
+    overflow-wrap: break-word;
+  }
+
+  /* O botao encolhe com o texto: fonte menor, respiro menor e teto de
+     largura na caixa que o abriga.
+
+     `white-space: normal` desfaz o `nowrap` da regra base. Era ele o
+     ultimo motivo de rotulo passando da borda: mesmo podendo encolher, o
+     botao nao tinha onde quebrar "Adicionar obra emergência", e o texto
+     seguia reto para fora. Agora ele quebra em duas linhas e o fundo
+     cresce junto. */
+  .acao {
+    max-width: 100%;
+    padding: 8px 14px;
+    font-size: 0.78rem;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .chip {
+    padding: 5px 11px;
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 400px) {
+  html {
+    font-size: 14px;
+  }
+
+  .acao {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+  }
+}
+
+/* ------------------------------------------------------------
+   Os campos de digitar, no celular
+
+   16px, e em PIXEL — nao em `rem`. Sao dois motivos no mesmo
+   numero:
+
+   1. Legibilidade. Com a fonte da raiz reduzida, os 0.8rem do
+      campo de busca viravam 11px: letra de rodape dentro do
+      lugar onde mais se digita.
+
+   2. O ZOOM do iPhone. O Safari dá um zoom na pagina inteira
+      quando o campo focado tem menos de 16px — e sair do campo
+      nao desfaz o zoom. A tela ficava torta depois de uma busca,
+      e ninguem ligava uma coisa a outra.
+
+   Por isso o valor nao acompanha a raiz: o limiar do Safari e
+   absoluto, e um `rem` que encolhe passaria por baixo dele.
+   ------------------------------------------------------------ */
+
+@media (max-width: 720px) {
+  input,
+  select,
+  textarea,
+  /* `.procura input` vem escrito aqui porque e uma regra de CLASSE: ela
+     ganha de `input` por especificidade, nao por ordem, e sem nomea-la
+     o campo continuava no tamanho antigo. Funciona daqui porque o
+     comum.css, dono da regra original, e importado no topo deste
+     arquivo — entao esta linha vem depois.
+
+     O campo da barra de cima (`.omni__campo`) NAO cabe aqui pelo mesmo
+     motivo invertido: o AppShell.css entra depois do global.css, e
+     ganharia de qualquer coisa escrita aqui. A regra dele mora la. */
+  .procura input {
+    font-size: 16px;
+  }
+
+  /* menor: com o respiro de antes o campo ficava visivelmente mais
+     alto que os botoes da mesma barra, e a tela parecia ter dois
+     tamanhos de controle */
+  .procura {
+    padding: 6px 12px;
+    gap: 6px;
+  }
+}

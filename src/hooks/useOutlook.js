@@ -13,7 +13,9 @@ import { inicioDoOutlook, outlookConfigurado } from '@/services/authService'
  *     const { codigo, redirecionar } = await outlook.abrir()
  *
  * `outlook.disponivel` diz se o servidor esta configurado; enquanto
- * nao estiver, a tela mostra o recado em vez do botao.
+ * nao estiver, a tela mostra o recado em vez do botao. `outlook.motivo`
+ * diz POR QUE nao esta — sem chave no servidor ou API sem responder —,
+ * que sao dois problemas com duas solucoes diferentes.
  */
 
 /** O endereco que a Microsoft chama de volta (ver src/routes/AppRoutes.jsx). */
@@ -21,14 +23,17 @@ const RETORNO = () => `${window.location.origin}/outlook`
 
 export default function useOutlook() {
   const [disponivel, setDisponivel] = useState(false)
+  /* 'sim' | 'nao' | 'sem-resposta' — ver authService.outlookConfigurado */
+  const [motivo, setMotivo] = useState('nao')
   const [conferindo, setConferindo] = useState(true)
   const janela = useRef(null)
 
   useEffect(() => {
     let vivo = true
-    outlookConfigurado().then((tem) => {
+    outlookConfigurado().then((resposta) => {
       if (!vivo) return
-      setDisponivel(tem)
+      setMotivo(resposta)
+      setDisponivel(resposta === 'sim')
       setConferindo(false)
     })
     return () => {
@@ -86,5 +91,5 @@ export default function useOutlook() {
     })
   }, [])
 
-  return { disponivel, conferindo, abrir }
+  return { disponivel, motivo, conferindo, abrir }
 }

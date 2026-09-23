@@ -256,3 +256,82 @@
   font-weight: 600;
   color: var(--text-muted);
 }
+
+/* ============================================================
+   O CELULAR
+
+   Duas coisas estavam feias aqui, e as duas pela mesma razao: a
+   tela foi montada para uma linha larga, onde cabe busca a
+   esquerda e todos os setores a direita.
+
+   1. Os SETORES. Numa tela estreita as pastilhas quebravam em
+      quatro linhas e empurravam a busca para cima sozinha no
+      meio. Agora as duas ficam lado a lado numa linha so, e a
+      fila de setores rola DENTRO da propria caixa — nao na
+      pagina. Aparecem dois ou tres; o resto vem com o dedo.
+
+   2. Os BOTOES do topo. Em fila com `margin-left: auto` eles
+      passavam da largura da tela. Agora ocupam a linha inteira e
+      dividem o espaco; com `min-width: 0` o rotulo comprido
+      quebra dentro do botao em vez de vazar por cima da borda.
+   ============================================================ */
+
+@media (max-width: 720px) {
+  .usuarios__acoes {
+    width: 100%;
+    margin-left: 0;
+    gap: 8px;
+  }
+
+  .usuarios__acoes .acao {
+    flex: 1 1 auto;
+    /* `min-width: 0` e o que autoriza o botao a encolher: sem ele o
+       item flex nunca fica menor que o proprio texto, e e assim que
+       um rotulo comprido empurra a linha para fora da tela */
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .usuarios__filtro {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .usuarios__filtro .procura {
+    flex: 1 1 46%;
+    min-width: 0;
+    padding: 7px 12px;
+  }
+
+  .usuarios__filtro .procura input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .usuarios__cargos {
+    flex: 1 1 54%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    /* a barra de rolagem some: o que indica que ha mais e o proprio
+       corte da ultima pastilha na borda */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .usuarios__cargos::-webkit-scrollbar {
+    display: none;
+  }
+
+  .usuarios__cargos .chip {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* 300px de minimo estourava a tela de 360px assim que entrava o
+     respiro lateral da pagina */
+  .usuarios__grade {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  }
+}

@@ -93,3 +93,16 @@ export function coordenadaDoCliente(cliente) {
 
 /** Quantas UFs o mapa conhece — usado pelo teste e pela documentacao. */
 export const UFS_CONHECIDAS = Object.keys(CENTRO_DA_UF)
+
+/**
+ * O centro do estado, sem espalhamento nenhum.
+ *
+ * E o que serve para marcar a UF no globo: um pingo por estado, no
+ * mesmo lugar sempre, independente de quantos clientes moram nele.
+ * `coordenadaDoCliente` faz o contrario de proposito — ela espalha, para
+ * duas cidades do mesmo estado nao virarem um ponto so.
+ */
+export function coordenadaDaUF(uf) {
+  const centro = CENTRO_DA_UF[String(uf ?? '').trim().toUpperCase()]
+  return centro ? { lat: centro[0], lon: centro[1] } : null
+}

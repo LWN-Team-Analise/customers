@@ -1,50 +1,21 @@
 import 'dotenv/config'
-import express from 'express'
+import app from './app.js'
 import { checarConexao, pool } from './db.js'
 import { plantarRoteiro } from './roteiro.js'
 import { comoEnvia, diagnostico } from './email.js'
-import authRouter from './routes/auth.js'
-import equipeRouter from './routes/equipe.js'
-import dadosRouter from './routes/dados.js'
-import roteiroRouter from './routes/roteiro.js'
-import botRouter, { aquecer } from './routes/bot.js'
+import { aquecer } from './routes/bot.js'
 
-const app = express()
+/**
+ * A API rodando NA MAQUINA — `npm run api` (ou `npm run api:dev`, que
+ * recarrega sozinho a cada mudanca em server/).
+ *
+ * As rotas nao moram aqui: elas estao em server/app.js, que e o mesmo
+ * arquivo que a Vercel usa em producao (via api/index.js). Aqui fica so
+ * o que existe por haver um processo de verdade: a porta, o modelo do
+ * bot entrando na memoria e a conferencia de partida.
+ */
+
 const porta = Number(process.env.API_PORT ?? 3001)
-
-// foto de perfil e logo de cliente viajam como data URL: o limite
-// padrao do express (100kb) barraria qualquer imagem de verdade
-app.use(express.json({ limit: '8mb' }))
-
-app.get('/api/health', async (_req, res) => {
-  try {
-    const info = await checarConexao()
-    res.json({ ok: true, ...info })
-  } catch (erro) {
-    res.status(503).json({ ok: false, erro: erro.message })
-  }
-})
-
-app.use('/api/auth', authRouter)
-app.use('/api/equipe', equipeRouter)
-app.use('/api/dados', dadosRouter)
-app.use('/api/roteiro', roteiroRouter)
-app.use('/api/bot', botRouter)
-
-app.use((erro, _req, res, _next) => {
-  /* imagem grande demais chegava aqui como 500 sem explicacao, e a tela
-     so dizia "nao foi possivel". Agora o recado diz o que houve. */
-  if (erro.type === 'entity.too.large') {
-    return res.status(413).json({
-      erro: 'A imagem é grande demais para ser salva. Escolha uma menor.',
-    })
-  }
-  if (erro.type === 'entity.parse.failed') {
-    return res.status(400).json({ erro: 'O conteúdo enviado veio corrompido.' })
-  }
-  console.error('[api]', erro)
-  return res.status(500).json({ erro: 'Erro interno no servidor.' })
-})
 
 app.listen(porta, async () => {
   console.log(`[api] ouvindo em http://localhost:${porta}`)

@@ -9,3 +9,12 @@ dist-ssr
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Vercel: a pasta do link local. O `vercel link` acrescenta estas linhas
+# sozinho toda vez que roda, por isso elas apareciam repetidas aqui.
+#
+# Repare que NAO ha `.env*`: aquele padrao, que o proprio vercel escreve,
+# levaria junto o .env.example — e e ele que diz quais variaveis existem.
+# Os arquivos de segredo ja estao cobertos por `.env` e `.env.local` la
+# em cima.
+.vercel

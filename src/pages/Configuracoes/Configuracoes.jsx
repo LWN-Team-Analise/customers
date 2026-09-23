@@ -288,7 +288,7 @@ export default function Configuracoes() {
                   aria-checked={theme === 'dark'}
                 >
                   <Lua />
-                  Modo escuro
+                  Modo noturno
                 </button>
               </div>
 
@@ -498,11 +498,24 @@ function BlocoOutlook() {
         </p>
       )}
 
+      {/* Duas causas, dois recados. Enquanto era um só, API fora do ar
+          aparecia como "peça para a diretoria preencher OUTLOOK_CLIENT_ID" —
+          e a configuração estava certa; o que faltava era a API no ar. */}
       {!outlook.disponivel && !outlook.conferindo && (
         <p className="config__nota">
-          O login com Outlook ainda não foi ligado no servidor. Peça para a diretoria preencher
-          <code> OUTLOOK_CLIENT_ID</code>, <code>OUTLOOK_CLIENT_SECRET</code> e
-          <code> OUTLOOK_TENANT</code> no <code>.env</code> da API.
+          {outlook.motivo === 'sem-resposta' ? (
+            <>
+              Não consegui falar com a API para saber se o login com Outlook está ligado. O
+              botão volta sozinho assim que ela responder.
+            </>
+          ) : (
+            <>
+              O login com Outlook ainda não foi ligado no servidor. Peça para a diretoria
+              preencher
+              <code> OUTLOOK_CLIENT_ID</code>, <code>OUTLOOK_CLIENT_SECRET</code> e
+              <code> OUTLOOK_TENANT</code> no <code>.env</code> da API.
+            </>
+          )}
         </p>
       )}
 

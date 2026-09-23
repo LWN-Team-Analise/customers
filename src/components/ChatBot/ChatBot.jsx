@@ -5,7 +5,8 @@ import Avatar from '@/components/Avatar/Avatar'
 import { useAuth } from '@/context/AuthContext'
 /* a marca da empresa responde no lugar de um desenho de robô: quem
    fala aqui é o sistema da LWN, e não um personagem */
-import logoLWN from '@/assets/logo_without_background.png'
+/* o mesmo arquivo do icone da aba (ver index.html) */
+import iconeLWN from '@/assets/icone-lwn.png'
 import { conversarComBot, enviarSugestaoDoBot } from '@/services/botService'
 import './ChatBot.css'
 
@@ -230,7 +231,7 @@ export default function ChatBot({ aberto, aoFechar }) {
             <article key={i} className={`bot__fala ${fala.papel === 'eu' ? 'is-minha' : ''}`.trim()}>
               <span className="bot__cara" aria-hidden="true">
                 {fala.papel === 'bot' ? (
-                  <img src={logoLWN} alt="" />
+                  <img src={iconeLWN} alt="" />
                 ) : (
                   <Avatar nome={user?.name} foto={user?.foto} tamanho={30} />
                 )}
@@ -322,7 +323,7 @@ export default function ChatBot({ aberto, aoFechar }) {
           {pensando && (
             <article className="bot__fala">
               <span className="bot__cara" aria-hidden="true">
-                <img src={logoLWN} alt="" />
+                <img src={iconeLWN} alt="" />
               </span>
               <div className="bot__balao bot__balao--pensando" aria-label="escrevendo">
                 <i />

@@ -209,13 +209,20 @@ export default function Login() {
             rotulo={
               outlook.disponivel
                 ? 'Entrar com Outlook'
-                : 'Login com Outlook ainda não configurado no servidor'
+                : outlook.motivo === 'sem-resposta'
+                  ? 'A API não respondeu — o botão do Outlook volta quando ela voltar'
+                  : 'Login com Outlook ainda não configurado no servidor'
             }
             onSelect={() =>
               outlook.disponivel
                 ? entrarOutlook()
                 : setError(
-                    'O login com Outlook ainda não foi configurado no servidor. Entre com e-mail ou CPF e senha.',
+                    /* API fora do ar e chave faltando davam o MESMO recado, e
+                       o recado era o da chave: mandava procurar defeito numa
+                       configuração que estava certa o tempo todo. */
+                    outlook.motivo === 'sem-resposta'
+                      ? 'A API não respondeu. O login com Outlook volta assim que ela voltar; por enquanto, entre com e-mail ou CPF e senha.'
+                      : 'O login com Outlook ainda não foi configurado no servidor. Entre com e-mail ou CPF e senha.',
                   )
             }
           />
