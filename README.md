@@ -138,7 +138,8 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/sistema.sql.txt`, `db/quadro.sql.txt`, `db/atualizacao.sql.txt`,
 > `db/setores-e-chat.sql.txt`, `db/atualizacao-2.sql.txt`,
 > `db/atualizacao-3.sql.txt`, `db/atualizacao-4.sql.txt`,
-> `db/atualizacao-5.sql.txt` e, por ultimo, `db/atualizacao-6.sql.txt`.
+> `db/atualizacao-5.sql.txt`, `db/atualizacao-6.sql.txt`,
+> `db/atualizacao-7.sql.txt` e, por ultimo, `db/atualizacao-8.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -186,6 +187,8 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-4.sql.txt` | cadastro de cargos, recorte das imagens e nascimento opcional     |
 | `db/atualizacao-5.sql.txt` | descricao da etapa, duracao da observacao e aviso por e-mail      |
 | `db/atualizacao-6.sql.txt` | chat da equipe com anexo, mencao, resposta e apagar              |
+| `db/atualizacao-7.sql.txt` | etiquetas dos cards do roteiro (catalogo proprio)                 |
+| `db/atualizacao-8.sql.txt` | despesas, refeicoes e bonus (aba Despesas) e o comprovante        |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
@@ -322,6 +325,23 @@ Os nomes sao os MESMOS de `obra_chat`, de proposito: as duas tabelas respondem
 a mesma pergunta e sao lidas pelo mesmo componente. Nome diferente para a
 mesma coisa e o comeco de dois jeitos diferentes de tratar a mesma coisa.
 
+### O que `db/atualizacao-8.sql.txt` acrescenta
+
+A aba **Despesas** (ver [Despesas](#despesas)):
+
+- `despesa_envio`: um envio — **despesa**, **refeicao** ou **bonus** (coluna
+  `categoria`) — com quem enviou, a obra, a data, o tipo, o valor
+  (`NUMERIC(12,2)`, nunca texto), justificativa e observacao. Uma tabela so para
+  as tres porque elas tem a mesma forma e sao lidas juntas; a trava
+  `despesa_envio_tipo_ok` garante que cada categoria so aceita os tipos dela;
+- `despesa_anexo`: o comprovante, em data URL, como os anexos da obra;
+- a permissao `revisar_despesa_geral` entra nos setores com acesso total.
+
+O envio aponta para a **obra** (`obra_id`), e o cliente sai dela — nao ha
+copia do nome. Excluir a obra **nao apaga** a despesa: o vinculo vira `NULL` e
+a tela mostra "obra excluída". O `usuario_id` e `RESTRICT`: pessoa com despesa
+nao pode ser apagada do banco (desligar e desativar, como sempre foi).
+
 ### Usuario protegido
 
 O registro `id = 1` tem `protegido = true`: um gatilho recusa `UPDATE` e
@@ -389,6 +409,10 @@ Senha padrao do sistema: `123456`.
 | `POST/PATCH/DELETE /api/roteiro/etapas` | etapas (permissao `editar_etapa`)   |
 | `POST/PATCH/DELETE /api/roteiro/cards`  | cards, com 1..N cargos cada         |
 | `POST/PATCH/DELETE /api/roteiro/checks` | checks de um card                    |
+| `POST /api/despesas/envios`     | envia uma despesa, refeicao ou bonus         |
+| `GET /api/despesas/envios?mes=AAAA-MM` | os envios do mes, dia a dia, com os totais |
+| `GET /api/despesas/resumo?ano=AAAA` | o ano mes a mes e o total anual          |
+| `GET /api/despesas/anexos/:id`  | baixa o comprovante (dono ou revisor)        |
 
 As rotas do roteiro aceitam um `obraId` (no corpo, ou na query nos DELETE):
 e ele que diz **a partir de qual obra** a mudanca vale. Ver *As cinco etapas*.
@@ -431,7 +455,7 @@ esconde o botao e a API recusa a chamada usando exatamente as mesmas chaves.
 | Grupo        | Chaves                                                              |
 | ------------ | ------------------------------------------------------------------- |
 | Visualizacao | `ver_inicio`, `ver_obras`, `ver_clientes`, `ver_concluidas`, `ver_avaliacoes`, `ver_avisos` |
-| Alteracao    | `editar_usuario`, `editar_cargo`, `editar_cargo_titulo`, `editar_avaliacoes`, `editar_clientes`, `editar_obras`, `excluir_concluidas`, `check_todas_etapas`, `editar_etapa`, `editar_cards`, `editar_cargos_card`, `editar_checks`, `enviar_avisos` |
+| Alteracao    | `editar_usuario`, `editar_cargo`, `editar_cargo_titulo`, `editar_avaliacoes`, `editar_clientes`, `editar_obras`, `excluir_concluidas`, `check_todas_etapas`, `editar_etapa`, `editar_cards`, `editar_cargos_card`, `editar_checks`, `enviar_avisos`, `revisar_despesa_geral` |
 
 Alteracao **sempre** depende da visualizacao correspondente: desmarcar "Obras"
 apaga junto tudo o que so faz sentido dentro de Obras, e essas linhas ficam
@@ -1063,6 +1087,8 @@ db/
 | `/app/concluidas`           | Obras concluidas         | protegido |
 | `/app/avaliacoes`           | Avaliacoes da equipe     | protegido |
 | `/app/usuarios`             | Usuarios                 | protegido |
+| `/app/despesas`             | Despesas (enviar)        | protegido |
+| `/app/despesas/envios`      | Meus envios (mes / ano)  | protegido |
 | `/app/configuracoes`        | Configuracoes (esboco)   | protegido |
 
 Sem sessao, `/app` redireciona para `/login`. Ao entrar, o usuario volta para a
@@ -1663,6 +1689,63 @@ A tarja colorida do card do cliente sai da **cor predominante da logo**
 (`src/utils/corDaImagem.js`): a imagem e reduzida num canvas e os pixels sao
 agrupados em baldes de cor, descartando branco, preto e cinza — senao quase toda
 logo devolveria "branco". Sem logo, entra a cor derivada do nome.
+
+## Despesas
+
+A aba de todo mundo: nao ha permissao de visualizacao para ela, porque cada
+pessoa envia as proprias despesas. A tela abre com tres botoes lado a lado —
+**Enviar despesa**, **Enviar refeição**, **Enviar bônus** — e **Meus envios**
+embaixo. Os formularios abrem em pop-up, por cima dela.
+
+| Envio    | Campos                                                                 |
+| -------- | ---------------------------------------------------------------------- |
+| Despesa  | data, cliente/obra, tipo (Vale Transporte, Transporte Intermunicipal, Combustível, Outros — este com justificativa opcional), valor, **comprovante obrigatorio**, observacao |
+| Refeição | data, cliente/obra, tipo (Almoço, Janta), valor **fixo** (R$ 41,50), observacao |
+| Bônus    | data, tipo (Bônus viagem, Bônus apartamento), cliente/obra, valor, observacao |
+
+**Os tipos e os valores fixos moram num arquivo so**, `src/domain/despesas.js`,
+importado pela tela e pela API — o mesmo esquema de `permissoes.js`. Mudar o
+valor da refeicao e mudar `VALORES_FIXOS` ali; a tela passa a mostrar o numero
+novo no campo travado e o servidor passa a gravar ele. O servidor **ignora** o
+valor que vier no pedido para tipo com valor fixo, entao o campo travado e regra,
+nao sugestao. Os bonus ainda nao tem valor definido e sao digitados; no dia em
+que tiverem, basta acrescentar `bonus_viagem: ...` ao mesmo objeto. Cada envio
+guarda o valor do dia em que foi feito — mudar o numero nao reescreve o passado.
+
+O **valor** e digitado so com numeros, que entram pela direita (4-1-5-0 vira
+R$ 41,50); letra nao entra. O **comprovante** aceita imagem, PDF, ZIP/RAR/7Z e
+documentos (Word, Excel, TXT, CSV, XML), ate **3 MB** — e nao 4 como os anexos
+da obra: em base64 o arquivo cresce um terco, e acima de 3 MB o pedido passaria
+do limite de 4,5 MB por chamada da Vercel. Foto maior que 1,5 MB e reduzida no
+navegador antes de sair (2000 px de lado), o que deixa o recibo legivel com
+algumas centenas de KB.
+
+**Cliente/obra** e escolhido em dois passos (o cliente, depois as obras dele),
+com as obras em andamento primeiro e as concluidas marcadas. A despesa aponta
+para a obra; o cliente sai dela.
+
+### Meus envios
+
+- **Mensal**: os envios do mes agrupados por dia, com o total de cada dia, o
+  total por categoria e o **total do mes** no fim;
+- **Anual**: os doze meses com o total de cada um (clicar abre o mes) e o
+  **total anual** no fim.
+
+Todos os totais sao somados **no banco** (`SUM` sobre `NUMERIC`); a tela so
+escreve o que recebe. O mes e o ano ficam no endereco
+(`?visao=ano&ano=2026`), entao o "voltar" do navegador funciona.
+
+### Revisar despesa geral
+
+Quem tem a permissao `revisar_despesa_geral` ganha, em Meus envios, o filtro
+**Só os meus / Todos os usuários / Escolher pessoas** (uma ou varias). Com mais
+de uma pessoa na tela, cada envio mostra a foto e o nome de quem enviou, e
+aparece o total por pessoa.
+
+A trava e **na API**, a cada chamada: sem a permissao, pedir
+`?usuarios=todos` ou o id de outra pessoa volta **403**, e o comprovante de
+outra pessoa volta **404** (como se nao existisse). Esconder o filtro da tela e
+so conforto — quem chama a API na mao da de cara na mesma recusa.
 
 ## Temas
 

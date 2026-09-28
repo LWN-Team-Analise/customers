@@ -8,7 +8,7 @@ import { CampoSelecao, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import { podeEditarCpf } from '@/domain/obras'
 import { ALTERACAO, VISUALIZACAO } from '@/domain/permissoes'
-import { SENHA_PADRAO, carregarFotoOriginal } from '@/services/equipeService'
+import { carregarFotoOriginal } from '@/services/equipeService'
 import { validateCPF, validateEmail } from '@/services/authService'
 import { formatarCPF, formatarTelefone, soDigitos } from '@/utils/formato'
 import { prepararImagem } from '@/utils/imagem'
@@ -367,7 +367,7 @@ export default function ModalColaborador({
         mensagem={
           editando
             ? 'Os dados abaixo passam a valer para esta pessoa.'
-            : `A pessoa entra com a senha ${SENHA_PADRAO} e troca no primeiro acesso.`
+            : 'A pessoa entra com uma senha temporária gerada automaticamente e troca no primeiro acesso.'
         }
         detalhes={<ResumoDoCargo campos={conferindo} cargos={cargos} titulos={titulos} />}
         rotuloConfirmar={editando ? 'Salvar' : 'Cadastrar'}

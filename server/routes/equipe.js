@@ -3,11 +3,12 @@ import bcrypt from 'bcryptjs'
 import { query } from '../db.js'
 import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
 import { normalizar } from '../../src/domain/permissoes.js'
+import { gerarSenhaForte } from '../utils/senha.js'
 
 const router = Router()
 
-/** Senha com que todo colaborador novo entra; a tela obriga a trocar depois. */
-export const SENHA_PADRAO = '123456'
+/** Senha temporária forte para novos usuários - gerada pelo servidor */
+export const SENHA_PADRAO = gerarSenhaForte()
 
 const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 const texto = (valor) => String(valor ?? '').trim()
@@ -415,7 +416,8 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
       ? await acharTitulo(req.body?.cargoTituloId, req.body?.cargoTitulo)
       : null
 
-    const hash = await bcrypt.hash(SENHA_PADRAO, 12)
+    const senhaTemporaria = gerarSenhaForte()
+    const hash = await bcrypt.hash(senhaTemporaria, 12)
 
     const { rows } = await query(
       `INSERT INTO usuario (name, email, cpf, data_nascimento, telefone,
@@ -444,7 +446,7 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
     const criado = await query(`${CONSULTA_USUARIOS} AND u.id = $1`, [rows[0].id])
     return res
       .status(201)
-      .json({ usuario: paraUsuario(criado.rows[0]), senhaPadrao: SENHA_PADRAO })
+      .json({ usuario: paraUsuario(criado.rows[0]), senhaPadrao: senhaTemporaria })
   } catch (erro) {
     if (erro.code === '23505') {
       const qual = String(erro.detail ?? '').includes('cpf') ? 'CPF' : 'e-mail'

@@ -27,6 +27,8 @@ const ARQUIVOS = [
   'db/atualizacao-4.sql.txt',
   'db/atualizacao-5.sql.txt',
   'db/atualizacao-6.sql.txt',
+  'db/atualizacao-7.sql.txt',
+  'db/atualizacao-8.sql.txt',
 ]
 
 /**
@@ -68,6 +70,10 @@ const CONFERENCIA = [
   ['chat_site.texto aceita NULL', nulavel('chat_site', 'texto')],
   ['chat_site_mencao', "SELECT to_regclass('public.chat_site_mencao') IS NOT NULL AS ok"],
   ['chat_site_oculta', "SELECT to_regclass('public.chat_site_oculta') IS NOT NULL AS ok"],
+  ['etiqueta_card', "SELECT to_regclass('public.etiqueta_card') IS NOT NULL AS ok"],
+  ['card_etiqueta', "SELECT to_regclass('public.card_etiqueta') IS NOT NULL AS ok"],
+  ['despesa_envio', "SELECT to_regclass('public.despesa_envio') IS NOT NULL AS ok"],
+  ['despesa_anexo', "SELECT to_regclass('public.despesa_anexo') IS NOT NULL AS ok"],
 ]
 
 function col(tabela, coluna) {

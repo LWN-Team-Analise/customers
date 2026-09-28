@@ -28,12 +28,13 @@
  */
 import nodemailer from 'nodemailer'
 import * as graph from './graph.js'
+import { logger } from './logger.js'
 
 /* As credenciais vem SO do .env — nunca escritas aqui. Este arquivo vai
    para o Git; o .env, nao. Se MAIL_SENHA estiver vazia, `temEmail()`
    devolve false e a tela avisa em vez de tentar enviar. */
-const REMETENTE = process.env.MAIL_USUARIO || ''
-const SENHA = process.env.MAIL_SENHA || ''
+const REMETENTE = process.env.MAIL_USUARIO
+const SENHA = process.env.MAIL_SENHA
 const SERVIDOR = process.env.MAIL_HOST || 'smtp.office365.com'
 const PORTA = Number(process.env.MAIL_PORT ?? 587)
 
@@ -119,7 +120,7 @@ async function despachar({ para, cco, assunto, html, texto, embutidas = [] }) {
     })
     return { ok: true }
   } catch (erro) {
-    console.error('[email]', erro.message)
+    logger.error('email', erro.message)
 
     /* Este erro tem nome e sobrenome, e a resposta generica escondia
        ele: a conta e a senha estao certas, o que esta desligado e o

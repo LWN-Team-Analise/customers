@@ -109,7 +109,11 @@ export async function chamar(caminho, opcoes = {}) {
     }
     // 5xx sem corpo util e servidor fora do ar para efeito da tela
     if (resposta.status >= 500 && !corpo?.erro) throw new SemServidor()
-    throw new Error(corpo?.erro ?? 'Não foi possível completar a operação.')
+    const falha = new Error(corpo?.erro ?? 'Não foi possível completar a operação.')
+    /* a rota que sabe QUAL campo recusou manda `campo` junto, e o
+       formulario acende o campo certo em vez de so mostrar o recado */
+    if (corpo?.campo) falha.campo = corpo.campo
+    throw falha
   }
 
   return corpo ?? {}

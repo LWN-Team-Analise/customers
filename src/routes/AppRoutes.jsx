@@ -9,6 +9,8 @@ import Concluidas from '@/pages/Concluidas/Concluidas'
 import Avaliacoes from '@/pages/Avaliacoes/Avaliacoes'
 import Usuarios from '@/pages/Usuarios/Usuarios'
 import Configuracoes from '@/pages/Configuracoes/Configuracoes'
+import Despesas from '@/pages/Despesas/Despesas'
+import MeusEnvios from '@/pages/Despesas/MeusEnvios'
 import RetornoOutlook from '@/pages/Login/RetornoOutlook'
 import ProtectedRoute from './ProtectedRoute'
 
@@ -93,6 +95,25 @@ export default function AppRoutes() {
         element={
           <Interna permissoes={['editar_usuario', 'editar_cargo', 'editar_cargo_titulo']}>
             <Usuarios />
+          </Interna>
+        }
+      />
+      {/* Despesas tambem nao tem trava de aba: todo mundo envia as
+          proprias. Ver as dos OUTROS e outra historia — quem decide e a
+          API, pela permissao revisar_despesa_geral. */}
+      <Route
+        path="/app/despesas"
+        element={
+          <Interna>
+            <Despesas />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/despesas/envios"
+        element={
+          <Interna>
+            <MeusEnvios />
           </Interna>
         }
       />

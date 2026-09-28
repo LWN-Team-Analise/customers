@@ -6,6 +6,8 @@ import equipeRouter from './routes/equipe.js'
 import dadosRouter from './routes/dados.js'
 import roteiroRouter from './routes/roteiro.js'
 import botRouter from './routes/bot.js'
+import despesasRouter from './routes/despesas.js'
+import { logger } from './logger.js'
 
 /**
  * A API — so as rotas, sem servidor nenhum em volta.
@@ -45,6 +47,7 @@ app.use('/api/equipe', equipeRouter)
 app.use('/api/dados', dadosRouter)
 app.use('/api/roteiro', roteiroRouter)
 app.use('/api/bot', botRouter)
+app.use('/api/despesas', despesasRouter)
 
 app.use((erro, _req, res, _next) => {
   /* imagem grande demais chegava aqui como 500 sem explicacao, e a tela
@@ -57,7 +60,7 @@ app.use((erro, _req, res, _next) => {
   if (erro.type === 'entity.parse.failed') {
     return res.status(400).json({ erro: 'O conteúdo enviado veio corrompido.' })
   }
-  console.error('[api]', erro)
+  logger.error('api', erro.message, { type: erro.type })
   return res.status(500).json({ erro: 'Erro interno no servidor.' })
 })
 

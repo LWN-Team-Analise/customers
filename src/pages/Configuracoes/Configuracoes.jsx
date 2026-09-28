@@ -557,7 +557,7 @@ function BlocoOutlook() {
 /**
  * Troca da propria senha.
  *
- * E por aqui que o colaborador novo sai da senha padrao 123456 — e,
+ * E por aqui que o colaborador novo sai da senha temporária — e,
  * depois de vincular o Outlook, que ele iguala a senha do site a da
  * conta Microsoft.
  */

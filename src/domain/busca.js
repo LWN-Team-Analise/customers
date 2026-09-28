@@ -79,6 +79,22 @@ const ATALHOS = [
     termos: 'avaliacoes notas nota estrelas satisfacao pesquisa desempenho',
   },
   {
+    id: 'tela-despesas',
+    grupo: 'Telas',
+    titulo: 'Despesas',
+    detalhe: 'Enviar despesa, refeição ou bônus',
+    rota: '/app/despesas',
+    termos: 'despesas despesa reembolso gasto recibo comprovante nota fiscal vale transporte combustivel refeicao almoco janta bonus viagem apartamento',
+  },
+  {
+    id: 'tela-meus-envios',
+    grupo: 'Telas',
+    titulo: 'Meus envios',
+    detalhe: 'O que você já enviou em Despesas, por mês e por ano',
+    rota: '/app/despesas/envios',
+    termos: 'meus envios despesas enviadas historico reembolso total do mes total anual',
+  },
+  {
     id: 'tela-usuarios',
     grupo: 'Telas',
     titulo: 'Usuários',

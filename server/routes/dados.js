@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { query } from '../db.js'
 import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
 import { enviarAviso, temEmail } from '../email.js'
+import { logger } from '../logger.js'
 
 const router = Router()
 
@@ -358,7 +359,7 @@ router.get('/vitrine', async (_req, res) => {
   } catch (erro) {
     /* a esfera tem foto de reserva; um banco fora do ar nao pode
        derrubar a tela de login por causa de enfeite */
-    console.error('[dados/vitrine]', erro.message)
+    logger.error('dados/vitrine', erro.message)
     return res.json({ fotos: [] })
   }
 })
@@ -1410,7 +1411,7 @@ async function avisarPorEmail({ obraId, setores, etapa, mensagem, quem }) {
   })
 
   if (!envio.ok) {
-    console.error('[dados/aviso-email]', envio.motivo)
+    logger.error('dados/aviso-email', envio.motivo)
     return { enviados: 0, motivo: envio.motivo }
   }
   return { enviados: para.length }
@@ -1450,7 +1451,7 @@ router.post('/obras/:id/avisos', exigeSessao, exige('enviar_avisos'), obraAberta
       mensagem,
       quem: req.dono.sub,
     }).catch((erro) => {
-      console.error('[dados/aviso-email]', erro.message)
+      logger.error('dados/aviso-email', erro.message)
       return { enviados: 0, motivo: erro.message }
     })
 

@@ -20,9 +20,14 @@
  * vez do botao — o resto do sistema continua funcionando igual.
  */
 
-const CLIENTE = process.env.OUTLOOK_CLIENT_ID || ''
-const SEGREDO = process.env.OUTLOOK_CLIENT_SECRET || ''
+const CLIENTE = process.env.OUTLOOK_CLIENT_ID
+const SEGREDO = process.env.OUTLOOK_CLIENT_SECRET
 const INQUILINO = process.env.OUTLOOK_TENANT || 'organizations'
+
+// Validação de configuração obrigatória
+if (!CLIENTE || !SEGREDO) {
+  console.warn('[outlook] OUTLOOK_CLIENT_ID e OUTLOOK_CLIENT_SECRET devem ser configurados para login com Outlook')
+}
 
 /* o que pedimos da conta: quem e (nome/e-mail) e a foto de perfil */
 const ESCOPOS = 'openid profile email offline_access User.Read'

@@ -88,6 +88,14 @@ export const ALTERACAO = [
     dependeDe: 'ver_avisos',
     nota: 'Sem esta, a pessoa vê a coluna de avisos mas não consegue disparar nenhum.',
   },
+  /* A aba Despesas nao tem permissao de visualizacao: todo mundo envia
+     as proprias despesas. Esta e a que abre os envios dos OUTROS. */
+  {
+    chave: 'revisar_despesa_geral',
+    rotulo: 'Revisar despesa geral',
+    dependeDe: null,
+    nota: 'Em Despesas > Meus envios, passa a ver (e filtrar por pessoa) os envios de toda a equipe. Sem esta, cada um vê só os seus.',
+  },
 ]
 
 export const TODAS = [...VISUALIZACAO, ...ALTERACAO]

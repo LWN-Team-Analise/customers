@@ -29,15 +29,16 @@
  * email.js cai no SMTP de antes — que continua servindo para quem
  * roda o sistema fora do tenant da LWN.
  */
+import { logger } from './logger.js'
 
 /* Se o registro do Entra ID for o MESMO do login com Outlook, basta
    acrescentar Mail.Send nele e o resto ja esta preenchido. So o tenant
    nao serve: credenciais de cliente exigem o ID do diretorio, e
    'organizations' nao e um diretorio. */
-const INQUILINO = process.env.GRAPH_TENANT_ID || ''
-const CLIENTE = process.env.GRAPH_CLIENT_ID || process.env.OUTLOOK_CLIENT_ID || ''
-const SEGREDO = process.env.GRAPH_CLIENT_SECRET || process.env.OUTLOOK_CLIENT_SECRET || ''
-const CAIXA = process.env.MAIL_USUARIO || ''
+const INQUILINO = process.env.GRAPH_TENANT_ID
+const CLIENTE = process.env.GRAPH_CLIENT_ID || process.env.OUTLOOK_CLIENT_ID
+const SEGREDO = process.env.GRAPH_CLIENT_SECRET || process.env.OUTLOOK_CLIENT_SECRET
+const CAIXA = process.env.MAIL_USUARIO
 
 export function configurado() {
   return Boolean(INQUILINO && CLIENTE && SEGREDO && CAIXA)
@@ -193,10 +194,10 @@ export async function enviar({ para, cco, assunto, html, texto, embutidas = [] }
 
     const erro = await resposta.json().catch(() => null)
     const recado = erro?.error?.message ?? `A Microsoft recusou o envio (HTTP ${resposta.status}).`
-    console.error('[graph/sendMail]', recado)
+    logger.error('graph/sendMail', recado, { status: resposta.status })
     return { ok: false, motivo: traduzir(resposta.status, recado) }
   } catch (erro) {
-    console.error('[graph/sendMail]', erro.message)
+    logger.error('graph/sendMail', erro.message)
     return { ok: false, motivo: 'Não foi possível falar com a API da Microsoft agora.' }
   }
 }

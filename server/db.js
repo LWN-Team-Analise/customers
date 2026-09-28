@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import pg from 'pg'
+import { logger } from './logger.js'
 
 const { Pool, types } = pg
 
@@ -48,11 +49,11 @@ export const pool = new Pool(
         connectionTimeoutMillis: 15_000,
       }
     : {
-        host: process.env.DB_HOST,
+        host: process.env.DB_HOST || 'localhost',
         port: Number(process.env.DB_PORT ?? 5432),
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'TrajetoClientes',
         max: 10,
         idleTimeoutMillis: 30_000,
         connectionTimeoutMillis: 5_000,
@@ -60,7 +61,7 @@ export const pool = new Pool(
 )
 
 pool.on('error', (erro) => {
-  console.error('[db] erro em conexao ociosa:', erro.message)
+  logger.error('db', 'erro em conexao ociosa', { message: erro.message })
 })
 
 /** Consulta simples; usa sempre parametros ($1, $2...) para evitar SQL injection. */

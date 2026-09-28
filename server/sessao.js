@@ -4,12 +4,16 @@
  */
 import jwt from 'jsonwebtoken'
 import { query } from './db.js'
+import { logger } from './logger.js'
 /* a lista de permissoes e a MESMA da tela: um arquivo so, sem React
    dentro, importado pelos dois lados. Assim nao existe a chance de o
    servidor aceitar uma chave que a tela nao conhece (ou o contrario). */
 import { normalizar } from '../src/domain/permissoes.js'
 
-export const SEGREDO = process.env.JWT_SECRET || 'segredo-de-desenvolvimento'
+export const SEGREDO = process.env.JWT_SECRET
+if (!SEGREDO) {
+  throw new Error('JWT_SECRET não está definido no ambiente. Defina esta variável de ambiente com uma string aleatória forte.')
+}
 
 /** Le o usuario do token. Sem token valido, devolve null. */
 export function usuarioDoToken(req) {
@@ -51,7 +55,7 @@ export function tratar(erro, res, onde) {
         'atualizacao-4.sql.txt e atualizacao-5.sql.txt. Ou, de uma vez: npm run db:atualizar.',
     })
   }
-  console.error(`[${onde}]`, erro)
+  logger.error(onde, erro.message, { code: erro.code })
   return res.status(500).json({ erro: 'Não foi possível completar a operação.' })
 }
 

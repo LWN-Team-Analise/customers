@@ -8,7 +8,7 @@ import Confirma from '@/components/Confirma/Confirma'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import Estrelas from '@/components/Estrelas/Estrelas'
-import { SENHA_PADRAO } from '@/services/equipeService'
+
 import { formatarTelefone } from '@/utils/formato'
 import ModalCargos from './ModalCargos'
 import ModalTitulos from './ModalTitulos'
@@ -147,9 +147,9 @@ export default function Usuarios() {
       setRecado(`Cadastro de ${campos.nome} atualizado.`)
       return
     }
-    await adicionarPessoa(campos)
+    const resultado = await adicionarPessoa(campos)
     setRecado(
-      `${campos.nome} foi cadastrado. A senha para o primeiro acesso é ${SENHA_PADRAO} — o sistema pede a troca ao entrar.`,
+      `${campos.nome} foi cadastrado. A senha para o primeiro acesso é ${resultado.senhaPadrao} — o sistema pede a troca ao entrar.`,
     )
   }
 
