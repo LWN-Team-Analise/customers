@@ -3,9 +3,10 @@ import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import Confirma from '@/components/Confirma/Confirma'
 import { useDados } from '@/context/DadosContext'
+import { useAuth } from '@/context/AuthContext'
 import EscolhaCor from '@/components/EscolhaCor/EscolhaCor'
 import Seletor from '@/components/Seletor/Seletor'
-import { ALTERACAO, CHAVES, VISUALIZACAO, dependentes, normalizar, travada } from '@/domain/permissoes'
+import { ALTERACAO, CHAVES, GRUPOS, VISUALIZACAO, dependentes, normalizar, travada } from '@/domain/permissoes'
 import './ModalCargos.css'
 
 const CORES_SUGERIDAS = [
@@ -60,6 +61,16 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
 
   const editando = Boolean(cargo)
   const emUso = editando ? equipe.filter((p) => p.cargo === cargo.chave).length : 0
+
+  /* As duas travas que a API aplica, espelhadas aqui para a tela nao
+     oferecer o que vai ser recusado:
+       - acesso total so e dado (ou tirado) por quem tem acesso total;
+       - as permissoes do PROPRIO setor so mudam por quem tem acesso
+         total — senao "editar setor" viraria "me dar qualquer permissao". */
+  const { user } = useAuth()
+  const souTotal = Boolean(user?.acessoTotal)
+  const ehOMeu = editando && user?.cargoId && String(user.cargoId) === String(cargo.id)
+  const listaTravada = ehOMeu && !souTotal
 
   useEffect(() => {
     if (!aberto) return
@@ -132,7 +143,8 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
     if (!fonte) return
     setForm((atual) => ({
       ...atual,
-      acessoTotal: Boolean(fonte.acessoTotal),
+      /* sem acesso total, a copia leva a lista mas nao a chave */
+      acessoTotal: souTotal ? Boolean(fonte.acessoTotal) : atual.acessoTotal,
       permissoes: normalizar(fonte.permissoes ?? []),
     }))
     setErro('')
@@ -249,21 +261,31 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
           ))}
         </div>
 
-        <label className="cargos__total">
+        <label
+          className={`cargos__total ${souTotal ? '' : 'is-travada'}`.trim()}
+          title={souTotal ? undefined : 'Só quem tem acesso total pode mudar esta opção.'}
+        >
           <input
             type="checkbox"
             checked={form.acessoTotal}
             onChange={(e) => mudar('acessoTotal')(e.target.checked)}
+            disabled={!souTotal}
           />
           <span>
             Edita as tarefas de <strong>todos</strong> os setores
           </span>
         </label>
 
+        {listaTravada && (
+          <p className="perm__nota">
+            Este é o seu setor: as permissões dele só podem ser mudadas por quem tem acesso total.
+          </p>
+        )}
+
         {/* ============================================================
             Permissoes
             ============================================================ */}
-        <section className="perm">
+        <section className={`perm ${listaTravada ? 'is-travada' : ''}`.trim()} inert={listaTravada ? '' : undefined}>
           <header className="perm__topo">
             <h3>Permissões</h3>
             <span className="perm__contagem">
@@ -305,63 +327,68 @@ export default function ModalCargo({ aberto, cargo = null, aoFechar }) {
             </p>
           )}
 
-          <div className="perm__grupos">
-            <div className="perm__grupo">
+          {/* Cada visualizacao e, embaixo dela, na coluna de Alteracao, o que
+              depende dela. As de Usuarios nao dependem de nenhuma e fecham a
+              lista, com o nome da aba no lugar da caixa. */}
+          <div className="perm__arvore">
+            <div className="perm__cabeca" aria-hidden="true">
               <h4>Visualização</h4>
-              <p className="perm__nota">O que aparece no menu para este setor.</p>
-              <ul>
-                {VISUALIZACAO.map((p) => (
-                  <li key={p.chave}>
+              <h4>Alteração</h4>
+            </div>
+
+            {GRUPOS.map((grupo) => (
+              <div key={grupo.visualizacao?.chave ?? grupo.rotulo} className="perm__ramo">
+                <div className="perm__vis">
+                  {grupo.visualizacao ? (
                     <label className="perm__item">
                       <input
                         type="checkbox"
-                        checked={form.permissoes.includes(p.chave)}
-                        onChange={() => alternar(p.chave)}
+                        checked={form.permissoes.includes(grupo.visualizacao.chave)}
+                        onChange={() => alternar(grupo.visualizacao.chave)}
                       />
-                      <span>{p.rotulo}</span>
+                      <span>{grupo.visualizacao.rotulo}</span>
                     </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
+                  ) : (
+                    <span className="perm__item perm__item--fixo">
+                      <i aria-hidden="true" />
+                      <span>{grupo.rotulo}</span>
+                    </span>
+                  )}
+                </div>
 
-            <div className="perm__grupo">
-              <h4>Alteração</h4>
-              <p className="perm__nota">
-                Cada uma depende da visualização da aba correspondente. Sem ela, a linha fica
-                travada.
-              </p>
-              <ul>
-                {ALTERACAO.map((p) => {
-                  const bloqueada = travada(p.chave, form.permissoes)
-                  const exigida = VISUALIZACAO.find((v) => v.chave === p.dependeDe)
-                  return (
-                    <li key={p.chave}>
-                      <label
-                        className={`perm__item ${bloqueada ? 'is-travada' : ''}`.trim()}
-                        title={
-                          bloqueada ? `Marque "${exigida?.rotulo}" em Visualização primeiro.` : undefined
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.permissoes.includes(p.chave)}
-                          onChange={() => alternar(p.chave)}
-                          disabled={bloqueada}
-                        />
-                        <span>
-                          {p.rotulo}
-                          {bloqueada && (
-                            <em className="perm__trava">precisa de “{exigida?.rotulo}”</em>
-                          )}
-                          {!bloqueada && p.nota && <em className="perm__dica">{p.nota}</em>}
-                        </span>
-                      </label>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+                {grupo.alteracoes.length > 0 && (
+                  <ul className="perm__alts">
+                    {grupo.alteracoes.map((p) => {
+                      const bloqueada = travada(p.chave, form.permissoes)
+                      const exigida = grupo.visualizacao
+                      return (
+                        <li key={p.chave}>
+                          <label
+                            className={`perm__item ${bloqueada ? 'is-travada' : ''}`.trim()}
+                            title={
+                              bloqueada ? `Marque "${exigida?.rotulo}" em Visualização primeiro.` : undefined
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.permissoes.includes(p.chave)}
+                              onChange={() => alternar(p.chave)}
+                              disabled={bloqueada}
+                            />
+                            <span>
+                              {p.rotulo}
+                              {bloqueada && (
+                                <em className="perm__trava">precisa de “{exigida?.rotulo}”</em>
+                              )}
+                            </span>
+                          </label>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            ))}
           </div>
         </section>
 

@@ -167,10 +167,12 @@ export const ASSUNTOS = [
     titulo: 'Despesas, refeições e bônus',
     gatilhos: ['despesa', 'reembolso', 'gasto', 'recibo', 'comprovante', 'refeicao', 'almoco', 'janta', 'bonus', 'vale'],
     resposta:
-      'Na aba Despesas, escolha Enviar despesa, Enviar refeição ou Enviar bônus. Toda despesa precisa do ' +
+      'Na aba Despesas, escolha Enviar despesa, Enviar refeição ou Enviar bônus. O cliente é obrigatório e ' +
+      'a obra, opcional. Toda despesa precisa do ' +
       'comprovante (imagem, PDF ou ZIP, até 3 MB); a refeição tem valor fixo. O que você enviou fica em ' +
-      '"Meus envios", por mês (dia a dia) ou por ano (mês a mês), com os totais. Ver os envios de outras ' +
-      'pessoas exige a permissão "Revisar despesa geral".',
+      '"Meus envios", por mês (dia a dia) ou por ano (mês a mês), com os totais e o filtro por tipo. Quem ' +
+      'tem a permissão "Revisar despesa geral" ganha também "Envios gerais", com os envios de cada pessoa ' +
+      'da equipe.',
   },
   {
     id: 'concluidas',

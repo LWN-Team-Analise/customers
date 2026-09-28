@@ -29,6 +29,8 @@ const ARQUIVOS = [
   'db/atualizacao-6.sql.txt',
   'db/atualizacao-7.sql.txt',
   'db/atualizacao-8.sql.txt',
+  'db/atualizacao-9.sql.txt',
+  'db/atualizacao-10.sql.txt',
 ]
 
 /**
@@ -74,6 +76,8 @@ const CONFERENCIA = [
   ['card_etiqueta', "SELECT to_regclass('public.card_etiqueta') IS NOT NULL AS ok"],
   ['despesa_envio', "SELECT to_regclass('public.despesa_envio') IS NOT NULL AS ok"],
   ['despesa_anexo', "SELECT to_regclass('public.despesa_anexo') IS NOT NULL AS ok"],
+  ['atividade', "SELECT to_regclass('public.atividade') IS NOT NULL AS ok"],
+  ['despesa_envio.cliente_id', col('despesa_envio', 'cliente_id')],
 ]
 
 function col(tabela, coluna) {

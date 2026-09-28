@@ -129,7 +129,29 @@
   transform: rotate(180deg);
 }
 
+/* nome + selos (nota e setor). O nome pede ~9rem; quando a linha nao
+   comporta os tres, os selos descem para baixo dele em vez de espremer
+   o nome ate uma letra por linha */
+.cliente__titulo {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.cliente__selos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .cliente__nome {
+  flex: 1 1 9rem;
   margin: 0;
   min-width: 0;
   font-size: 1rem;
@@ -627,6 +649,9 @@
        do setor tinha menos de 10px. */
 .cliente__setor {
   flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 3px 10px;
   border: 1px solid color-mix(in srgb, var(--setor-cor) 70%, transparent);
   border-radius: var(--radius-pill);

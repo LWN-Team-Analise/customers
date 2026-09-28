@@ -407,32 +407,42 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
       title={aberto ? 'Fechar' : 'Ver endereço e obras'}
     >
       <Avatar nome={cliente.nome} foto={cliente.logo} tamanho={40} quadrado titulo={cliente.nome} />
-      <h2 className="cliente__nome">{cliente.nome}</h2>
+      {/* nome e selos num bloco que QUEBRA linha: com nota e setor na
+          mesma linha do nome, num card estreito o nome encolhia ate
+          sobrar uma letra por linha. Agora os selos descem para baixo
+          do nome quando nao cabem ao lado. */}
+      <span className="cliente__titulo">
+        <h2 className="cliente__nome">{cliente.nome}</h2>
 
-      {/* ---- a nota, na linha do nome ----
-          Antes ela só existia dentro do card aberto, no pino sobre a
-          foto. Mas "esse cliente foi bem?" é a pergunta que se faz
-          VARRENDO a lista, e não abrindo cliente por cliente para
-          descobrir — então ela sobe para o cabeçalho, que é a única
-          parte sempre visível. Dentro do card ela continua, com as
-          notas obra a obra. */}
-      {nota && (
-        <span
-          className="cliente__nota"
-          title={`Média de ${nota.quantas} obra${nota.quantas === 1 ? '' : 's'} avaliada${
-            nota.quantas === 1 ? '' : 's'
-          }`}
-        >
-          <Estrelas nota={nota.media} tamanho={12} />
-          <strong>{nota.media.toFixed(1)}</strong>
-        </span>
-      )}
+        {/* ---- a nota, na linha do nome ----
+            Antes ela só existia dentro do card aberto, no pino sobre a
+            foto. Mas "esse cliente foi bem?" é a pergunta que se faz
+            VARRENDO a lista, e não abrindo cliente por cliente para
+            descobrir — então ela sobe para o cabeçalho, que é a única
+            parte sempre visível. Dentro do card ela continua, com as
+            notas obra a obra. */}
+        {(nota || setor) && (
+          <span className="cliente__selos">
+            {nota && (
+              <span
+                className="cliente__nota"
+                title={`Média de ${nota.quantas} obra${nota.quantas === 1 ? '' : 's'} avaliada${
+                  nota.quantas === 1 ? '' : 's'
+                }`}
+              >
+                <Estrelas nota={nota.media} tamanho={12} />
+                <strong>{nota.media.toFixed(1)}</strong>
+              </span>
+            )}
 
-      {setor && (
-        <span className="cliente__setor" style={{ '--setor-cor': corAdaptada(setor.cor, isDark) }}>
-          {setor.nome}
-        </span>
-      )}
+            {setor && (
+              <span className="cliente__setor" style={{ '--setor-cor': corAdaptada(setor.cor, isDark) }}>
+                {setor.nome}
+              </span>
+            )}
+          </span>
+        )}
+      </span>
       <span className="cliente__seta" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="m6 9 6 6 6-6" />

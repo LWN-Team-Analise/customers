@@ -84,6 +84,7 @@ const ATALHOS = [
     titulo: 'Despesas',
     detalhe: 'Enviar despesa, refeição ou bônus',
     rota: '/app/despesas',
+    permissao: 'ver_despesas',
     termos: 'despesas despesa reembolso gasto recibo comprovante nota fiscal vale transporte combustivel refeicao almoco janta bonus viagem apartamento',
   },
   {
@@ -92,7 +93,17 @@ const ATALHOS = [
     titulo: 'Meus envios',
     detalhe: 'O que você já enviou em Despesas, por mês e por ano',
     rota: '/app/despesas/envios',
+    permissao: 'ver_despesas',
     termos: 'meus envios despesas enviadas historico reembolso total do mes total anual',
+  },
+  {
+    id: 'tela-envios-gerais',
+    grupo: 'Telas',
+    titulo: 'Envios gerais',
+    detalhe: 'As despesas, refeições e bônus de cada pessoa da equipe',
+    rota: '/app/despesas/gerais',
+    permissao: 'revisar_despesa_geral',
+    termos: 'envios gerais despesas da equipe revisar despesa geral reembolsos de todos',
   },
   {
     id: 'tela-usuarios',

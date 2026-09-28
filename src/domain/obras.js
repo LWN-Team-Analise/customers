@@ -379,28 +379,21 @@ export function checkTemDonoProprio(check) {
 /**
  * Quem marca ESTE check.
  *
- * Duas portas de saida da regra "so o seu cargo", e as duas sao
- * PERMISSAO de quem esta logado:
+ * A regra e "so o seu setor", com tres portas de saida:
  *   - acesso total (diretoria);
- *   - a permissao "check em todas as etapas".
+ *   - a permissao "check em todas as etapas";
+ *   - a obra e de EMERGENCIA (obra.tipo === 'emergencia'): ali ninguem
+ *     espera o setor certo, e QUALQUER setor marca qualquer check.
  *
- * Havia uma terceira: obra de EMERGENCIA liberava o check para
- * qualquer um, com a ideia de que ali ninguem fica esperando o setor
- * certo. Ela saiu. Na pratica o TIPO DA OBRA passava por cima do
- * cadastro de permissoes — quem nao pode marcar fora do seu setor
- * marcava assim mesmo, bastando a obra ser emergencia, e o rastro
- * ficava com o nome de quem nao devia ter marcado. Quem precisa
- * marcar por outro setor numa emergencia ganha a permissao "check em
- * todas as etapas", que e onde essa decisao deve morar.
- *
- * O parametro `obra` continua: quem chama ja passa, e e nele que
- * entraria uma regra por obra se voltar a existir alguma.
+ * Na obra padrao a trava por setor continua igual. O servidor
+ * (podeMarcar, em server/routes/dados.js) responde a MESMA coisa — se
+ * os dois divergirem, o check pisca: a tela libera e a API recusa.
  */
-// eslint-disable-next-line no-unused-vars
 export function podeEditarCheck(usuario, check, card, obra) {
   if (!usuario) return false
   if (temAcessoTotal(usuario)) return true
   if (podeFazer(usuario, 'check_todas_etapas')) return true
+  if (obra?.tipo === 'emergencia') return true
   return cargosDoCheck(check, card).includes(chaveDoCargo(usuario))
 }
 

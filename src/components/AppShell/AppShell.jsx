@@ -150,16 +150,15 @@ const Icone = {
  * Usuarios nao tem permissao de VISUALIZACAO propria: quem entra la e
  * quem pode mexer em usuario ou em cargo.
  *
- * Item SEM `permissao` nem `permissoes` e de todo mundo — e o caso de
- * Despesas: cada pessoa envia as proprias.
+ * Item SEM `permissao` nem `permissoes` seria de todo mundo.
  */
 const MENU = [
   { id: 'inicio', rotulo: 'Página inicial', rota: '/app', exato: true, permissao: 'ver_inicio' },
   { id: 'obras', rotulo: 'Obras', rota: '/app/obras', permissao: 'ver_obras' },
   { id: 'clientes', rotulo: 'Clientes', rota: '/app/clientes', permissao: 'ver_clientes' },
   { id: 'concluidas', rotulo: 'Concluídas', rota: '/app/concluidas', permissao: 'ver_concluidas' },
+  { id: 'despesas', rotulo: 'Despesas', rota: '/app/despesas', permissao: 'ver_despesas' },
   { id: 'avaliacoes', rotulo: 'Avaliações', rota: '/app/avaliacoes', permissao: 'ver_avaliacoes' },
-  { id: 'despesas', rotulo: 'Despesas', rota: '/app/despesas' },
   {
     id: 'usuarios',
     rotulo: 'Usuários',

@@ -7,6 +7,7 @@ import { configurado as temOutlook, perfilDoCodigo, urlDeEntrada } from '../outl
 import { normalizar } from '../../src/domain/permissoes.js'
 import { logger } from '../logger.js'
 import { validarForcaSenha } from '../utils/senha.js'
+import { registrarAtividade } from '../atividade.js'
 
 const router = Router()
 
@@ -198,6 +199,12 @@ router.post('/senha', async (req, res) => {
       hash,
       sub,
     ])
+    await registrarAtividade(sub, {
+      acao: 'senha.alterada',
+      categoria: 'conta',
+      entidade: ['usuario', sub],
+      descricao: 'Senha alterada',
+    })
     return res.json({ ok: true })
   } catch (erro) {
     if (erro.name === 'JsonWebTokenError' || erro.name === 'TokenExpiredError') {
@@ -399,6 +406,12 @@ router.post('/redefinir', async (req, res) => {
       [hash, dono.sub],
     )
     await query('UPDATE senha_codigo SET usado_em = now() WHERE id = $1', [dono.cod])
+    await registrarAtividade(dono.sub, {
+      acao: 'senha.redefinida',
+      categoria: 'conta',
+      entidade: ['usuario', dono.sub],
+      descricao: 'Senha redefinida pelo código do e-mail',
+    })
 
     return res.json({ ok: true })
   } catch (erro) {
@@ -535,6 +548,13 @@ router.post('/outlook/vincular', async (req, res) => {
         WHERE id = $4`,
       [perfil.email, perfil.id ?? null, perfil.foto, sub],
     )
+    await registrarAtividade(sub, {
+      acao: 'outlook.vinculado',
+      categoria: 'conta',
+      entidade: ['usuario', sub],
+      descricao: 'Conta Microsoft (Outlook) vinculada',
+      detalhes: { conta: perfil.email },
+    })
 
     const { rows } = await buscarUsuario('u.id = $1', [sub])
     return res.json({

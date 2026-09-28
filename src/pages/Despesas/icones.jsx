@@ -52,6 +52,15 @@ export const IconeLista = () => (
   </svg>
 )
 
+/** Pessoas: "Envios gerais". */
+export const IconeEquipe = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" {...traco} strokeWidth="1.9">
+    <circle cx="9" cy="8" r="3.3" />
+    <path d="M2.8 19.5a6.4 6.4 0 0 1 12.4 0" />
+    <path d="M16.2 5.2a3.3 3.3 0 0 1 0 6.1M17.6 14.4a6.4 6.4 0 0 1 3.6 5.1" />
+  </svg>
+)
+
 export const IconeVoltar = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" {...traco} strokeWidth="1.9">
     <path d="M15 5.5 8.5 12l6.5 6.5" />

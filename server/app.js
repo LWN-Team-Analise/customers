@@ -7,6 +7,7 @@ import dadosRouter from './routes/dados.js'
 import roteiroRouter from './routes/roteiro.js'
 import botRouter from './routes/bot.js'
 import despesasRouter from './routes/despesas.js'
+import atividadesRouter from './routes/atividades.js'
 import { logger } from './logger.js'
 
 /**
@@ -48,6 +49,7 @@ app.use('/api/dados', dadosRouter)
 app.use('/api/roteiro', roteiroRouter)
 app.use('/api/bot', botRouter)
 app.use('/api/despesas', despesasRouter)
+app.use('/api/atividades', atividadesRouter)
 
 app.use((erro, _req, res, _next) => {
   /* imagem grande demais chegava aqui como 500 sem explicacao, e a tela

@@ -4,8 +4,38 @@ import { query } from '../db.js'
 import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
 import { normalizar } from '../../src/domain/permissoes.js'
 import { gerarSenhaForte } from '../utils/senha.js'
+import { registrarAtividade } from '../atividade.js'
 
 const router = Router()
+
+/* ------------------------------------------------------------
+   A trava do ACESSO TOTAL
+
+   O setor com acesso total passa por qualquer permissao. Entao dar
+   acesso total — ligando a chave num setor, ou pondo alguem num
+   setor que ja a tem — e dar TUDO, e so quem ja tem tudo pode.
+
+   Sem esta trava, quem tinha "editar setor" ligava o acesso total
+   no proprio setor, e quem tinha "editar usuario" cadastrava (ou
+   movia) alguem para a diretoria e ficava com a senha dele.
+   ------------------------------------------------------------ */
+const SO_ACESSO_TOTAL = 'Só quem tem acesso total pode dar acesso total a alguém.'
+
+/* o nome de cada coluna do usuario como o historico escreve "o que mudou" */
+const ROTULO_CAMPO_USUARIO = {
+  name: 'nome',
+  email: 'e-mail',
+  telefone: 'telefone',
+  foto: 'foto',
+  foto_original: 'foto',
+  recorte_foto: 'foto',
+  data_nascimento: 'nascimento',
+  cargo_titulo_id: 'cargo',
+  cargo_titulo: 'cargo',
+  cargo_id: 'setor',
+  cargo: 'setor',
+  cpf: 'CPF',
+}
 
 /** Senha temporária forte para novos usuários - gerada pelo servidor */
 export const SENHA_PADRAO = gerarSenhaForte()
@@ -59,6 +89,7 @@ router.post('/cargos', exigeSessao, exige('editar_cargo'), async (req, res) => {
 
   if (!nome) return res.status(400).json({ erro: 'Informe o nome do cargo.' })
   if (!/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(cor)) return res.status(400).json({ erro: 'Cor inválida.' })
+  if (acessoTotal && !req.cargo?.acessoTotal) return res.status(403).json({ erro: SO_ACESSO_TOTAL })
 
   const chave = chaveDe(nome)
   if (!/^[a-z][a-z0-9_]*$/.test(chave)) {
@@ -72,6 +103,13 @@ router.post('/cargos', exigeSessao, exige('editar_cargo'), async (req, res) => {
        RETURNING *`,
       [chave, nome, curto, cor, acessoTotal, permissoes],
     )
+    await registrarAtividade(req, {
+      acao: 'setor.criado',
+      categoria: 'equipe',
+      entidade: ['cargo', rows[0].id],
+      descricao: 'Setor criado',
+      detalhes: { setor: nome, permissoes: `${permissoes.length} permissão(ões)` },
+    })
     return res.status(201).json({ cargo: paraCargo(rows[0]) })
   } catch (erro) {
     if (erro.code === '23505') {
@@ -101,27 +139,66 @@ router.patch('/cargos/:id', exigeSessao, exige('editar_cargo'), async (req, res)
     valores.push(texto(req.body.curto).slice(0, 6))
     campos.push(`curto = $${valores.length}`)
   }
-  if (req.body?.acessoTotal !== undefined) {
-    valores.push(Boolean(req.body.acessoTotal))
-    campos.push(`acesso_total = $${valores.length}`)
+  if (campos.length === 0 && req.body?.acessoTotal === undefined && req.body?.permissoes === undefined) {
+    return res.status(400).json({ erro: 'Nada para alterar.' })
   }
-  /* a lista passa pelo mesmo `normalizar` da tela: alteracao sem a
-     visualizacao dela nao entra, venha de onde vier */
-  if (req.body?.permissoes !== undefined) {
-    valores.push(normalizar(req.body.permissoes))
-    campos.push(`permissoes = $${valores.length}`)
-  }
-
-  if (campos.length === 0) return res.status(400).json({ erro: 'Nada para alterar.' })
-
-  valores.push(req.params.id)
 
   try {
+    const alvo = await query('SELECT acesso_total, permissoes FROM cargo WHERE id = $1', [req.params.id])
+    if (!alvo.rows[0]) return res.status(404).json({ erro: 'Cargo não encontrado.' })
+
+    /* ligar OU desligar o acesso total so por quem o tem — desligar o
+       da diretoria trancaria a empresa do lado de fora */
+    if (req.body?.acessoTotal !== undefined) {
+      const novo = Boolean(req.body.acessoTotal)
+      if (novo !== Boolean(alvo.rows[0].acesso_total)) {
+        if (!req.cargo?.acessoTotal) return res.status(403).json({ erro: SO_ACESSO_TOTAL })
+        valores.push(novo)
+        campos.push(`acesso_total = $${valores.length}`)
+      }
+    }
+
+    /* a lista passa pelo mesmo `normalizar` da tela: alteracao sem a
+       visualizacao dela nao entra, venha de onde vier.
+
+       As permissoes do PROPRIO setor so mudam por quem tem acesso
+       total: senao "editar setor" virava "dar a mim mesmo qualquer
+       permissao". Enviar a mesma lista de antes nao conta como troca. */
+    if (req.body?.permissoes !== undefined) {
+      const lista = normalizar(req.body.permissoes)
+      const mudou = lista.join('|') !== normalizar(alvo.rows[0].permissoes ?? []).join('|')
+      if (mudou) {
+        const meuSetor = await query('SELECT cargo_id FROM usuario WHERE id = $1', [req.dono.sub])
+        const ehOMeu = String(meuSetor.rows[0]?.cargo_id) === String(req.params.id)
+        if (ehOMeu && !req.cargo?.acessoTotal) {
+          return res.status(403).json({ erro: 'Você não pode mudar as permissões do seu próprio setor.' })
+        }
+        valores.push(lista)
+        campos.push(`permissoes = $${valores.length}`)
+      }
+    }
+
+    if (campos.length === 0) {
+      const igual = await query('SELECT * FROM cargo WHERE id = $1', [req.params.id])
+      return res.json({ cargo: paraCargo(igual.rows[0]) })
+    }
+
+    valores.push(req.params.id)
+
     const { rows } = await query(
       `UPDATE cargo SET ${campos.join(', ')} WHERE id = $${valores.length} RETURNING *`,
       valores,
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Cargo não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'setor.editado',
+      categoria: 'equipe',
+      entidade: ['cargo', rows[0].id],
+      descricao: campos.some((c) => c.startsWith('permissoes') || c.startsWith('acesso_total'))
+        ? 'Permissões do setor alteradas'
+        : 'Setor editado',
+      detalhes: { setor: rows[0].nome },
+    })
     return res.json({ cargo: paraCargo(rows[0]) })
   } catch (erro) {
     return tratar(erro, res, 'equipe/cargos-editar')
@@ -149,6 +226,13 @@ router.delete('/cargos/:id', exigeSessao, exige('editar_cargo'), async (req, res
     }
 
     await query('DELETE FROM cargo WHERE id = $1', [req.params.id])
+    await registrarAtividade(req, {
+      acao: 'setor.excluido',
+      categoria: 'equipe',
+      entidade: ['cargo', req.params.id],
+      descricao: 'Setor excluído',
+      detalhes: { setor: alvo.rows[0].nome },
+    })
     return res.status(204).end()
   } catch (erro) {
     if (erro.code === '23503') {
@@ -222,6 +306,13 @@ router.post('/titulos', exigeSessao, exige('editar_cargo_titulo'), async (req, r
       'INSERT INTO cargo_titulo (nome) VALUES ($1) RETURNING *',
       [nome],
     )
+    await registrarAtividade(req, {
+      acao: 'cargo.criado',
+      categoria: 'equipe',
+      entidade: ['cargo_titulo', rows[0].id],
+      descricao: 'Cargo criado',
+      detalhes: { cargo: nome },
+    })
     return res.status(201).json({ titulo: paraTitulo(rows[0]) })
   } catch (erro) {
     if (erro.code === '23505') {
@@ -247,6 +338,13 @@ router.patch('/titulos/:id', exigeSessao, exige('editar_cargo_titulo'), async (r
       nome,
       req.params.id,
     ])
+    await registrarAtividade(req, {
+      acao: 'cargo.editado',
+      categoria: 'equipe',
+      entidade: ['cargo_titulo', rows[0].id],
+      descricao: 'Cargo renomeado',
+      detalhes: { cargo: nome },
+    })
     return res.json({ titulo: paraTitulo(rows[0]) })
   } catch (erro) {
     if (erro.code === '23505') {
@@ -268,8 +366,17 @@ router.delete('/titulos/:id', exigeSessao, exige('editar_cargo_titulo'), async (
       })
     }
 
-    const { rowCount } = await query('DELETE FROM cargo_titulo WHERE id = $1', [req.params.id])
-    if (rowCount === 0) return res.status(404).json({ erro: 'Cargo não encontrado.' })
+    const { rows } = await query('DELETE FROM cargo_titulo WHERE id = $1 RETURNING nome', [
+      req.params.id,
+    ])
+    if (!rows[0]) return res.status(404).json({ erro: 'Cargo não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'cargo.excluido',
+      categoria: 'equipe',
+      entidade: ['cargo_titulo', req.params.id],
+      descricao: 'Cargo excluído',
+      detalhes: { cargo: rows[0].nome },
+    })
     return res.status(204).end()
   } catch (erro) {
     return tratar(erro, res, 'equipe/titulos-apagar')
@@ -343,10 +450,39 @@ const paraUsuario = (l) => ({
   obrasAvaliadas: l.obras_avaliadas ?? 0,
 })
 
-router.get('/usuarios', exigeSessao, async (_req, res) => {
+/* ------------------------------------------------------------
+   O que cada um ve dos colegas
+
+   A lista da equipe vai para TODA tela (nome, foto, setor, cargo:
+   e o que pinta cards, mencoes e avatares). Os dados pessoais nao:
+
+     CPF e nascimento   so para quem edita usuario;
+     telefone           para quem abre a tela de Usuarios;
+
+   e cada um sempre ve os proprios. Antes a lista inteira, com CPF,
+   ia para qualquer pessoa logada — bastava abrir a resposta.
+   ------------------------------------------------------------ */
+function recortarPessoal(usuario, meu, meuId) {
+  if (String(usuario.id) === String(meuId)) return usuario
+  const gestor = cargoPode(meu, 'editar_usuario')
+  const abreUsuarios = gestor || cargoPode(meu, 'editar_cargo') || cargoPode(meu, 'editar_cargo_titulo')
+  return {
+    ...usuario,
+    cpf: gestor ? usuario.cpf : null,
+    nascimento: gestor ? usuario.nascimento : null,
+    telefone: abreUsuarios ? usuario.telefone : null,
+  }
+}
+
+router.get('/usuarios', exigeSessao, async (req, res) => {
   try {
-    const { rows } = await query(`${CONSULTA_USUARIOS} ORDER BY c.ordem NULLS LAST, u.name`)
-    return res.json({ usuarios: rows.map(paraUsuario) })
+    const [{ rows }, meu] = await Promise.all([
+      query(`${CONSULTA_USUARIOS} ORDER BY c.ordem NULLS LAST, u.name`),
+      meuCargo(req.dono.sub),
+    ])
+    return res.json({
+      usuarios: rows.map(paraUsuario).map((u) => recortarPessoal(u, meu, req.dono.sub)),
+    })
   } catch (erro) {
     return tratar(erro, res, 'equipe/usuarios')
   }
@@ -407,8 +543,11 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
     }
     if (cpf.length !== 11) return res.status(400).json({ erro: 'O CPF precisa ter 11 dígitos.' })
 
-    const cargo = await query('SELECT id, nome FROM cargo WHERE chave = $1', [chaveCargo])
+    const cargo = await query('SELECT id, nome, acesso_total FROM cargo WHERE chave = $1', [chaveCargo])
     if (!cargo.rows[0]) return res.status(400).json({ erro: 'Escolha o setor.' })
+    if (cargo.rows[0].acesso_total && !meu.acessoTotal) {
+      return res.status(403).json({ erro: SO_ACESSO_TOTAL })
+    }
 
     /* atribuir CARGO e permissao a parte: quem nao a tem cadastra a
        pessoa do mesmo jeito, so que sem cargo */
@@ -444,6 +583,13 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
     )
 
     const criado = await query(`${CONSULTA_USUARIOS} AND u.id = $1`, [rows[0].id])
+    await registrarAtividade(req, {
+      acao: 'usuario.cadastrado',
+      categoria: 'equipe',
+      entidade: ['usuario', rows[0].id],
+      descricao: 'Colaborador cadastrado',
+      detalhes: { pessoa: nome, setor: cargo.rows[0].nome },
+    })
     return res
       .status(201)
       .json({ usuario: paraUsuario(criado.rows[0]), senhaPadrao: senhaTemporaria })
@@ -527,11 +673,31 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
       por('cargo_titulo_id', titulo?.id ?? null)
       por('cargo_titulo', titulo?.nome ?? null)
     }
+    /* O SETOR decide as permissoes, entao trocar setor e trocar o que a
+       pessoa pode fazer. Antes isso passava so com o "cada um edita o
+       proprio" la de cima: qualquer um se mudava para a diretoria pela
+       API. Agora pede "editar usuario" — tambem para o proprio — e, se
+       o setor novo tem acesso total, pede acesso total.
+
+       Mandar o mesmo setor de antes (a tela de Configuracoes manda o
+       formulario inteiro) nao e troca e nao pede nada. */
     if (req.body?.cargo !== undefined) {
-      const cargo = await query('SELECT id, nome FROM cargo WHERE chave = $1', [req.body.cargo])
+      const cargo = await query('SELECT id, nome, acesso_total FROM cargo WHERE chave = $1', [
+        req.body.cargo,
+      ])
       if (!cargo.rows[0]) return res.status(400).json({ erro: 'Setor não encontrado.' })
-      por('cargo_id', cargo.rows[0].id)
-      por('cargo', cargo.rows[0].nome)
+      const atual = await query('SELECT cargo_id FROM usuario WHERE id = $1', [alvo])
+      const troca = String(atual.rows[0]?.cargo_id) !== String(cargo.rows[0].id)
+      if (troca) {
+        if (!cargoPode(meu, 'editar_usuario')) {
+          return res.status(403).json({ erro: 'Seu setor não pode mudar o setor de ninguém.' })
+        }
+        if (cargo.rows[0].acesso_total && !meu.acessoTotal) {
+          return res.status(403).json({ erro: SO_ACESSO_TOTAL })
+        }
+        por('cargo_id', cargo.rows[0].id)
+        por('cargo', cargo.rows[0].nome)
+      }
     }
 
     if (req.body?.cpf !== undefined) {
@@ -553,6 +719,20 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ erro: 'Usuário não encontrado.' })
 
     const salvo = await query(`${CONSULTA_USUARIOS} AND u.id = $1`, [alvo])
+    await registrarAtividade(req, {
+      acao: souEu ? 'perfil.editado' : 'usuario.editado',
+      categoria: souEu ? 'conta' : 'equipe',
+      entidade: ['usuario', alvo],
+      descricao: souEu ? 'Seu cadastro foi atualizado' : 'Cadastro de colaborador editado',
+      detalhes: {
+        pessoa: souEu ? null : salvo.rows[0]?.name,
+        alterado: campos
+          .map((c) => ROTULO_CAMPO_USUARIO[c.split(' ')[0]])
+          .filter(Boolean)
+          .filter((v, i, todos) => todos.indexOf(v) === i)
+          .join(', '),
+      },
+    })
     return res.json({ usuario: paraUsuario(salvo.rows[0]) })
   } catch (erro) {
     if (erro.code === '23505') {
@@ -583,10 +763,17 @@ router.delete('/usuarios/:id', exigeSessao, async (req, res) => {
     }
 
     const { rows } = await query(
-      'UPDATE usuario SET ativo = false WHERE id = $1 RETURNING id',
+      'UPDATE usuario SET ativo = false WHERE id = $1 RETURNING id, name',
       [req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Usuário não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'usuario.desativado',
+      categoria: 'equipe',
+      entidade: ['usuario', req.params.id],
+      descricao: 'Colaborador removido da equipe',
+      detalhes: { pessoa: rows[0].name },
+    })
     return res.status(204).end()
   } catch (erro) {
     if (erro.message?.includes('protegido')) {

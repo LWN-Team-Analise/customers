@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { query } from '../db.js'
-import { cargoPode, exigeSessao, meuCargo, tratar } from '../sessao.js'
+import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
+import { descreverObra, registrarAtividade } from '../atividade.js'
 /* os tipos, os valores fixos e os limites sao os MESMOS da tela: um
    arquivo so, sem React dentro, importado pelos dois lados (ver o
    comentario no topo dele) */
@@ -12,9 +13,13 @@ import {
   VALOR_MAXIMO,
   anexoAceito,
   lerValor,
+  rotuloDoTipo,
   tipoValido,
   valorFixo,
 } from '../../src/domain/despesas.js'
+
+const REAIS = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+const reais = (valor) => REAIS.format(Number(valor) || 0)
 
 /* ============================================================
    DESPESAS — /api/despesas
@@ -22,17 +27,29 @@ import {
      POST /envios                 envia uma despesa, refeicao ou bonus
      GET  /envios?mes=AAAA-MM     os envios do mes, dia a dia, com totais
      GET  /resumo?ano=AAAA        o ano, mes a mes, com o total anual
+     GET  /pessoas                quem ja enviou algo (Envios gerais; so revisor)
      GET  /anexos/:id             o comprovante (o arquivo em si)
 
-   Quem enxerga o que:
+   /envios e /resumo aceitam os mesmos filtros, e eles se somam:
+     ?usuarios=   de quem (ver escopoDaConsulta)
+     ?categoria=  despesa | refeicao | bonus (vazio = todas)
 
-     Todo mundo ve os PROPRIOS envios. Ver os de outra pessoa exige
-     `revisar_despesa_geral` — e isso e conferido AQUI, a cada
-     chamada, a partir do token. A tela esconde o filtro de pessoas
-     de quem nao tem a permissao, mas esconder nao protege nada:
-     `?usuarios=` com o id de outra pessoa, sem a permissao, volta
-     403. E o comprovante de outra pessoa volta 404, como se nao
-     existisse — o id de um anexo nao conta se ele existe.
+   Quem enxerga o que — tudo conferido AQUI, a cada chamada, a partir
+   do token (a tela esconde o que a pessoa nao pode, mas esconder nao
+   protege nada):
+
+     ver_despesas          qualquer rota daqui; sem ela, 403 em todas.
+                           Com ela, a pessoa ve os PROPRIOS envios.
+     alterar_despesas      enviar (POST /envios).
+     revisar_despesa_geral ver os envios dos outros. `?usuarios=` com
+                           o id de outra pessoa, sem ela, volta 403. E o
+                           comprovante de outra pessoa volta 404, como se
+                           nao existisse — o id de um anexo nao conta se
+                           ele existe.
+
+   As duas de baixo dependem de ver_despesas (src/domain/permissoes.js):
+   a lista do setor e normalizada ao ser lida, entao sem a visualizacao
+   nenhuma das duas vale, mesmo que esteja gravada.
 
    Os TOTAIS (do dia, do mes, do ano, por pessoa) saem do banco,
    com SUM sobre NUMERIC. A tela so escreve o que recebeu.
@@ -41,6 +58,8 @@ import {
 const router = Router()
 
 const texto = (valor) => String(valor ?? '').trim()
+const PERMISSAO_VER = 'ver_despesas'
+const PERMISSAO_ENVIAR = 'alterar_despesas'
 const PERMISSAO_REVISAR = 'revisar_despesa_geral'
 
 /** Tabela que ainda nao existe vira recado com o arquivo certo, nao 500. */
@@ -48,8 +67,8 @@ function falhou(erro, res, onde) {
   if (erro.code === '42P01' || erro.code === '42703') {
     return res.status(503).json({
       erro:
-        'O banco ainda não tem as tabelas de despesas. Rode db/atualizacao-8.sql.txt ' +
-        '(ou, de uma vez: npm run db:atualizar) e suba a API de novo.',
+        'O banco ainda não tem as tabelas de despesas. Rode db/atualizacao-8.sql.txt e ' +
+        'db/atualizacao-10.sql.txt (ou, de uma vez: npm run db:atualizar) e suba a API de novo.',
     })
   }
   return tratar(erro, res, onde)
@@ -161,7 +180,8 @@ function lerAnexo(bruto) {
 
 async function escopoDaConsulta(req, res) {
   const eu = Number(req.dono.sub)
-  const cargo = await meuCargo(eu)
+  /* o `exige` da rota ja leu o setor; so le de novo se nao leu */
+  const cargo = req.cargo ?? (await meuCargo(eu))
   const revisor = cargoPode(cargo, PERMISSAO_REVISAR)
   const bruto = texto(req.query.usuarios)
 
@@ -188,9 +208,36 @@ async function escopoDaConsulta(req, res) {
   return { ids, revisor }
 }
 
-/** O pedaco de WHERE do escopo. `$n` e o proximo parametro livre. */
-function filtroDeUsuarios(ids, n) {
-  return ids === null ? { sql: '', params: [] } : { sql: `AND e.usuario_id = ANY($${n}::bigint[])`, params: [ids] }
+/**
+ * `?categoria=despesa|refeicao|bonus` — vazio (ou `todos`) e tudo.
+ * Devolve a categoria, null para "todas", ou `false` se ja recusou.
+ */
+function categoriaDaConsulta(req, res) {
+  const bruto = texto(req.query.categoria)
+  if (!bruto || bruto === 'todos') return null
+  if (!CHAVES_CATEGORIA.includes(bruto)) {
+    res.status(400).json({ erro: 'Tipo de envio inválido.' })
+    return false
+  }
+  return bruto
+}
+
+/**
+ * O resto do WHERE: de quem e de que tipo. Os dois primeiros
+ * parametros ($1 e $2) sao sempre o periodo; os filtros vem depois.
+ */
+function filtros(ids, categoria) {
+  const partes = []
+  const params = []
+  if (ids !== null) {
+    params.push(ids)
+    partes.push(`AND e.usuario_id = ANY($${params.length + 2}::bigint[])`)
+  }
+  if (categoria) {
+    params.push(categoria)
+    partes.push(`AND e.categoria = $${params.length + 2}`)
+  }
+  return { sql: partes.join(' '), params }
 }
 
 /* ------------------------------------------------------------
@@ -207,7 +254,8 @@ const paraEnvio = (l) => ({
   observacao: l.observacao ?? '',
   usuarioId: String(l.usuario_id),
   usuarioNome: l.usuario_nome ?? '',
-  /* obra excluida depois do envio: tudo null, e a tela diz isso */
+  /* sem obra (enviado sem, ou excluida depois): null. O cliente vem
+     da obra quando ha obra, e do proprio envio quando nao ha */
   obraId: l.obra_id === null || l.obra_id === undefined ? null : String(l.obra_id),
   obraProposta: l.obra_proposta ?? '',
   obraDescricao: l.obra_descricao ?? '',
@@ -229,7 +277,7 @@ const CONSULTA_ENVIOS = `
          e.criado_em, e.usuario_id, u.name AS usuario_nome,
          e.obra_id, o.proposta AS obra_proposta, o.descricao AS obra_descricao,
          o.concluida_em AS obra_concluida_em,
-         o.cliente_id, c.nome AS cliente_nome,
+         c.id AS cliente_id, c.nome AS cliente_nome,
          (SELECT coalesce(json_agg(json_build_object(
                    'id', a.id, 'nome', a.nome, 'tipo', a.tipo, 'tamanho', a.tamanho
                  ) ORDER BY a.id), '[]'::json)
@@ -237,7 +285,7 @@ const CONSULTA_ENVIOS = `
     FROM despesa_envio e
     JOIN usuario u      ON u.id = e.usuario_id
     LEFT JOIN obra o    ON o.id = e.obra_id
-    LEFT JOIN cliente c ON c.id = o.cliente_id`
+    LEFT JOIN cliente c ON c.id = coalesce(o.cliente_id, e.cliente_id)`
 
 const soma = (l) => ({ total: Number(l?.total ?? 0), quantidade: Number(l?.quantidade ?? 0) })
 
@@ -245,11 +293,12 @@ const soma = (l) => ({ total: Number(l?.total ?? 0), quantidade: Number(l?.quant
    ENVIAR
    ============================================================ */
 
-router.post('/envios', exigeSessao, async (req, res) => {
+router.post('/envios', exigeSessao, exige(PERMISSAO_ENVIAR), async (req, res) => {
   const corpo = req.body ?? {}
   const categoria = texto(corpo.categoria)
   const tipo = texto(corpo.tipo)
   const data = texto(corpo.data)
+  const clienteId = texto(corpo.clienteId)
   const obraId = texto(corpo.obraId)
 
   if (!CHAVES_CATEGORIA.includes(categoria)) {
@@ -266,9 +315,10 @@ router.post('/envios', exigeSessao, async (req, res) => {
   if (!tipo) return recusa(res, 'tipo', `Escolha o tipo de ${nomeDoTipo}.`)
   if (!tipoValido(categoria, tipo)) return recusa(res, 'tipo', `Tipo de ${nomeDoTipo} inválido.`)
 
-  /* ---- obra ---- */
-  if (!obraId) return recusa(res, 'obraId', 'Escolha o cliente e a obra.')
-  if (!/^\d{1,15}$/.test(obraId)) return recusa(res, 'obraId', 'Obra inválida.')
+  /* ---- cliente (obrigatorio) e obra (opcional) ---- */
+  if (!clienteId) return recusa(res, 'clienteId', 'Escolha o cliente.')
+  if (!/^\d{1,15}$/.test(clienteId)) return recusa(res, 'clienteId', 'Cliente inválido.')
+  if (obraId && !/^\d{1,15}$/.test(obraId)) return recusa(res, 'obraId', 'Obra inválida.')
 
   /* ---- valor ----
      Tipo com valor fixo (a refeicao) grava o numero da casa, e o que
@@ -307,9 +357,21 @@ router.post('/envios', exigeSessao, async (req, res) => {
   }
 
   try {
-    const obra = await query('SELECT id FROM obra WHERE id = $1', [obraId])
-    if (!obra.rows[0]) {
-      return recusa(res, 'obraId', 'A obra escolhida não existe mais. Escolha outra.')
+    const cliente = await query('SELECT nome FROM cliente WHERE id = $1', [clienteId])
+    if (!cliente.rows[0]) {
+      return recusa(res, 'clienteId', 'O cliente escolhido não existe mais. Escolha outro.')
+    }
+
+    /* a obra, quando vem, tem de ser DESSE cliente — senao o envio
+       diria um cliente e a obra, outro */
+    if (obraId) {
+      const obra = await query('SELECT cliente_id FROM obra WHERE id = $1', [obraId])
+      if (!obra.rows[0]) {
+        return recusa(res, 'obraId', 'A obra escolhida não existe mais. Escolha outra.')
+      }
+      if (String(obra.rows[0].cliente_id) !== clienteId) {
+        return recusa(res, 'obraId', 'Essa obra não é do cliente escolhido.')
+      }
     }
 
     /* O envio e o comprovante numa instrucao SO. Uma instrucao e
@@ -318,8 +380,8 @@ router.post('/envios', exigeSessao, async (req, res) => {
     const { rows } = await query(
       `WITH envio AS (
          INSERT INTO despesa_envio
-                (usuario_id, obra_id, categoria, tipo, data, valor, justificativa, observacao)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (usuario_id, cliente_id, obra_id, categoria, tipo, data, valor, justificativa, observacao)
+         VALUES ($1, $13, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, criado_em, valor
        ), anexo AS (
          INSERT INTO despesa_anexo (envio_id, nome, tipo, tamanho, conteudo)
@@ -329,7 +391,7 @@ router.post('/envios', exigeSessao, async (req, res) => {
        SELECT envio.id, envio.criado_em, envio.valor, (SELECT id FROM anexo) AS anexo_id FROM envio`,
       [
         req.dono.sub,
-        obraId,
+        obraId || null,
         categoria,
         tipo,
         data,
@@ -340,8 +402,23 @@ router.post('/envios', exigeSessao, async (req, res) => {
         anexo?.tipo ?? null,
         anexo?.tamanho ?? null,
         anexo?.conteudo ?? null,
+        clienteId,
       ],
     )
+
+    await registrarAtividade(req, {
+      acao: `${categoria}.enviado`,
+      categoria: 'despesa',
+      entidade: ['despesa_envio', rows[0].id],
+      descricao: { despesa: 'Despesa enviada', refeicao: 'Refeição enviada', bonus: 'Bônus enviado' }[categoria],
+      detalhes: {
+        tipo: rotuloDoTipo(tipo),
+        ...(obraId ? await descreverObra(obraId) : { cliente: cliente.rows[0].nome }),
+        valor: reais(Number(rows[0].valor)),
+        data: data.split('-').reverse().join('/'),
+        comprovante: anexo?.nome ?? null,
+      },
+    })
 
     return res.status(201).json({
       id: String(rows[0].id),
@@ -350,9 +427,11 @@ router.post('/envios', exigeSessao, async (req, res) => {
       anexoId: rows[0].anexo_id === null ? null : String(rows[0].anexo_id),
     })
   } catch (erro) {
-    /* a obra sumiu entre a conferencia e a gravacao */
+    /* o cliente ou a obra sumiu entre a conferencia e a gravacao */
     if (erro.code === '23503') {
-      return recusa(res, 'obraId', 'A obra escolhida não existe mais. Escolha outra.')
+      return String(erro.constraint ?? '').includes('cliente')
+        ? recusa(res, 'clienteId', 'O cliente escolhido não existe mais. Escolha outro.')
+        : recusa(res, 'obraId', 'A obra escolhida não existe mais. Escolha outra.')
     }
     if (erro.code === '23514') {
       return res.status(400).json({ erro: 'Algum campo não passou na conferência do banco. Revise e envie de novo.' })
@@ -365,18 +444,21 @@ router.post('/envios', exigeSessao, async (req, res) => {
    MES — os envios, dia a dia
    ============================================================ */
 
-router.get('/envios', exigeSessao, async (req, res) => {
+router.get('/envios', exigeSessao, exige(PERMISSAO_VER), async (req, res) => {
   const mes = texto(req.query.mes) || hojeNoBrasil().slice(0, 7)
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes) || mes < '2000-01' || mes > '2100-12') {
     return res.status(400).json({ erro: 'Mês inválido. Use AAAA-MM.' })
   }
+
+  const categoria = categoriaDaConsulta(req, res)
+  if (categoria === false) return undefined
 
   try {
     const escopo = await escopoDaConsulta(req, res)
     if (!escopo) return undefined
 
     const [inicio, fim] = limitesDoMes(mes)
-    const f = filtroDeUsuarios(escopo.ids, 3)
+    const f = filtros(escopo.ids, categoria)
     const params = [inicio, fim, ...f.params]
     const onde = `WHERE e.data >= $1 AND e.data < $2 ${f.sql}`
 
@@ -425,17 +507,20 @@ router.get('/envios', exigeSessao, async (req, res) => {
    ANO — mes a mes, e o total anual
    ============================================================ */
 
-router.get('/resumo', exigeSessao, async (req, res) => {
+router.get('/resumo', exigeSessao, exige(PERMISSAO_VER), async (req, res) => {
   const ano = Number(texto(req.query.ano) || hojeNoBrasil().slice(0, 4))
   if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) {
     return res.status(400).json({ erro: 'Ano inválido.' })
   }
 
+  const categoria = categoriaDaConsulta(req, res)
+  if (categoria === false) return undefined
+
   try {
     const escopo = await escopoDaConsulta(req, res)
     if (!escopo) return undefined
 
-    const f = filtroDeUsuarios(escopo.ids, 3)
+    const f = filtros(escopo.ids, categoria)
     const params = [`${ano}-01-01`, `${ano + 1}-01-01`, ...f.params]
     const onde = `WHERE e.data >= $1 AND e.data < $2 ${f.sql}`
     const mesDe = 'extract(month FROM e.data)::int'
@@ -502,13 +587,59 @@ router.get('/resumo', exigeSessao, async (req, res) => {
 })
 
 /* ============================================================
+   ENVIOS GERAIS — quem ja enviou alguma coisa
+
+   A lista de pessoas da tela "Envios gerais". So entra quem tem pelo
+   menos UM envio (despesa, refeicao ou bonus) — quem nunca enviou nada
+   nao aparece, mesmo cadastrado. Pessoa desligada (inativa) com envio
+   aparece: o historico dela continua valendo.
+
+   So para quem tem `revisar_despesa_geral`, conferido aqui pelo
+   `exige` — o mesmo 403 de qualquer outra rota protegida.
+   ============================================================ */
+
+router.get('/pessoas', exigeSessao, exige(PERMISSAO_REVISAR), async (_req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.name, u.email, u.ativo,
+              c.nome AS setor_nome, c.cor AS setor_cor,
+              coalesce(t.nome, u.cargo_titulo) AS cargo_titulo,
+              count(e.id)::int AS quantidade,
+              sum(e.valor)     AS total,
+              max(e.data)      AS ultimo_envio
+         FROM despesa_envio e
+         JOIN usuario u           ON u.id = e.usuario_id
+         LEFT JOIN cargo c        ON c.id = u.cargo_id
+         LEFT JOIN cargo_titulo t ON t.id = u.cargo_titulo_id
+        GROUP BY u.id, u.name, u.email, u.ativo, c.nome, c.cor, t.nome, u.cargo_titulo
+        ORDER BY lower(u.name)`,
+    )
+    return res.json({
+      pessoas: rows.map((l) => ({
+        usuarioId: String(l.id),
+        nome: l.name,
+        email: l.email ?? '',
+        ativo: l.ativo,
+        setor: l.setor_nome ?? '',
+        setorCor: l.setor_cor ?? null,
+        cargo: l.cargo_titulo ?? '',
+        ultimoEnvio: l.ultimo_envio ? String(l.ultimo_envio).slice(0, 10) : null,
+        ...soma(l),
+      })),
+    })
+  } catch (erro) {
+    return falhou(erro, res, 'despesas/pessoas')
+  }
+})
+
+/* ============================================================
    O COMPROVANTE
 
    Do dono do envio, ou de quem revisa. Para qualquer outro, o anexo
    "nao existe" — 404, e nao 403, para o id nao servir de sonda.
    ============================================================ */
 
-router.get('/anexos/:id', exigeSessao, async (req, res) => {
+router.get('/anexos/:id', exigeSessao, exige(PERMISSAO_VER), async (req, res) => {
   const id = texto(req.params.id)
   const naoAchou = () => res.status(404).json({ erro: 'Anexo não encontrado.' })
   if (!/^\d{1,15}$/.test(id)) return naoAchou()
@@ -523,9 +654,8 @@ router.get('/anexos/:id', exigeSessao, async (req, res) => {
     const anexo = rows[0]
     if (!anexo) return naoAchou()
 
-    if (Number(anexo.usuario_id) !== Number(req.dono.sub)) {
-      const cargo = await meuCargo(req.dono.sub)
-      if (!cargoPode(cargo, PERMISSAO_REVISAR)) return naoAchou()
+    if (Number(anexo.usuario_id) !== Number(req.dono.sub) && !cargoPode(req.cargo, PERMISSAO_REVISAR)) {
+      return naoAchou()
     }
 
     return res.json({ nome: anexo.nome, tipo: anexo.tipo ?? '', conteudo: anexo.conteudo })

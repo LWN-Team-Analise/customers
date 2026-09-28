@@ -36,6 +36,8 @@ import { prepararImagem } from '@/utils/imagem'
  *   refeicao  data · cliente/obra · tipo · valor (fixo) · observacao
  *   bonus     data · tipo · cliente/obra · valor · observacao
  *
+ * Nas tres, o cliente e obrigatorio e a obra e opcional.
+ *
  * A tela confere tudo antes de enviar, para o recado aparecer no campo
  * na hora. Mas quem MANDA e a API: ela confere de novo, e quando recusa
  * diz o campo (`erro.campo`), que acende aqui do mesmo jeito.
@@ -147,15 +149,15 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
 
   /* ---- cliente e obra ----
 
-     A despesa aponta para uma OBRA, e a obra ja diz o cliente. A
-     escolha e em dois passos porque uma lista unica com todas as obras
-     de todos os clientes seria longa demais para achar alguma coisa:
-     primeiro o cliente, depois so as obras dele.
+     O CLIENTE e obrigatorio; a OBRA e opcional ("Nenhuma" e uma
+     resposta valida). A escolha e em dois passos porque uma lista
+     unica com todas as obras de todos os clientes seria longa demais
+     para achar alguma coisa: primeiro o cliente, depois, se for o
+     caso, uma das obras dele.
 
-     So entram clientes que tem obra — escolher um cliente sem obra
-     levaria a um segundo campo vazio. As obras em andamento vem
-     primeiro; as concluidas continuam na lista (a despesa da semana
-     passada pode ser de uma obra que fechou ontem), marcadas. */
+     As obras em andamento vem primeiro; as concluidas continuam na
+     lista (a despesa da semana passada pode ser de uma obra que
+     fechou ontem), marcadas. */
   const obrasPorCliente = useMemo(() => {
     const mapa = new Map()
     obras.forEach((o) => {
@@ -173,15 +175,19 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
   }, [obras])
 
   const opcoesCliente = useMemo(
-    () =>
-      clientes
-        .filter((c) => obrasPorCliente.has(String(c.id)))
-        .map((c) => ({ valor: String(c.id), rotulo: c.nome })),
-    [clientes, obrasPorCliente],
+    () => clientes.map((c) => ({ valor: String(c.id), rotulo: c.nome })),
+    [clientes],
   )
 
   const obrasDoCliente = obrasPorCliente.get(String(form.clienteId)) ?? []
-  const opcoesObra = obrasDoCliente.map((o) => ({ valor: String(o.id), rotulo: rotuloDaObra(o) }))
+  /* "Nenhuma" e a primeira opcao — e a que vem escolhida ao trocar de
+     cliente: obra so entra no envio quando a pessoa escolhe uma */
+  const opcoesObra = form.clienteId
+    ? [
+        { valor: '', rotulo: 'Nenhuma' },
+        ...obrasDoCliente.map((o) => ({ valor: String(o.id), rotulo: rotuloDaObra(o) })),
+      ]
+    : []
 
   const mudar = (campo) => (evento) => {
     const valor = evento?.target ? evento.target.value : evento
@@ -190,14 +196,8 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
   }
 
   const escolherCliente = (clienteId) => {
-    const lista = obrasPorCliente.get(String(clienteId)) ?? []
-    /* cliente com uma obra so: ela ja vem escolhida */
-    setForm((atual) => ({
-      ...atual,
-      clienteId,
-      obraId: lista.length === 1 ? String(lista[0].id) : '',
-    }))
-    setErros((atual) => ({ ...atual, obraId: undefined, geral: undefined }))
+    setForm((atual) => ({ ...atual, clienteId, obraId: '' }))
+    setErros((atual) => ({ ...atual, clienteId: undefined, obraId: undefined, geral: undefined }))
   }
 
   /* ---- valor ---- */
@@ -226,8 +226,7 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
     if (!form.data) novos.data = 'Informe a data.'
     else if (form.data > hojeISO()) novos.data = 'A data não pode ser no futuro.'
 
-    if (!form.clienteId) novos.obraId = 'Escolha o cliente e a obra.'
-    else if (!form.obraId) novos.obraId = 'Escolha a obra.'
+    if (!form.clienteId) novos.clienteId = 'Escolha o cliente.'
 
     if (!form.tipo) {
       novos.tipo = {
@@ -263,7 +262,8 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
         categoria,
         tipo: form.tipo,
         data: form.data,
-        obraId: form.obraId,
+        clienteId: form.clienteId,
+        obraId: form.obraId || undefined,
         /* valor fixo nao vai: quem grava o fixo e o servidor */
         valor: travado ? undefined : (centavos / 100).toFixed(2),
         justificativa: form.tipo === 'outros' ? form.justificativa.trim() : undefined,
@@ -276,9 +276,9 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
       /* o servidor diz o campo quando sabe; sem campo, o recado vai
          para o rodape do formulario */
       setErros(e.campo && e.campo !== 'categoria' ? { [e.campo]: e.message } : { geral: e.message })
-      /* a obra sumiu enquanto o formulario estava aberto: a lista de
-         obras e relida, para ela sair das opcoes */
-      if (e.campo === 'obraId') recarregar()
+      /* o cliente ou a obra sumiu enquanto o formulario estava aberto:
+         as listas sao relidas, para ele sair das opcoes */
+      if (e.campo === 'obraId' || e.campo === 'clienteId') recarregar()
     } finally {
       setSalvando(false)
     }
@@ -299,13 +299,24 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
     />
   )
 
-  const campoObra = (
-    <div key="obra" className={`campo ${erros.obraId ? 'has-erro' : ''}`.trim()}>
-      <span className="campo__rotulo">Cliente / Obra</span>
-      {opcoesCliente.length === 0 ? (
-        <p className="formdesp__aviso">Nenhuma obra cadastrada ainda. As despesas são lançadas numa obra.</p>
-      ) : (
-        <div className="formdesp__par">
+  const notaDeErro = (recado) =>
+    recado && (
+      <span className="campo__nota campo__nota--erro" role="alert">
+        {recado}
+      </span>
+    )
+
+  /* cliente e obra dividem a linha; no celular, um embaixo do outro */
+  const campoObra =
+    opcoesCliente.length === 0 ? (
+      <div key="obra" className="campo">
+        <span className="campo__rotulo">Cliente</span>
+        <p className="formdesp__aviso">Nenhum cliente cadastrado ainda. Os envios são lançados para um cliente.</p>
+      </div>
+    ) : (
+      <div key="obra" className="formdesp__par">
+        <div className={`campo ${erros.clienteId ? 'has-erro' : ''}`.trim()}>
+          <span className="campo__rotulo">Cliente</span>
           <Seletor
             largo
             valor={form.clienteId}
@@ -314,24 +325,23 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
             vazio="Escolha o cliente..."
             aria-label="Cliente"
           />
+          {notaDeErro(erros.clienteId)}
+        </div>
+        <div className={`campo ${erros.obraId ? 'has-erro' : ''}`.trim()}>
+          <span className="campo__rotulo">Obra (opcional)</span>
           <Seletor
             largo
             valor={form.obraId}
             aoMudar={(v) => mudar('obraId')(v)}
             opcoes={opcoesObra}
-            vazio={form.clienteId ? 'Escolha a obra...' : 'Primeiro o cliente'}
+            vazio="Primeiro o cliente"
             desabilitado={!form.clienteId}
-            aria-label="Obra"
+            aria-label="Obra (opcional)"
           />
+          {notaDeErro(erros.obraId)}
         </div>
-      )}
-      {erros.obraId && (
-        <span className="campo__nota campo__nota--erro" role="alert">
-          {erros.obraId}
-        </span>
-      )}
-    </div>
-  )
+      </div>
+    )
 
   const campoTipo = (
     <CampoSelecao
@@ -372,7 +382,6 @@ export default function ModalEnvio({ categoria, aoFechar, aoEnviado }) {
       }}
       travado={travado}
       erro={erros.valor}
-      dica={travado ? 'Valor fixo, definido pela empresa.' : undefined}
     />
   )
 

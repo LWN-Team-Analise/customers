@@ -314,7 +314,12 @@ export default function ModalColaborador({
             onChange={mudar('cargo')}
             erro={erros.cargo}
             vazio="Escolha o setor..."
-            opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
+            /* setor com acesso total so aparece para quem tem acesso
+               total (a API recusa do mesmo jeito) — ou quando ja e o da
+               pessoa, para o cadastro dela abrir com o setor certo */
+            opcoes={cargos
+              .filter((c) => !c.acessoTotal || usuarioLogado?.acessoTotal || c.chave === colaborador?.cargo)
+              .map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
           />
 
           {/* CARGO: sai do cadastro de Cargos e não muda permissão

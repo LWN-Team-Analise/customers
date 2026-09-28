@@ -324,6 +324,20 @@
     display: none;
   }
 
+  /* telefone pequeno: lado a lado a busca ficava com ~130px e o texto
+     dela cortado. Cada um ganha a propria linha (as pastilhas continuam
+     rolando de lado) */
+  @media (max-width: 420px) {
+    .usuarios__filtro {
+      flex-wrap: wrap;
+    }
+
+    .usuarios__filtro .procura,
+    .usuarios__cargos {
+      flex-basis: 100%;
+    }
+  }
+
   .usuarios__cargos .chip {
     flex: none;
     white-space: nowrap;
