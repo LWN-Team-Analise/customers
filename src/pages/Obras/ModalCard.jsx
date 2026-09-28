@@ -19,7 +19,7 @@ import './ModalRoteiro.css'
  * que ja passaram nao mudam — nem o que elas ja tinham marcado.
  */
 export default function ModalCard({ aberto, etapa, card = null, obraId = null, aoFechar }) {
-  const { cargos, corDoCargo, adicionarCard, atualizarCard, removerCard, rotuloEtapa } =
+  const { cargos, corDoCargo, adicionarCard, atualizarCard, removerCard, rotuloEtapa, pode } =
     useDados()
 
   const [escolhidos, setEscolhidos] = useState([])
@@ -29,6 +29,11 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
   const [confirmando, setConfirmando] = useState(false)
 
   const editando = Boolean(card)
+  /* trocar os setores de um card que ja existe e permissao propria
+     ("alterar setores no card"). Sem ela o campo fica travado — e o
+     card novo continua escolhendo os dele, porque card sem setor nao
+     marca nada. */
+  const setoresTravados = editando && !pode('editar_cargos_card')
 
   useEffect(() => {
     if (!aberto) return
@@ -47,7 +52,14 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
 
     setSalvando(true)
     try {
-      const campos = { cargos: escolhidos, titulo: titulo.trim(), obraId }
+      /* na edicao, os setores so vao quando mudaram: a API trata o
+         envio deles como troca, e troca pede a permissao propria */
+      const mudouSetores = (card?.cargos ?? []).join('|') !== escolhidos.join('|')
+      const campos = {
+        titulo: titulo.trim(),
+        obraId,
+        ...(!editando || mudouSetores ? { cargos: escolhidos } : {}),
+      }
       if (editando) await atualizarCard(card.id, campos)
       else await adicionarCard(etapa.id, campos)
       aoFechar()
@@ -91,11 +103,13 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
           aoMudar={setEscolhidos}
           vazio="Escolha um ou mais setores..."
           aria-label="Setores responsáveis pelo card"
+          desabilitado={setoresTravados}
           opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
         />
         <p className="formrot__dica">
-          Com mais de um cargo, o card fica com um gradiente das cores deles — e qualquer um
-          dos cargos pode marcar os checks.
+          {setoresTravados
+            ? 'Seu setor não tem a permissão "Adicionar / alterar setores no card": os setores deste card ficam como estão.'
+            : 'Com mais de um cargo, o card fica com um gradiente das cores deles — e qualquer um dos cargos pode marcar os checks.'}
         </p>
 
         <CampoTexto

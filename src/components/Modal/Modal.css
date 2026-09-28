@@ -1,19 +1,38 @@
+/* O respiro de CIMA e maior que o dos lados: o pop-up alto (um
+   formulario) comecava em cima da barra de busca, e parecia grudado
+   nela. Agora ele comeca abaixo da barra (~80px) e so encolhe em tela
+   baixa. O pop-up de tamanho ajustavel (o chat) fica como era: o
+   tamanho que a pessoa salvou foi medido com 20px em volta. */
 .modal {
+  --modal-topo: clamp(20px, 11vh, 96px);
   position: fixed;
   inset: 0;
   z-index: 90;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: var(--modal-topo) 20px 20px;
   background: var(--modal-veu);
   animation: modal-entra var(--dur-fast) var(--ease-out);
+}
+
+.modal:has(> .modal__caixa.is-ajustado) {
+  --modal-topo: 20px;
+}
+
+/* No celular a barra de cima tem duas linhas e o veu ja a cobre:
+   empurrar o pop-up para baixo dela so tiraria altura do formulario. */
+@media (max-width: 720px) {
+  .modal {
+    --modal-topo: clamp(16px, 5vh, 40px);
+    padding-inline: 16px;
+  }
 }
 
 /* O pop-up e o unico lugar sem vidro: superficie opaca, sem desfoque
    e sem brilho. Formulario tem que ser facil de ler. */
 .modal__caixa {
   width: 100%;
-  max-height: min(88dvh, 860px);
+  max-height: min(calc(100dvh - var(--modal-topo) - 20px), 860px);
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-lg);

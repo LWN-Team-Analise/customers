@@ -37,6 +37,7 @@ export const VISUALIZACAO = [
   { chave: 'ver_obras', rotulo: 'Obras', rota: '/app/obras' },
   { chave: 'ver_clientes', rotulo: 'Clientes', rota: '/app/clientes' },
   { chave: 'ver_concluidas', rotulo: 'Concluídas', rota: '/app/concluidas' },
+  { chave: 'ver_despesas', rotulo: 'Visualizar despesas', rota: '/app/despesas' },
   { chave: 'ver_avaliacoes', rotulo: 'Avaliações', rota: '/app/avaliacoes' },
   { chave: 'ver_avisos', rotulo: 'Enviar avisos', rota: null },
 ]
@@ -50,44 +51,37 @@ export const VISUALIZACAO = [
  * consegue abrir a aba.
  */
 export const ALTERACAO = [
-  {
-    chave: 'editar_usuario',
-    rotulo: 'Adicionar / editar usuário',
-    dependeDe: null,
-    nota: 'Sem esta, a pessoa só edita o próprio cadastro em Configurações (e nunca o CPF).',
-  },
+  { chave: 'editar_usuario', rotulo: 'Adicionar / editar usuário', dependeDe: null },
   { chave: 'editar_cargo', rotulo: 'Adicionar / editar setor', dependeDe: null },
-  {
-    chave: 'editar_cargo_titulo',
-    rotulo: 'Adicionar / editar cargo',
-    dependeDe: null,
-    nota: 'É ela também que permite ATRIBUIR o cargo de alguém — sem ela, ninguém escolhe o próprio cargo no perfil.',
-  },
+  { chave: 'editar_cargo_titulo', rotulo: 'Adicionar / editar cargo', dependeDe: null },
   { chave: 'editar_avaliacoes', rotulo: 'Adicionar / editar avaliações', dependeDe: 'ver_avaliacoes' },
   { chave: 'editar_clientes', rotulo: 'Adicionar / editar clientes', dependeDe: 'ver_clientes' },
   { chave: 'editar_obras', rotulo: 'Adicionar / editar obras', dependeDe: 'ver_obras' },
-  {
-    chave: 'excluir_concluidas',
-    rotulo: 'Excluir obra concluída',
-    dependeDe: 'ver_concluidas',
-    nota: 'Apagar uma obra fechada apaga o registro do que foi feito. Fica separada de "editar obras" de propósito.',
-  },
-  {
-    chave: 'check_todas_etapas',
-    rotulo: 'Check em todas as etapas',
-    dependeDe: 'ver_obras',
-    nota: 'Sem esta, a pessoa só marca os checks do próprio setor — exceto em obra de emergência.',
-  },
+  { chave: 'excluir_concluidas', rotulo: 'Excluir obra concluída', dependeDe: 'ver_concluidas' },
+  { chave: 'check_todas_etapas', rotulo: 'Check em todas as etapas', dependeDe: 'ver_obras' },
   { chave: 'editar_etapa', rotulo: 'Adicionar / alterar etapa', dependeDe: 'ver_obras' },
   { chave: 'editar_cards', rotulo: 'Adicionar / alterar cards', dependeDe: 'ver_obras' },
   { chave: 'editar_cargos_card', rotulo: 'Adicionar / alterar setores no card', dependeDe: 'ver_obras' },
   { chave: 'editar_checks', rotulo: 'Adicionar / alterar checks', dependeDe: 'ver_obras' },
-  {
-    chave: 'enviar_avisos',
-    rotulo: 'Enviar avisos',
-    dependeDe: 'ver_avisos',
-    nota: 'Sem esta, a pessoa vê a coluna de avisos mas não consegue disparar nenhum.',
-  },
+  { chave: 'enviar_avisos', rotulo: 'Enviar avisos', dependeDe: 'ver_avisos' },
+  /* Despesas: ver a aba (e os proprios envios) e `ver_despesas`;
+     ENVIAR despesa, refeicao ou bonus e esta; abrir os envios dos
+     OUTROS (Despesas > Envios gerais) e a de baixo. */
+  { chave: 'alterar_despesas', rotulo: 'Alterar despesas', dependeDe: 'ver_despesas' },
+  { chave: 'revisar_despesa_geral', rotulo: 'Revisar despesa geral', dependeDe: 'ver_despesas' },
+]
+
+/**
+ * A tela de Setores mostra cada alteracao EMBAIXO da visualizacao de
+ * que ela depende. As que nao dependem de nenhuma (as de Usuarios, aba
+ * que abre com qualquer uma delas) vao num grupo proprio, no fim.
+ */
+export const GRUPOS = [
+  ...VISUALIZACAO.map((v) => ({
+    visualizacao: v,
+    alteracoes: ALTERACAO.filter((a) => a.dependeDe === v.chave),
+  })),
+  { visualizacao: null, rotulo: 'Usuários', alteracoes: ALTERACAO.filter((a) => !a.dependeDe) },
 ]
 
 export const TODAS = [...VISUALIZACAO, ...ALTERACAO]

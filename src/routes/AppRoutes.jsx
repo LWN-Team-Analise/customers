@@ -9,6 +9,9 @@ import Concluidas from '@/pages/Concluidas/Concluidas'
 import Avaliacoes from '@/pages/Avaliacoes/Avaliacoes'
 import Usuarios from '@/pages/Usuarios/Usuarios'
 import Configuracoes from '@/pages/Configuracoes/Configuracoes'
+import Despesas from '@/pages/Despesas/Despesas'
+import MeusEnvios from '@/pages/Despesas/MeusEnvios'
+import EnviosGerais, { EnviosDaPessoa } from '@/pages/Despesas/EnviosGerais'
 import RetornoOutlook from '@/pages/Login/RetornoOutlook'
 import ProtectedRoute from './ProtectedRoute'
 
@@ -93,6 +96,44 @@ export default function AppRoutes() {
         element={
           <Interna permissoes={['editar_usuario', 'editar_cargo', 'editar_cargo_titulo']}>
             <Usuarios />
+          </Interna>
+        }
+      />
+      {/* Despesas abre com ver_despesas — a API confere a mesma chave em
+          cada chamada de /api/despesas, entao digitar o endereco ou chamar
+          a API na mao da no mesmo. */}
+      <Route
+        path="/app/despesas"
+        element={
+          <Interna permissao="ver_despesas">
+            <Despesas />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/despesas/envios"
+        element={
+          <Interna permissao="ver_despesas">
+            <MeusEnvios />
+          </Interna>
+        }
+      />
+      {/* Envios gerais: so quem revisa. revisar_despesa_geral depende de
+          ver_despesas (sem ela, a lista do setor ja chega sem esta), e a
+          API confere as duas em cada chamada. */}
+      <Route
+        path="/app/despesas/gerais"
+        element={
+          <Interna permissao="revisar_despesa_geral">
+            <EnviosGerais />
+          </Interna>
+        }
+      />
+      <Route
+        path="/app/despesas/gerais/:usuarioId"
+        element={
+          <Interna permissao="revisar_despesa_geral">
+            <EnviosDaPessoa />
           </Interna>
         }
       />

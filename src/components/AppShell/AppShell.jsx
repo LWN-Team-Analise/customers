@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { useDados } from '@/context/DadosContext'
@@ -56,6 +56,12 @@ const Icone = {
   avaliacoes: () => (
     <svg viewBox="0 0 24 24" width="21" height="21" {...traco}>
       <path d="m12 3.6 2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.99 6.75 19.75l1-5.85L3.5 9.75l5.9-.85z" />
+    </svg>
+  ),
+  despesas: () => (
+    <svg viewBox="0 0 24 24" width="21" height="21" {...traco}>
+      <path d="M6 3.5h12v17l-2.4-1.5-2.4 1.5-2.4-1.5-2.4 1.5L6 20.5z" />
+      <path d="M9 8h6M9 11.5h6M9 15h3.5" />
     </svg>
   ),
   usuarios: () => (
@@ -143,12 +149,15 @@ const Icone = {
  * `permissao` e a chave que o cargo precisa ter para o item aparecer.
  * Usuarios nao tem permissao de VISUALIZACAO propria: quem entra la e
  * quem pode mexer em usuario ou em cargo.
+ *
+ * Item SEM `permissao` nem `permissoes` seria de todo mundo.
  */
 const MENU = [
   { id: 'inicio', rotulo: 'Página inicial', rota: '/app', exato: true, permissao: 'ver_inicio' },
   { id: 'obras', rotulo: 'Obras', rota: '/app/obras', permissao: 'ver_obras' },
   { id: 'clientes', rotulo: 'Clientes', rota: '/app/clientes', permissao: 'ver_clientes' },
   { id: 'concluidas', rotulo: 'Concluídas', rota: '/app/concluidas', permissao: 'ver_concluidas' },
+  { id: 'despesas', rotulo: 'Despesas', rota: '/app/despesas', permissao: 'ver_despesas' },
   { id: 'avaliacoes', rotulo: 'Avaliações', rota: '/app/avaliacoes', permissao: 'ver_avaliacoes' },
   {
     id: 'usuarios',
@@ -181,6 +190,56 @@ const MENU = [
    teclado e o leitor de tela seguem.
    ------------------------------------------------------------ */
 const PRINCIPAIS = ['inicio', 'obras', 'concluidas', 'clientes']
+
+/* ------------------------------------------------------------
+   Onde o indicador estava na tela anterior
+
+   Isto e uma variavel de MODULO, e nao um estado — de proposito.
+
+   Cada tela monta o proprio AppShell (`<AppShell>` esta dentro de
+   Home, de Obras, de Clientes...). Entao trocar de tela nao muda
+   a barra: DESTROI uma e cria outra. O indicador que nasce ja
+   nasce no lugar certo, e nunca houve o que animar — era essa a
+   animacao "travada e seca": nao havia animacao nenhuma, so uma
+   peca nova aparecendo no destino.
+
+   Guardada fora do React, a posicao sobrevive a troca. A barra
+   nova comeca onde a antiga terminou e so entao anda ate o novo
+   item, que e o que se ve como deslizar.
+   ------------------------------------------------------------ */
+let ultimaMarca = { x: 0, y: 0, l: 0, a: 0, ix: 0, ex: 0, ergue: 0, ergueMais: 0, pronta: false }
+
+/* O item que estava ACESO na tela anterior. A tela nova nasce com ele
+   aceso e so na moldura seguinte passa a acender o dela: e isso que da
+   aos icones (e nao so ao indicador) o caminho de um item para o outro.
+   Sem isso o icone novo ja nascia erguido e o antigo ja nascia no chao,
+   enquanto o indicador ainda estava a caminho. */
+let ultimoMostrado = null
+
+/* a rolagem da lista do computador, pelo mesmo motivo: a barra nova
+   nasceria rolada para o topo e o item clicado pularia de lugar */
+let ultimaRolagem = 0
+
+/** Qual item do menu corresponde ao endereco — a mesma regra do NavLink. */
+function itemDaRota(abas, caminho) {
+  const item = abas.find((i) => matchPath({ path: i.rota, end: Boolean(i.exato) }, caminho))
+  return item?.id ?? null
+}
+
+/* Posicao de `el` medida a partir da caixa de `ate`, somando os offsets.
+   Offset e medida de LAYOUT: ignora transform, entao nem o icone erguido
+   nem uma transicao pela metade entortam a conta. */
+function posicaoDentro(el, ate) {
+  let x = 0
+  let y = 0
+  let no = el
+  while (no && no !== ate) {
+    x += no.offsetLeft
+    y += no.offsetTop
+    no = no.offsetParent
+  }
+  return no === ate ? { x, y } : null
+}
 
 /** Avatar do rodape: abre o menu de Configuracoes / Sair. */
 /**
@@ -676,9 +735,10 @@ export default function AppShell({
   /* cada cargo enxerga so as abas que a permissao dele abre */
   const abas = useMemo(
     () =>
-      MENU.filter((item) =>
-        item.permissoes ? item.permissoes.some((p) => pode(p)) : pode(item.permissao),
-      ),
+      MENU.filter((item) => {
+        if (item.permissoes) return item.permissoes.some((p) => pode(p))
+        return item.permissao ? pode(item.permissao) : true
+      }),
     [pode],
   )
 
@@ -701,11 +761,49 @@ export default function AppShell({
      `pronta` so vira true depois da PRIMEIRA medida. Sem isso a
      marca entrava deslizando do canto 0,0 a cada carga de tela.
      ------------------------------------------------------------ */
+  const barra = useRef(null)
   const lista = useRef(null)
   const local = useLocation()
-  const [marca, setMarca] = useState({ x: 0, y: 0, l: 0, a: 0, pronta: false })
+  const [marca, setMarca] = useState(ultimaMarca)
   /* a gaveta do hamburguer (so existe no celular; ver AppShell.css) */
   const [gaveta, setGaveta] = useState(false)
+
+  /* O item da tela aberta, e o item que esta ACESO. Sao dois porque a
+     tela nova nasce com o aceso da anterior (ver `ultimoMostrado`) e so
+     depois de desenhada passa ao dela — e essa troca, com a barra ja na
+     tela, que as transicoes do CSS conseguem animar. */
+  const ativo = itemDaRota(abas, local.pathname)
+  const [mostrado, setMostrado] = useState(() =>
+    ultimoMostrado && abas.some((i) => i.id === ultimoMostrado) ? ultimoMostrado : ativo,
+  )
+
+  useEffect(() => {
+    ultimoMostrado = mostrado
+  }, [mostrado])
+
+  /* As transicoes de lugar so ligam depois da primeira pintura. Na
+     primeira carga do sistema o indicador nao tem de onde vir: sem
+     esta trava ele entraria deslizando do canto esquerdo da barra. */
+  const [viaja, setViaja] = useState(false)
+  useEffect(() => {
+    const quadro = requestAnimationFrame(() => setViaja(true))
+    return () => cancelAnimationFrame(quadro)
+  }, [])
+
+  /* Duas molduras, e nao uma: a primeira ainda cai antes da pintura
+     da barra nova, e trocar ali seria trocar sem ter desenhado o
+     ponto de partida — o indicador nasceria no destino. */
+  useEffect(() => {
+    if (mostrado === ativo) return undefined
+    let segunda = 0
+    const primeira = requestAnimationFrame(() => {
+      segunda = requestAnimationFrame(() => setMostrado(ativo))
+    })
+    return () => {
+      cancelAnimationFrame(primeira)
+      cancelAnimationFrame(segunda)
+    }
+  }, [ativo, mostrado])
 
   /* trocou de tela, fecha: deixar aberta esconderia a tela que a
      pessoa acabou de escolher */
@@ -713,60 +811,150 @@ export default function AppShell({
     setGaveta(false)
   }, [local.pathname])
 
+  /* a gaveta fecha no Esc e num toque fora da barra, como todo menu */
+  useEffect(() => {
+    if (!gaveta) return undefined
+    const fora = (e) => {
+      if (!barra.current?.contains(e.target)) setGaveta(false)
+    }
+    const tecla = (e) => e.key === 'Escape' && setGaveta(false)
+    document.addEventListener('pointerdown', fora)
+    document.addEventListener('keydown', tecla)
+    return () => {
+      document.removeEventListener('pointerdown', fora)
+      document.removeEventListener('keydown', tecla)
+    }
+  }, [gaveta])
+
+  /* a lista do computador volta rolada onde a anterior estava */
   useLayoutEffect(() => {
     const caixa = lista.current
     if (!caixa) return undefined
+    caixa.scrollTop = ultimaRolagem
+    const guardar = () => {
+      ultimaRolagem = caixa.scrollTop
+    }
+    caixa.addEventListener('scroll', guardar, { passive: true })
+    return () => caixa.removeEventListener('scroll', guardar)
+  }, [])
+
+  useLayoutEffect(() => {
+    const nav = barra.current
+    const caixa = lista.current
+    if (!nav || !caixa) return undefined
+
+    /* guarda fora do React antes de avisar o React: e essa copia que a
+       proxima tela vai encontrar ao montar */
+    const aplicar = (nova) => {
+      ultimaMarca = nova
+      setMarca((atual) =>
+        Object.keys(nova).every((k) => atual[k] === nova[k]) ? atual : nova,
+      )
+    }
 
     const medir = () => {
-      const atual = caixa.querySelector('.rail__btn.is-atual')
+      const btn = mostrado
+        ? caixa.querySelector(`li[data-id="${mostrado}"] > .rail__btn`)
+        : null
+      const glifo = btn?.querySelector('.rail__glifo')
+      const botaoMais = caixa.querySelector('.rail__mais')
+
+      /* O quanto o centro do circulo fica ABAIXO da borda de cima da
+         barra. Mora no CSS (`--afunda`), junto do desenho das curvas
+         que dependem dele; aqui so e lido. */
+      const estilo = getComputedStyle(nav)
+      const afunda = parseFloat(estilo.getPropertyValue('--afunda')) || 0
+      /* o botao do meio tem a sua: ele fica um pouco mais para fora
+         que o icone aceso, que so da um degrau pequeno */
+      const afundaMais = parseFloat(estilo.getPropertyValue('--afunda-mais')) || 0
+
+      /* O botao do meio fica parado, mas o lugar dele depende de
+         quantas abas o cargo tem: e medido, e nao `left: 50%`. */
+      const mais = botaoMais && botaoMais.offsetParent !== null ? posicaoDentro(botaoMais, nav) : null
+      const ex = mais ? mais.x + botaoMais.offsetWidth / 2 : ultimaMarca.ex
+      const ergueMais = mais
+        ? mais.y + botaoMais.offsetHeight / 2 - afundaMais
+        : ultimaMarca.ergueMais
+
       /* `offsetParent` nulo = o botao esta escondido. Acontece no
          celular quando a tela aberta e uma das que foram para a
-         gaveta: sem esta guarda o anel media 0x0 e ia encolher no
-         canto da barra, parecendo defeito. */
-      if (!atual || atual.offsetParent === null) {
-        setMarca((m) => ({ ...m, pronta: false }))
+         gaveta: o indicador apaga no lugar onde estava, em vez de
+         encolher para o canto 0,0. */
+      const noGlifo = glifo && btn.offsetParent !== null ? posicaoDentro(glifo, nav) : null
+      if (!noGlifo) {
+        aplicar({ ...ultimaMarca, ex, ergueMais, pronta: false })
         return
       }
-      setMarca({
-        x: atual.offsetLeft,
-        y: atual.offsetTop,
-        l: atual.offsetWidth,
-        a: atual.offsetHeight,
+
+      /* Tudo sai do CENTRO do icone, medido na caixa da barra — a
+         mesma caixa em que o indicador e posicionado. Medir na lista
+         (como antes) deixava o indicador deslocado o tamanho do
+         recheio da barra. */
+      const cx = noGlifo.x + glifo.offsetWidth / 2
+      const cy = noGlifo.y + glifo.offsetHeight / 2
+
+      /* O batente: a curva lateral do indicador pinta ~7px alem do
+         circulo, e perto das pontas ela sairia pela quina arredondada
+         da barra. So pesa em telas abaixo de ~340px. */
+      const meia = 28
+      const folga = 14
+      const ix = Math.min(Math.max(cx, folga + meia), nav.clientWidth - folga - meia)
+
+      aplicar({
+        x: btn.offsetLeft,
+        y: btn.offsetTop,
+        l: btn.offsetWidth,
+        a: btn.offsetHeight,
+        ix,
+        ex,
+        /* quanto o icone precisa subir para o centro dele cair no
+           centro do indicador — que fica `afunda` px abaixo da borda
+           de cima da barra, e nao em cima dela: so um pouco para fora */
+        ergue: cy - afunda,
+        ergueMais,
         pronta: true,
       })
     }
 
     medir()
 
-    /* a barra muda de forma na virada para o celular, e a lista rola;
-       nos dois casos a marca tem que reencontrar o botao */
+    /* a barra muda de forma na virada para o celular e quando a janela
+       muda de largura: a marca tem que reencontrar o botao */
     const observador = new ResizeObserver(medir)
+    observador.observe(nav)
     observador.observe(caixa)
-    caixa.addEventListener('scroll', medir)
-    return () => {
-      observador.disconnect()
-      caixa.removeEventListener('scroll', medir)
-    }
-  }, [local.pathname, abas])
+    return () => observador.disconnect()
+  }, [mostrado, abas])
 
   return (
-    <div className={`shell ${avisoDeSenha ? 'tem-ilha' : ''}`.trim()}>
+    <div
+      className={`shell ${avisoDeSenha ? 'tem-ilha' : ''} ${gaveta ? 'tem-gaveta' : ''}`
+        .replace(/\s+/g, ' ')
+        .trim()}
+    >
       {/* logo e avatar vivem fora da bolha, mas alinhados ao centro dela */}
       <Link to="/app" className="marca" aria-label="Página inicial">
         <img src={isDark ? logoModoEscuro : logoModoClaro} alt="LWN" />
       </Link>
 
       <nav
-        className="rail vidro"
+        ref={barra}
+        className={`rail vidro ${viaja ? 'is-viaja' : ''}`.trim()}
         aria-label="Navegação principal"
         /* as medidas do item atual moram na BARRA, e nao so na marca:
-           a camada liquida do celular le as mesmas para saber onde
-           pousar a bolha */
+           o indicador do celular le as mesmas para saber onde pousar.
+           `--marca-*` e o botao inteiro, medido na lista (anel do
+           computador); `--ind-x`, `--encaixe-x` e `--ergue` sao o centro
+           do icone, medido na propria barra (indicador do celular). */
         style={{
           '--marca-x': `${marca.x}px`,
           '--marca-y': `${marca.y}px`,
           '--marca-l': `${marca.l}px`,
           '--marca-a': `${marca.a}px`,
+          '--ind-x': `${marca.ix}px`,
+          '--encaixe-x': `${marca.ex}px`,
+          ...(marca.ergue ? { '--ergue': `${marca.ergue}px` } : null),
+          ...(marca.ergueMais ? { '--ergue-mais': `${marca.ergueMais}px` } : null),
         }}
       >
         {/* ---------------- o indicador (so no celular) ----------------
@@ -813,7 +1001,10 @@ export default function AppShell({
                 <NavLink
                   to={item.rota}
                   end={item.exato}
-                  className={({ isActive }) => `rail__btn ${isActive ? 'is-atual' : ''}`.trim()}
+                  /* aceso pelo `mostrado`, e nao pelo `isActive`: ver o
+                     comentario de `ultimoMostrado`. O aria-current do
+                     NavLink continua seguindo a rota de verdade. */
+                  className={`rail__btn ${item.id === mostrado ? 'is-atual' : ''}`.trim()}
                   title={item.rotulo}
                 >
                   <span className="rail__glifo">
@@ -831,61 +1022,72 @@ export default function AppShell({
               botao nenhum. */}
           {escondidas.length > 0 && (
             <li className="rail__somobile">
-              {/* `is-atual` de proposito FORA daqui: essa classe e o que o
-                  anel deslizante persegue, e ele nao tem o que fazer em
-                  volta de um botao redondo que ja e destaque por si. O
-                  estado aberto se ve no proprio botao. */}
+              {/* O botao E o circulo, e nada alem dele: a area de toque e
+                  exatamente o que se ve. A vaga (o `li`) em volta nao
+                  tem clique nenhum, e o encaixe e a caixa da gaveta sao
+                  pecas de desenho, sem `pointer-events`. */}
               <button
                 type="button"
-                className="rail__btn rail__mais"
+                className="rail__mais"
                 onClick={() => setGaveta((v) => !v)}
                 aria-expanded={gaveta}
                 aria-controls="rail-gaveta"
                 aria-label="Mais telas"
                 title="Mais telas"
               >
-                <span className="rail__glifo">
-                  <Icone.hamburguer />
-                </span>
-                <span className="rail__rotulo">Mais</span>
+                <Icone.hamburguer />
               </button>
             </li>
           )}
         </ul>
 
-        {/* A gaveta: o resto do menu, numa faixa colada por cima da
-            barra. Nao e pop-up — nao escurece a tela nem toma o foco;
-            e o mesmo menu, continuando para cima.
+        {/* A gaveta: o resto do menu, saindo do botao do meio. Nao e
+            pop-up — nao escurece a tela nem toma o foco; e o mesmo
+            menu, continuando para cima.
+
+            Tres pecas, cada uma com um papel so:
+              .rail__gaveta         a caixa que posiciona (sem clique)
+              .rail__gaveta-sombra  a sombra, que segue o recorte do corpo
+              .rail__gaveta-corpo   a superficie e os itens (o unico que
+                                    recebe toque, e so aberto)
+
+            O corpo abre por `clip-path`, a partir do ponto logo acima do
+            botao: ele cresce dali, em vez de aparecer por opacidade. O
+            botao continua preso a BARRA pela propria bolha, e nao ao
+            corpo — nao ha peca ligando os dois.
 
             Ela fica MONTADA mesmo fechada, escondida por `visibility`.
             Desmontando, o fechar era instantaneo: a peca sumia do DOM
-            antes de qualquer transicao rodar, e era isso que dava o
-            estalo seco. Montada, os dois sentidos animam. */}
+            antes de qualquer transicao rodar. */}
         {escondidas.length > 0 && (
           <div
             className={`rail__gaveta ${gaveta ? 'is-aberta' : ''}`.trim()}
             id="rail-gaveta"
             aria-hidden={!gaveta}
           >
-            {escondidas.map((item) => {
-              const Glifo = Icone[item.id]
-              return (
-                <NavLink
-                  key={item.id}
-                  to={item.rota}
-                  end={item.exato}
-                  className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
-                  onClick={() => setGaveta(false)}
-                  /* fechada, ela sai tambem do caminho do Tab */
-                  tabIndex={gaveta ? undefined : -1}
-                >
-                  <span className="rail__glifo">
-                    <Glifo />
-                  </span>
-                  {item.rotulo}
-                </NavLink>
-              )
-            })}
+            <div className="rail__gaveta-sombra">
+              <div className="rail__gaveta-corpo">
+                {escondidas.map((item) => {
+                  const Glifo = Icone[item.id]
+                  return (
+                    <NavLink
+                      key={item.id}
+                      to={item.rota}
+                      end={item.exato}
+                      className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
+                      onClick={() => setGaveta(false)}
+                      /* fechada, ela sai tambem do caminho do Tab */
+                      tabIndex={gaveta ? undefined : -1}
+                    >
+                      <span className="rail__glifo">
+                        <Glifo />
+                      </span>
+                      {item.rotulo}
+                    </NavLink>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )}
       </nav>

@@ -36,7 +36,7 @@ export const ASSUNTOS = [
     id: 'senha-padrao',
     titulo: 'Por que aparece "Troque a sua senha"',
     peso: 1.4,
-    gatilhos: ['padrao', 'temporaria', 'aviso', 'ilha', 'topo', '123456', 'obrigatorio', 'insiste'],
+    gatilhos: ['padrao', 'temporaria', 'aviso', 'ilha', 'topo', 'senha', 'obrigatorio', 'insiste'],
     resposta:
       'Porque a sua senha ainda é a que outra pessoa definiu quando criou o seu acesso — e senha que outra ' +
       'pessoa escolheu é senha que outra pessoa sabe. O aviso não tem como ser dispensado: "Agora não" só ' +
@@ -161,6 +161,18 @@ export const ASSUNTOS = [
     resposta:
       'A aba Avaliações reúne as notas por pessoa e por obra. Quem vê e quem lança depende da permissão do ' +
       'cargo.',
+  },
+  {
+    id: 'despesas',
+    titulo: 'Despesas, refeições e bônus',
+    gatilhos: ['despesa', 'reembolso', 'gasto', 'recibo', 'comprovante', 'refeicao', 'almoco', 'janta', 'bonus', 'vale'],
+    resposta:
+      'Na aba Despesas, escolha Enviar despesa, Enviar refeição ou Enviar bônus. O cliente é obrigatório e ' +
+      'a obra, opcional. Toda despesa precisa do ' +
+      'comprovante (imagem, PDF ou ZIP, até 3 MB); a refeição tem valor fixo. O que você enviou fica em ' +
+      '"Meus envios", por mês (dia a dia) ou por ano (mês a mês), com os totais e o filtro por tipo. Quem ' +
+      'tem a permissão "Revisar despesa geral" ganha também "Envios gerais", com os envios de cada pessoa ' +
+      'da equipe.',
   },
   {
     id: 'concluidas',

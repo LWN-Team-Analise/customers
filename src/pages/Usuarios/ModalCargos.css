@@ -194,6 +194,18 @@
   cursor: pointer;
 }
 
+/* acesso total e lista do proprio setor, para quem nao tem acesso
+   total: aparecem, mas nao mexem (a API recusa do mesmo jeito) */
+.cargos__total.is-travada,
+.perm.is-travada {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.perm.is-travada * {
+  pointer-events: none;
+}
+
 .cargos__total input {
   width: 17px;
   height: 17px;
@@ -235,9 +247,9 @@
 /* ============================================================
    Permissoes do cargo
 
-   Duas colunas: o que ele VE e o que ele ALTERA. A segunda
-   depende da primeira — linha travada fica apagada e com o
-   motivo escrito ao lado.
+   Duas colunas: o que ele VE e o que ele ALTERA. Cada alteracao
+   fica embaixo da visualizacao de que depende — e, sem ela, fica
+   apagada e travada.
    ============================================================ */
 
 .perm {
@@ -316,14 +328,28 @@
   color: var(--text-strong);
 }
 
-.perm__grupos {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
-  gap: 16px;
+/* As duas colunas continuam — Visualizacao a esquerda, Alteracao a
+   direita —, mas cada alteracao desce para a linha de baixo da
+   visualizacao de que depende. O ramo inteiro e uma grade de duas
+   colunas: a visualizacao na primeira linha, as alteracoes na segunda,
+   ja na coluna da direita. */
+.perm__arvore {
+  --perm-col: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.perm__grupo h4 {
-  margin: 0 0 3px;
+.perm__cabeca,
+.perm__ramo {
+  display: grid;
+  grid-template-columns: var(--perm-col);
+  column-gap: 14px;
+}
+
+.perm__cabeca h4 {
+  margin: 0 0 4px;
+  padding: 0 9px;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -331,13 +357,55 @@
   color: var(--text-muted);
 }
 
-.perm__grupo ul {
+.perm__ramo + .perm__ramo {
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.perm__vis {
+  grid-column: 1;
+}
+
+.perm__alts {
   display: flex;
+  grid-column: 2;
+  grid-row: 2;
   flex-direction: column;
   gap: 2px;
-  margin: 9px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* Usuarios nao tem caixa de visualizacao: o nome da aba fica no lugar,
+   alinhado com o texto das outras linhas */
+.perm__item--fixo {
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.perm__item--fixo i {
+  width: 16px;
+  flex-shrink: 0;
+}
+
+/* No celular as duas colunas nao cabem lado a lado: vira arvore, com a
+   alteracao recuada embaixo da visualizacao e um fio ligando as duas */
+@media (max-width: 560px) {
+  .perm__cabeca,
+  .perm__ramo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .perm__cabeca h4 + h4,
+  .perm__alts {
+    grid-column: 1;
+    grid-row: auto;
+    margin-left: 17px;
+    padding-left: 10px;
+    border-left: 1.5px solid var(--control-border);
+  }
 }
 
 .perm__item {
@@ -383,8 +451,7 @@
   cursor: not-allowed;
 }
 
-.perm__trava,
-.perm__dica {
+.perm__trava {
   font-style: normal;
   font-size: 0.68rem;
   line-height: 1.4;

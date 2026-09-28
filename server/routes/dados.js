@@ -2,11 +2,32 @@ import { Router } from 'express'
 import { query } from '../db.js'
 import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
 import { enviarAviso, temEmail } from '../email.js'
+import { logger } from '../logger.js'
+import { descreverObra, registrarAtividade } from '../atividade.js'
 
 const router = Router()
 
 const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 const texto = (valor) => String(valor ?? '').trim()
+
+/**
+ * O nome de quem esta logado, tirado do BANCO pelo id do token.
+ *
+ * Mensagem, observacao e anexo guardam o nome do autor. Ele vinha do
+ * corpo do pedido (`autorNome`), e bastava chamar a API na mao com
+ * outro nome para a mensagem aparecer assinada por outra pessoa. O
+ * `autorNome` que a tela ainda manda e ignorado.
+ */
+async function nomeDoDono(req) {
+  const { rows } = await query('SELECT name FROM usuario WHERE id = $1', [req.dono.sub])
+  return rows[0]?.name ?? 'Usuário'
+}
+
+/** Texto longo encurtado para o historico: a primeira linha, ate 120 letras. */
+const resumo = (valor) => {
+  const linha = String(valor ?? '').split('\n')[0].trim()
+  return linha.length > 120 ? `${linha.slice(0, 119)}…` : linha
+}
 
 /* ============================================================
    OBRA FECHADA E REGISTRO, NAO RASCUNHO
@@ -358,7 +379,7 @@ router.get('/vitrine', async (_req, res) => {
   } catch (erro) {
     /* a esfera tem foto de reserva; um banco fora do ar nao pode
        derrubar a tela de login por causa de enfeite */
-    console.error('[dados/vitrine]', erro.message)
+    logger.error('dados/vitrine', erro.message)
     return res.json({ fotos: [] })
   }
 })
@@ -398,6 +419,12 @@ router.patch('/termos', exigeSessao, exige('editar_etapa'), async (req, res) => 
         [chave, valor, req.dono.sub],
       )
     }
+    await registrarAtividade(req, {
+      acao: 'termos.alterados',
+      categoria: 'configuracao',
+      descricao: 'Termos da empresa alterados',
+      detalhes: Object.fromEntries(mudancas),
+    })
     return res.json({ termos: await lerTermos() })
   } catch (e) {
     return tratar(e, res, 'dados/termos')
@@ -484,6 +511,13 @@ router.post('/setores', exigeSessao, exige('editar_clientes'), async (req, res) 
       'INSERT INTO setor_cliente (nome, cor) VALUES ($1, $2) RETURNING *',
       [nome, cor],
     )
+    await registrarAtividade(req, {
+      acao: 'setor_cliente.criado',
+      categoria: 'cliente',
+      entidade: ['setor_cliente', rows[0].id],
+      descricao: 'Setor de cliente criado',
+      detalhes: { setor: nome },
+    })
     return res.status(201).json({ setor: paraSetor(rows[0]) })
   } catch (e) {
     if (e.code === '23505') {
@@ -504,6 +538,13 @@ router.patch('/setores/:id', exigeSessao, exige('editar_clientes'), async (req, 
       [nome, texto(req.body?.cor) || null, req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Setor não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'setor_cliente.editado',
+      categoria: 'cliente',
+      entidade: ['setor_cliente', rows[0].id],
+      descricao: 'Setor de cliente editado',
+      detalhes: { setor: nome },
+    })
     return res.json({ setor: paraSetor(rows[0]) })
   } catch (e) {
     if (e.code === '23505') {
@@ -516,8 +557,17 @@ router.patch('/setores/:id', exigeSessao, exige('editar_clientes'), async (req, 
 
 router.delete('/setores/:id', exigeSessao, exige('editar_clientes'), async (req, res) => {
   try {
-    const { rowCount } = await query('DELETE FROM setor_cliente WHERE id = $1', [req.params.id])
-    if (rowCount === 0) return res.status(404).json({ erro: 'Setor não encontrado.' })
+    const { rows } = await query('DELETE FROM setor_cliente WHERE id = $1 RETURNING nome', [
+      req.params.id,
+    ])
+    if (!rows[0]) return res.status(404).json({ erro: 'Setor não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'setor_cliente.excluido',
+      categoria: 'cliente',
+      entidade: ['setor_cliente', req.params.id],
+      descricao: 'Setor de cliente excluído',
+      detalhes: { setor: rows[0].nome },
+    })
     return res.status(204).end()
   } catch (e) {
     if (e.code === '42P01') return res.status(503).json({ erro: SEM_TABELA_SETOR })
@@ -540,6 +590,13 @@ router.post('/clientes', exigeSessao, exige('editar_clientes'), async (req, res)
        VALUES (${todos.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
       todos,
     )
+    await registrarAtividade(req, {
+      acao: 'cliente.criado',
+      categoria: 'cliente',
+      entidade: ['cliente', rows[0].id],
+      descricao: 'Novo cliente cadastrado',
+      detalhes: { cliente: rows[0].nome, cidade: `${rows[0].cidade}/${rows[0].estado}` },
+    })
     return res.status(201).json({ cliente: paraCliente(rows[0]) })
   } catch (e) {
     return tratar(e, res, 'dados/cliente-criar')
@@ -566,6 +623,13 @@ router.patch('/clientes/:id', exigeSessao, exige('editar_clientes'), async (req,
       [...todos, req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Cliente não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'cliente.editado',
+      categoria: 'cliente',
+      entidade: ['cliente', rows[0].id],
+      descricao: 'Cliente editado',
+      detalhes: { cliente: rows[0].nome, imagem: extras ? 'imagem alterada' : null },
+    })
     return res.json({ cliente: paraCliente(rows[0]) })
   } catch (e) {
     return tratar(e, res, 'dados/cliente-editar')
@@ -596,9 +660,21 @@ router.get('/clientes/:id/imagem', exigeSessao, async (req, res) => {
 /** Apagar cliente leva junto as obras dele — a tela ja avisa disso. */
 router.delete('/clientes/:id', exigeSessao, exige('editar_clientes'), async (req, res) => {
   try {
-    await query('DELETE FROM obra WHERE cliente_id = $1', [req.params.id])
-    const { rowCount } = await query('DELETE FROM cliente WHERE id = $1', [req.params.id])
-    if (rowCount === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' })
+    const obras = await query('DELETE FROM obra WHERE cliente_id = $1', [req.params.id])
+    const { rows } = await query('DELETE FROM cliente WHERE id = $1 RETURNING nome', [
+      req.params.id,
+    ])
+    if (!rows[0]) return res.status(404).json({ erro: 'Cliente não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'cliente.excluido',
+      categoria: 'cliente',
+      entidade: ['cliente', req.params.id],
+      descricao: 'Cliente excluído',
+      detalhes: {
+        cliente: rows[0].nome,
+        obras: obras.rowCount ? `${obras.rowCount} obra(s) excluída(s) junto` : null,
+      },
+    })
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/cliente-apagar')
@@ -719,7 +795,7 @@ router.post('/chat', exigeSessao, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         req.dono.sub,
-        texto(req.body?.autorNome) || 'Usuário',
+        await nomeDoDono(req),
         conteudo || null,
         req.body?.respondeA || null,
         arquivo?.nome ? texto(arquivo.nome) : null,
@@ -813,6 +889,17 @@ router.delete('/chat/:id', exigeSessao, async (req, res) => {
 
 const PRIORIDADES = ['baixa', 'media', 'alta']
 
+/* o nome de cada coluna da obra como o historico escreve "o que mudou" */
+const ROTULO_CAMPO_OBRA = {
+  descricao: 'descrição',
+  proposta: 'n° da proposta',
+  cliente_id: 'cliente',
+  data_inicio: 'início',
+  data_conclusao: 'conclusão',
+  tipo: 'tipo',
+  prioridade: 'prioridade',
+}
+
 router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
   const clienteId = texto(req.body?.clienteId)
   const proposta = texto(req.body?.proposta)
@@ -858,6 +945,13 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
         req.dono.sub,
       ],
     )
+    await registrarAtividade(req, {
+      acao: 'obra.criada',
+      categoria: 'obra',
+      entidade: ['obra', rows[0].id],
+      descricao: tipo === 'emergencia' ? 'Nova obra de emergência criada' : 'Nova obra criada',
+      detalhes: await descreverObra(rows[0].id),
+    })
     return res.status(201).json({ id: String(rows[0].id) })
   } catch (e) {
     if (e.code === '23503') return res.status(400).json({ erro: 'Cliente não encontrado.' })
@@ -933,6 +1027,19 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
       valores,
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Obra não encontrada.' })
+    await registrarAtividade(req, {
+      acao: 'obra.editada',
+      categoria: 'obra',
+      entidade: ['obra', req.params.id],
+      descricao: 'Obra editada',
+      detalhes: {
+        ...(await descreverObra(req.params.id)),
+        alterado: campos
+          .map((c) => ROTULO_CAMPO_OBRA[c.split(' ')[0]])
+          .filter(Boolean)
+          .join(', '),
+      },
+    })
     return res.json({ ok: true })
   } catch (e) {
     if (e.code === '23503') return res.status(400).json({ erro: 'Cliente não encontrado.' })
@@ -971,8 +1078,17 @@ router.delete('/obras/:id', exigeSessao, async (req, res) => {
       })
     }
 
+    /* o nome e lido ANTES: depois do DELETE nao ha mais o que ler */
+    const antes = await descreverObra(req.params.id)
     const { rowCount } = await query('DELETE FROM obra WHERE id = $1', [req.params.id])
     if (rowCount === 0) return res.status(404).json({ erro: 'Obra não encontrada.' })
+    await registrarAtividade(req, {
+      acao: fechada ? 'obra.concluida_excluida' : 'obra.excluida',
+      categoria: 'obra',
+      entidade: ['obra', req.params.id],
+      descricao: fechada ? 'Obra concluída excluída' : 'Obra excluída',
+      detalhes: antes,
+    })
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/obra-apagar')
@@ -1063,6 +1179,13 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
         WHERE id = $3`,
       [req.dono.sub, observacao || null, req.params.id],
     )
+    await registrarAtividade(req, {
+      acao: 'obra.concluida',
+      categoria: 'obra',
+      entidade: ['obra', req.params.id],
+      descricao: 'Obra concluída',
+      detalhes: { ...(await descreverObra(req.params.id)), observacao: observacao || null },
+    })
     return res.json({ ok: true })
   } catch (e) {
     return tratar(e, res, 'dados/obra-concluir')
@@ -1072,23 +1195,40 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
 /* ------------------------------------------------------------
    Marcar / desmarcar check
 
-   A regra e a mesma da tela: cada cargo mexe no card que e dele.
-   Repetida aqui porque a tela pode ser burlada e o banco, nao.
+   A regra e a mesma da tela (podeEditarCheck, src/domain/obras.js):
+   cada setor mexe no card que e dele. Repetida aqui porque a tela
+   pode ser burlada e o banco, nao.
 
-   Duas saidas dessa trava:
-     - o cargo tem a permissao "check em todas as etapas";
-     - a obra e de EMERGENCIA (ali ninguem espera por setor).
+   Saidas dessa trava:
+     - acesso total, ou a permissao "check em todas as etapas";
+     - a obra e de EMERGENCIA (obra.tipo = 'emergencia'): ali ninguem
+       espera por setor, e qualquer setor marca qualquer check.
    ------------------------------------------------------------ */
 
-async function podeMarcar(usuarioId, checkId) {
+/** O nome do check e da etapa dele, para o historico. */
+async function descreverCheck(checkId) {
+  try {
+    const { rows } = await query(
+      `SELECT ck.titulo, et.nome AS etapa
+         FROM etapa_check ck
+         JOIN etapa_card kd ON kd.id = ck.card_id
+         JOIN etapa et      ON et.id = kd.etapa_id
+        WHERE ck.id = $1`,
+      [checkId],
+    )
+    return { check: rows[0]?.titulo ?? null, etapa: rows[0]?.etapa ?? null }
+  } catch {
+    return {}
+  }
+}
+
+async function podeMarcar(usuarioId, checkId, obraId) {
   const meu = await meuCargo(usuarioId)
   if (cargoPode(meu, 'check_todas_etapas')) return true
 
-  /* A emergencia NAO libera mais o check para qualquer um. A regra
-     vivia aqui e no dominio da tela, e passava por cima do cadastro de
-     permissoes: bastava a obra ser emergencia para quem nao pode marcar
-     fora do seu setor marcar assim mesmo, e o rastro ficava com o nome
-     errado. Quem precisa disso ganha "check em todas as etapas". */
+  /* obra de emergencia: a trava por setor nao vale */
+  const obra = await query('SELECT tipo FROM obra WHERE id = $1', [obraId])
+  if (obra.rows[0]?.tipo === 'emergencia') return true
 
   /* o check pode ter dono proprio; se tiver, e ele quem decide, e o
      cargo do card nao entra na conta */
@@ -1113,15 +1253,25 @@ async function podeMarcar(usuarioId, checkId) {
 
 router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, res) => {
   try {
-    if (!(await podeMarcar(req.dono.sub, req.params.checkId))) {
+    if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
     }
-    await query(
+    const marcado = await query(
       `INSERT INTO obra_check (obra_id, check_id, feito_por)
        VALUES ($1, $2, $3)
        ON CONFLICT (obra_id, check_id) DO NOTHING`,
       [req.params.id, req.params.checkId, req.dono.sub],
     )
+    /* ja estava marcado: nada aconteceu, nada entra no historico */
+    if (marcado.rowCount > 0) {
+      await registrarAtividade(req, {
+        acao: 'check.marcado',
+        categoria: 'check',
+        entidade: ['obra', req.params.id],
+        descricao: 'Check concluído',
+        detalhes: { ...(await descreverObra(req.params.id)), ...(await descreverCheck(req.params.checkId)) },
+      })
+    }
     return res.json({ ok: true })
   } catch (e) {
     if (e.code === '23503') return res.status(404).json({ erro: 'Obra ou check não encontrado.' })
@@ -1131,13 +1281,22 @@ router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, re
 
 router.delete('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, res) => {
   try {
-    if (!(await podeMarcar(req.dono.sub, req.params.checkId))) {
+    if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
     }
-    await query('DELETE FROM obra_check WHERE obra_id = $1 AND check_id = $2', [
+    const desmarcado = await query('DELETE FROM obra_check WHERE obra_id = $1 AND check_id = $2', [
       req.params.id,
       req.params.checkId,
     ])
+    if (desmarcado.rowCount > 0) {
+      await registrarAtividade(req, {
+        acao: 'check.desmarcado',
+        categoria: 'check',
+        entidade: ['obra', req.params.id],
+        descricao: 'Check desmarcado',
+        detalhes: { ...(await descreverObra(req.params.id)), ...(await descreverCheck(req.params.checkId)) },
+      })
+    }
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/check-desmarcar')
@@ -1160,8 +1319,15 @@ router.post('/obras/:id/observacoes', exigeSessao, obraAberta, async (req, res) 
     const { rows } = await query(
       `INSERT INTO obra_observacao (obra_id, usuario_id, autor_nome, texto)
        VALUES ($1, $2, $3, $4) RETURNING id, enviada_em`,
-      [req.params.id, req.dono.sub, texto(req.body?.autorNome) || 'Usuário', conteudo],
+      [req.params.id, req.dono.sub, await nomeDoDono(req), conteudo],
     )
+    await registrarAtividade(req, {
+      acao: 'observacao.criada',
+      categoria: 'obra',
+      entidade: ['obra', req.params.id],
+      descricao: 'Observação na obra',
+      detalhes: { ...(await descreverObra(req.params.id)), texto: resumo(conteudo) },
+    })
     return res.status(201).json({ id: String(rows[0].id), enviadaEm: rows[0].enviada_em })
   } catch (e) {
     if (e.code === '23503') return res.status(404).json({ erro: 'Obra não encontrada.' })
@@ -1257,8 +1423,15 @@ router.post('/observacoes', exigeSessao, async (req, res) => {
     const { rows } = await query(
       `INSERT INTO observacao_quadro (usuario_id, autor_nome, texto, inicio_em, fim_em)
        VALUES ($1, $2, $3, $4, $5) RETURNING id, enviada_em, inicio_em, fim_em`,
-      [req.dono.sub, texto(req.body?.autorNome) || 'Usuário', conteudo, inicio, fim],
+      [req.dono.sub, await nomeDoDono(req), conteudo, inicio, fim],
     )
+    await registrarAtividade(req, {
+      acao: 'observacao_quadro.criada',
+      categoria: 'obra',
+      entidade: ['observacao_quadro', rows[0].id],
+      descricao: 'Observação no quadro de obras',
+      detalhes: { texto: resumo(conteudo) },
+    })
     return res.status(201).json({
       id: String(rows[0].id),
       enviadaEm: rows[0].enviada_em,
@@ -1410,7 +1583,7 @@ async function avisarPorEmail({ obraId, setores, etapa, mensagem, quem }) {
   })
 
   if (!envio.ok) {
-    console.error('[dados/aviso-email]', envio.motivo)
+    logger.error('dados/aviso-email', envio.motivo)
     return { enviados: 0, motivo: envio.motivo }
   }
   return { enviados: para.length }
@@ -1450,8 +1623,21 @@ router.post('/obras/:id/avisos', exigeSessao, exige('enviar_avisos'), obraAberta
       mensagem,
       quem: req.dono.sub,
     }).catch((erro) => {
-      console.error('[dados/aviso-email]', erro.message)
+      logger.error('dados/aviso-email', erro.message)
       return { enviados: 0, motivo: erro.message }
+    })
+
+    const nomesSetores = await query('SELECT nome FROM cargo WHERE chave = ANY($1)', [setores])
+    await registrarAtividade(req, {
+      acao: 'aviso.enviado',
+      categoria: 'aviso',
+      entidade: ['obra', req.params.id],
+      descricao: 'Aviso enviado',
+      detalhes: {
+        ...(await descreverObra(req.params.id)),
+        setores: nomesSetores.rows.map((l) => l.nome).join(', '),
+        texto: resumo(mensagem),
+      },
     })
 
     return res.status(201).json({
@@ -1516,6 +1702,17 @@ router.post('/obras/:id/avaliacoes', exigeSessao, exige('editar_avaliacoes'), as
         req.dono.sub,
       ],
     )
+    await registrarAtividade(req, {
+      acao: 'avaliacao.criada',
+      categoria: 'avaliacao',
+      entidade: ['obra', req.params.id],
+      descricao: 'Avaliação lançada',
+      detalhes: {
+        ...(await descreverObra(req.params.id)),
+        avaliacao: texto(req.body?.rotulo) || 'Avaliação',
+        nota: String(valor),
+      },
+    })
     return res.status(201).json({ id: String(rows[0].id), avaliadaEm: rows[0].avaliado_em })
   } catch (e) {
     if (e.code === '23503') return res.status(404).json({ erro: 'Obra não encontrada.' })
@@ -1544,10 +1741,21 @@ router.patch('/avaliacoes/:id', exigeSessao, exige('editar_avaliacoes'), async (
   try {
     const { rows } = await query(
       `UPDATE obra_avaliacao_item SET ${campos.join(', ')}
-        WHERE id = $${valores.length} RETURNING id`,
+        WHERE id = $${valores.length} RETURNING id, obra_id, rotulo, nota`,
       valores,
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Avaliação não encontrada.' })
+    await registrarAtividade(req, {
+      acao: 'avaliacao.editada',
+      categoria: 'avaliacao',
+      entidade: ['obra', rows[0].obra_id],
+      descricao: 'Avaliação editada',
+      detalhes: {
+        ...(await descreverObra(rows[0].obra_id)),
+        avaliacao: rows[0].rotulo,
+        nota: String(Number(rows[0].nota)),
+      },
+    })
     return res.json({ ok: true })
   } catch (e) {
     return tratar(e, res, 'dados/avaliacao-editar')
@@ -1583,8 +1791,17 @@ router.delete('/avaliacoes/:id', exigeSessao, exige('editar_avaliacoes'), async 
 /** Tira a avaliacao inteira da obra (todas as notas de uma vez). */
 router.delete('/obras/:id/avaliacao', exigeSessao, exige('editar_avaliacoes'), async (req, res) => {
   try {
-    await query('DELETE FROM obra_avaliacao_item WHERE obra_id = $1', [req.params.id])
+    const tiradas = await query('DELETE FROM obra_avaliacao_item WHERE obra_id = $1', [req.params.id])
     await query('DELETE FROM obra_avaliacao WHERE obra_id = $1', [req.params.id])
+    if (tiradas.rowCount > 0) {
+      await registrarAtividade(req, {
+        acao: 'avaliacao.removida',
+        categoria: 'avaliacao',
+        entidade: ['obra', req.params.id],
+        descricao: 'Avaliação da obra removida',
+        detalhes: await descreverObra(req.params.id),
+      })
+    }
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/avaliacao-limpar')
@@ -1623,11 +1840,20 @@ router.post('/obras/:id/etiquetas', exigeSessao, exige('editar_obras'), obraAber
       etiqueta = criada.rows[0]
     }
 
-    await query(
+    const posta = await query(
       'INSERT INTO obra_etiqueta (obra_id, etiqueta_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
       [req.params.id, etiqueta.id],
     )
     await query('UPDATE obra SET atualizado_por = $1 WHERE id = $2', [req.dono.sub, req.params.id])
+    if (posta.rowCount > 0) {
+      await registrarAtividade(req, {
+        acao: 'etiqueta.marcada',
+        categoria: 'obra',
+        entidade: ['obra', req.params.id],
+        descricao: 'Etiqueta na obra',
+        detalhes: { ...(await descreverObra(req.params.id)), etiqueta: etiqueta.nome },
+      })
+    }
 
     return res.status(201).json({
       etiqueta: { id: String(etiqueta.id), nome: etiqueta.nome, cor: etiqueta.cor },
@@ -1677,10 +1903,23 @@ router.patch('/etiquetas/:id', exigeSessao, exige('editar_obras'), async (req, r
 /** Tira a etiqueta DESTA obra; a etiqueta continua existindo para as outras. */
 router.delete('/obras/:id/etiquetas/:etiquetaId', exigeSessao, exige('editar_obras'), obraAberta, async (req, res) => {
   try {
-    await query('DELETE FROM obra_etiqueta WHERE obra_id = $1 AND etiqueta_id = $2', [
+    const nomeEtiqueta = await query('SELECT nome FROM etiqueta WHERE id = $1', [req.params.etiquetaId])
+    const tirada = await query('DELETE FROM obra_etiqueta WHERE obra_id = $1 AND etiqueta_id = $2', [
       req.params.id,
       req.params.etiquetaId,
     ])
+    if (tirada.rowCount > 0) {
+      await registrarAtividade(req, {
+        acao: 'etiqueta.tirada',
+        categoria: 'obra',
+        entidade: ['obra', req.params.id],
+        descricao: 'Etiqueta tirada da obra',
+        detalhes: {
+          ...(await descreverObra(req.params.id)),
+          etiqueta: nomeEtiqueta.rows[0]?.nome ?? null,
+        },
+      })
+    }
     /* etiqueta que nao esta em nenhuma obra some da lista: senao a
        caixa de sugestoes vira um cemiterio de nomes antigos */
     await query(
@@ -1725,10 +1964,17 @@ router.post('/obras/:id/anexos', exigeSessao, exige('editar_obras'), obraAberta,
         Number(req.body?.tamanho) || conteudo.length,
         conteudo,
         req.dono.sub,
-        texto(req.body?.autorNome) || 'Usuário',
+        await nomeDoDono(req),
       ],
     )
     await query('UPDATE obra SET atualizado_por = $1 WHERE id = $2', [req.dono.sub, req.params.id])
+    await registrarAtividade(req, {
+      acao: 'anexo.enviado',
+      categoria: 'documento',
+      entidade: ['obra', req.params.id],
+      descricao: 'Documento anexado à obra',
+      detalhes: { ...(await descreverObra(req.params.id)), arquivo: nome },
+    })
     return res.status(201).json({ id: String(rows[0].id), enviadoEm: rows[0].enviado_em })
   } catch (e) {
     if (e.code === '23503') return res.status(404).json({ erro: 'Obra não encontrada.' })
@@ -1770,7 +2016,21 @@ router.delete('/anexos/:id', exigeSessao, exige('editar_obras'), async (req, res
       })
     }
 
-    await query('DELETE FROM obra_anexo WHERE id = $1', [req.params.id])
+    const apagado = await query('DELETE FROM obra_anexo WHERE id = $1 RETURNING obra_id, nome', [
+      req.params.id,
+    ])
+    if (apagado.rows[0]) {
+      await registrarAtividade(req, {
+        acao: 'anexo.excluido',
+        categoria: 'documento',
+        entidade: ['obra', apagado.rows[0].obra_id],
+        descricao: 'Documento excluído da obra',
+        detalhes: {
+          ...(await descreverObra(apagado.rows[0].obra_id)),
+          arquivo: apagado.rows[0].nome,
+        },
+      })
+    }
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/anexo-apagar')
@@ -1881,7 +2141,7 @@ router.post('/obras/:id/chat', exigeSessao, obraAberta, async (req, res) => {
       [
         req.params.id,
         req.dono.sub,
-        texto(req.body?.autorNome) || 'Usuário',
+        await nomeDoDono(req),
         conteudo || null,
         req.body?.respondeA || null,
         arquivo?.nome ? texto(arquivo.nome) : null,

@@ -72,6 +72,21 @@
    ------------------------------------------------------- */
 
 .rail {
+  /* o andar do item atual, igual nos dois menus */
+  --dur-viagem: 460ms;
+  --curva-viagem: cubic-bezier(0.32, 0.72, 0, 1);
+  /* quanto o icone aceso sobe no celular; o valor de verdade e medido
+     (ver `ergue` no AppShell.jsx), este so vale ate a primeira medida */
+  --ergue: 14px;
+  /* o mesmo, para o botao do meio (medido a parte: ver `ergueMais`) */
+  --ergue-mais: 19px;
+  /* quanto o centro da bolha do celular fica abaixo da borda da barra.
+     O do icone aceso e mais fundo: ele so da um degrau de ~6px para
+     fora. O do botao do meio, 8px. As curvas das duas bolhas no CSS
+     mobile sao calculadas para ESTES valores. */
+  --afunda: 15px;
+  --afunda-mais: 8px;
+
   position: fixed;
   left: 10px;
   top: 50%;
@@ -160,11 +175,17 @@
   z-index: 2;
   display: grid;
   place-items: center;
-  transition: transform var(--dur-fast) var(--ease-out);
+  transition:
+    scale var(--dur-fast) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
 }
 
+/* `scale`, e nao `transform`: no celular o icone aceso (e o botao do
+   meio) sobe com `translate`. Com os dois no mesmo `transform`, apertar
+   trocava o "sobe" pelo "encolhe" — o botao despencava para fora do
+   dedo no meio do toque, e o clique so pegava na metade de baixo. */
 .rail__btn:active .rail__glifo {
-  transform: scale(0.9);
+  scale: 0.9;
 }
 
 /* Fonte pequena de proposito: a bolha tem 72px e o rotulo mais longo e
@@ -225,11 +246,17 @@
      navegador a recalcular layout a cada quadro, que e de onde vinha o
      tranco. Assim a bolha escorrega numa camada so.
 
-     A curva passa um tiquinho do ponto e volta: e o que da o peso de
-     bolha, em vez de uma caixa que para seco no destino. */
-  transition: transform 520ms cubic-bezier(0.22, 1.12, 0.32, 1),
+     A curva arranca rapido e assenta devagar, sem passar do ponto: a
+     mesma do indicador do celular, para os dois menus terem o mesmo
+     andar. */
+  transition: transform var(--dur-viagem) var(--curva-viagem),
     opacity var(--dur-fast) var(--ease-out);
   will-change: transform;
+}
+
+/* antes da primeira pintura nao ha de onde vir: a marca so aparece */
+.rail:not(.is-viaja) .rail__marca {
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 /* so aparece depois da primeira medida — senao entrava deslizando do
@@ -581,7 +608,12 @@
     flex-direction: row;
     align-items: center;
     gap: 4px;
-    padding: 6px 8px;
+    /* 18px nas laterais, e nao 8: o vinco do indicador se estende 10px
+       para fora do circulo, e no primeiro e no ultimo item isso caia
+       fora da quina arredondada da barra — uma corcova escura do lado
+       de fora, bem visivel no tema escuro. Com o respiro maior os dois
+       extremos ficam dentro da faixa. */
+    padding: 6px 18px;
     border-radius: 22px;
   }
 
@@ -680,11 +712,30 @@
     overflow: visible;
   }
 
+  /* ---- a geometria das bolhas ----
+     O circulo tem 56px e o centro dele fica ABAIXO da borda de cima
+     da barra — `--afunda` (15px) no indicador, `--afunda-mais` (8px)
+     no encaixe do botao do meio. O indicador aflora so 13px, e o icone
+     aceso dentro dele so ~6px: um degrau, e nao um icone flutuando
+     longe da barra. O encaixe aflora 20px, e e ele que prende o botao
+     do meio na BARRA.
+
+     As duas curvas que ligam cada circulo a linha reta da barra sao
+     um `radial-gradient` recortado numa caixa pequena: transparente
+     dentro de um circulo de 12px, cor da barra fora dele. As medidas
+     saem da tangencia desse circulo com a barra e com a bolha
+     (distancia entre centros = 28 + 12 = 40):
+
+                    afunda 15px          afunda 8px
+       centro       1,51px fora do       6,64px fora do
+                    circulo              circulo
+       caixa        8,85 x 3,9px         10,39 x 6px
+
+     Se um `--afunda` mudar, os numeros dele mudam junto. */
   .rail__indicador,
   .rail__encaixe {
     display: block;
     position: absolute;
-    top: -28px;
     left: 0;
     z-index: 0;
     width: 56px;
@@ -694,191 +745,165 @@
     pointer-events: none;
   }
 
-  /* as duas pecas do vinco, iguais nos dois (ver o comentario acima) */
+  .rail__indicador {
+    top: calc(var(--afunda) - 28px);
+  }
+
+  .rail__encaixe {
+    top: calc(var(--afunda-mais) - 28px);
+  }
+
   .rail__indicador::before,
   .rail__indicador::after,
   .rail__encaixe::before,
   .rail__encaixe::after {
     content: '';
     position: absolute;
-    top: 4px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
   }
 
   .rail__indicador::before,
-  .rail__encaixe::before {
-    left: -22px;
-    box-shadow: 12px 15px 0 0 var(--barra-cor);
+  .rail__indicador::after {
+    top: 9.1px;
+    width: 8.85px;
+    height: 3.9px;
   }
 
-  .rail__indicador::after,
+  .rail__indicador::before {
+    left: -1.51px;
+    background: radial-gradient(
+      circle 12px at 0 -8.1px,
+      transparent 11.5px,
+      var(--barra-cor) 12px
+    );
+  }
+
+  .rail__indicador::after {
+    right: -1.51px;
+    background: radial-gradient(
+      circle 12px at 100% -8.1px,
+      transparent 11.5px,
+      var(--barra-cor) 12px
+    );
+  }
+
+  .rail__encaixe::before,
   .rail__encaixe::after {
-    right: -22px;
-    box-shadow: -12px 15px 0 0 var(--barra-cor);
+    top: 14px;
+    width: 10.39px;
+    height: 6px;
   }
 
-  /* o que viaja: meio segundo, a mesma medida do exemplo */
+  .rail__encaixe::before {
+    left: -6.64px;
+    background: radial-gradient(
+      circle 12px at 0 -6px,
+      transparent 11.5px,
+      var(--barra-cor) 12px
+    );
+  }
+
+  .rail__encaixe::after {
+    right: -6.64px;
+    background: radial-gradient(
+      circle 12px at 100% -6px,
+      transparent 11.5px,
+      var(--barra-cor) 12px
+    );
+  }
+
+  /* O que viaja. `--ind-x` e o centro do icone aceso medido na caixa
+     da propria barra (ver `posicaoDentro` no AppShell.jsx) — e nao
+     uma conta de indice vezes largura: vale em qualquer tela e com
+     qualquer quantidade de abas. So o `transform` anima, entao a
+     viagem nao mexe em layout nenhum. */
   .rail__indicador {
     opacity: 0;
-    transform: translate3d(calc(var(--marca-x) + var(--marca-l) / 2 - 28px), 0, 0);
+    transform: translate3d(calc(var(--ind-x) - 28px), 0, 0);
     transition:
-      transform 0.5s var(--ease-out),
-      opacity 0.2s var(--ease-out);
+      transform var(--dur-viagem) var(--curva-viagem),
+      opacity 0.22s var(--ease-out);
+    will-change: transform;
   }
 
   .rail__indicador.is-pronta {
     opacity: 1;
   }
 
-  /* o do botao do meio nao viaja: o botao nao sai do lugar */
+  /* antes da primeira pintura nao ha de onde vir: ele so aparece */
+  .rail:not(.is-viaja) .rail__indicador {
+    transition: opacity 0.22s var(--ease-out);
+  }
+
+  /* o do botao do meio nao viaja: o botao nao sai do lugar. Tambem e
+     medido, porque o meio da BARRA so e o meio dos itens quando o
+     cargo tem as quatro abas principais. */
   .rail__encaixe {
-    left: 50%;
-    margin-left: -28px;
+    transform: translate3d(calc(var(--encaixe-x) - 28px), 0, 0);
   }
 
   /* o anel deslizante do computador sai de cena */
   .rail__marca {
     display: none;
   }
-  .rail__somobile {
-    display: block;
-    flex: 0 0 62px !important;
+
+  /* O destaque cinza que o iPhone pinta no toque cobria a caixa
+     inteira do botao — era o "quadrado cinza" embaixo do hamburguer. */
+  .rail__btn,
+  .rail__mais,
+  .rail__item {
+    -webkit-tap-highlight-color: transparent;
   }
 
-  /* O botao do meio segue a MESMA gramatica do item ativo: um circulo
-     da cor do sistema, do mesmo tamanho, erguido a mesma altura, dentro
-     do proprio encaixe branco. A diferenca e que o dele nao viaja.
-
-     O halo que ele tinha saiu: com o encaixe por tras, o anel
-     translucido virava um segundo circulo palido em volta do primeiro. */
-  .rail__mais {
-    position: relative;
-    width: 42px;
-    height: 42px;
-    margin: 0 auto;
-    padding: 0;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #fff;
-    transform: translateY(-26px);
-    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--accent) 80%, transparent);
-    transition: transform 0.28s cubic-bezier(0.2, 1.15, 0.35, 1);
-  }
-
-  /* O halo que respirava saiu. Ele existia para o botao nao parecer
-     colado no rodape — e quem faz isso agora e o pescoco do proprio
-     filtro, que liga o botao a faixa. Os dois juntos viravam um disco
-     pálido em volta do botao. */
-
-  @keyframes mais-respira {
-    0%,
-    100% {
-      opacity: 0.55;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0;
-      transform: scale(1.35);
-    }
-  }
-
-  .rail__mais:hover {
-    color: #fff;
-  }
-
-  .rail__mais:active {
-    transform: scale(0.92);
-  }
-
-  /* aberto ele desce um pouco: o botao "entra" na barra enquanto a
-     gaveta esta para fora */
-  .rail__mais[aria-expanded='true'] {
-    transform: translateY(-20px);
-  }
-
-  /* sem rotulo: o circulo elevado ja diz o que e, e a palavra embaixo
-     dele desalinharia a linha dos outros tres */
-  .rail__mais .rail__rotulo {
-    display: none;
-  }
-
-  /* o glifo dele nao vira circulo: o circulo e o proprio botao */
-  .rail__mais .rail__glifo {
-    width: auto;
-    height: auto;
-    background: none;
-    color: #fff;
-    transform: none;
-  }
-
-  .rail__mais .rail__glifo::before {
-    content: none;
-  }
-
+  /* Altura que CABE o conteudo: icone de 42px + rotulo. Com os 56px e
+     o recheio antigos o flex encolhia os dois para caber — o circulo
+     virava um ovo de 42x32 e o rotulo era cortado ao meio. */
   .rail__btn {
     min-width: 0;
-    padding: 7px 2px 6px;
-  }
-
-  /* o rotulo encolhe em vez de vazar o botao: numa tela de 360px os
-     cinco nomes tem de caber sem um empurrar o outro */
-  .rail__rotulo {
-    font-size: 0.54rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-
-  /* ---- a passagem de um item para o outro ----
-     Tres coisas acontecem juntas, e e o conjunto que da a sensacao de
-     "deslizar" em vez de "piscar":
-
-       o icone do item escolhido SOBE e cresce um tico;
-       o rotulo dele acende (o dos outros fica apagado);
-       um pingo aparece embaixo, crescendo do centro.
-
-     A curva passa um pouco do destino e volta — e o que faz o gesto
-     parecer fisico. O anel deslizante, que ja existia, continua
-     correndo por tras de tudo isso. */
-  .rail__btn {
+    height: 60px;
+    padding: 2px 2px 3px;
+    gap: 3px;
     transition: color 0.24s var(--ease-out);
   }
 
-  .rail__glifo {
-    transition: transform 0.36s cubic-bezier(0.2, 1.3, 0.35, 1);
+  .rail__btn > * {
+    flex-shrink: 0;
   }
 
-  /* ---- o icone que sobe ----
-     Ele vira um circulo com a cor do sistema e SOBE para dentro do
-     indicador. O atraso e o truque inteiro: o indicador leva meio
-     segundo para chegar, e o icone so pula depois de um quarto de
-     segundo — chega primeiro o encaixe, depois o conteudo. Sem a
-     espera, os dois andam grudados e o gesto perde a graca.
+  /* ---- o icone ----
+     Ele vira um circulo e, aceso, sobe para dentro do indicador: o
+     centro dele cai no centro da bolha porque a distancia (`--ergue`)
+     e medida, e nao chutada — e como a bolha so aflora um pouco da
+     barra, o icone tambem so sobe um pouco.
 
-     Na saida nao ha espera: o icone do item que deixou de ser o
-     atual desce na hora, enquanto o indicador ainda esta a caminho.
-     E o que deixa o encaixe vazio durante a viagem. */
+     A subida usa `translate`, e nao `transform`: assim o `scale` do
+     toque (la em cima) soma com ela em vez de substitui-la.
+
+     Na chegada ha um atraso curto — o encaixe chega primeiro, o
+     icone logo atras. Na saida nao ha atraso: o icone que deixou de
+     ser o atual desce na hora, enquanto o indicador parte. */
   .rail__glifo {
     display: grid;
     place-items: center;
     width: 42px;
     height: 42px;
     border-radius: 50%;
+    translate: 0 0;
     transition:
-      transform 0.5s var(--ease-out),
-      background 0.3s var(--ease-out),
-      color 0.3s var(--ease-out);
-    transition-delay: 0s;
+      translate 0.32s var(--curva-viagem),
+      scale var(--dur-fast) var(--ease-out),
+      background-color 0.24s var(--ease-out),
+      color 0.24s var(--ease-out);
   }
 
   .rail__btn.is-atual .rail__glifo {
     background: var(--accent);
     color: #fff;
-    transform: translateY(-26px);
-    transition-delay: 0.25s;
+    translate: 0 calc(var(--ergue) * -1);
+    transition:
+      translate 0.44s cubic-bezier(0.34, 1.16, 0.64, 1) 0.1s,
+      scale var(--dur-fast) var(--ease-out),
+      background-color 0.32s var(--ease-out) 0.1s,
+      color 0.32s var(--ease-out) 0.1s;
   }
 
   /* o brilho colorido por baixo do icone erguido */
@@ -891,102 +916,183 @@
     background: var(--accent);
     filter: blur(6px);
     opacity: 0;
-    transition: opacity 0.4s var(--ease-out);
+    transition: opacity 0.2s var(--ease-out);
     z-index: -1;
   }
 
   .rail__btn.is-atual .rail__glifo::before {
     opacity: 0.45;
-    transition-delay: 0.25s;
+    transition: opacity 0.35s var(--ease-out) 0.18s;
   }
 
+  /* o rotulo encolhe em vez de vazar o botao: numa tela de 360px os
+     cinco nomes tem de caber sem um empurrar o outro */
   .rail__rotulo {
+    font-size: 0.54rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
     opacity: 0.62;
-    transition:
-      opacity 0.24s var(--ease-out),
-      transform 0.36s cubic-bezier(0.2, 1.3, 0.35, 1);
+    transition: opacity 0.24s var(--ease-out);
   }
 
   .rail__btn.is-atual .rail__rotulo {
     opacity: 1;
-    transform: translateY(1px);
   }
 
-  /* O pingo embaixo do item atual saiu: com o icone subindo para dentro
-     do encaixe, ele virava uma segunda marca dizendo a mesma coisa — e
-     caia em cima do rotulo.
+  /* ---- o botao do meio ----
+     O botao E o circulo de 42px, e nada alem dele: a area de toque e
+     a que se ve. A vaga em volta (o `li`) nao tem clique.
 
+     Ele sobe com `translate` ate o centro dele cair no centro do
+     proprio encaixe — a mesma altura do icone aceso das outras abas,
+     porque as duas contas descontam o mesmo `--afunda`. O toque usa
+     `scale`, que soma com a subida: o botao nao sai do lugar nem ao
+     apertar nem ao abrir a gaveta. */
+  .rail__somobile {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex: 0 0 62px !important;
+  }
 
+  .rail__mais {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    translate: 0 calc(var(--ergue-mais) * -1);
+    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--accent) 80%, transparent);
+    transition: scale var(--dur-fast) var(--ease-out);
+  }
+
+  .rail__mais:active {
+    scale: 0.94;
+  }
 
   /* ---- a gaveta ----
-     Colada no alto da barra, da largura dela. Nao escurece a tela nem
-     prende o foco: e o menu continuando para cima, e sai com um toque
-     no hamburguer ou ao escolher uma tela. */
-  /* Fechada ela existe, so nao se ve nem se alcanca. `visibility` (e
-     nao `display`) porque `display` nao transiciona: e o que fazia o
-     fechar ser um estalo. */
+     Ela se abre a partir do ponto logo acima do botao do meio: o corpo
+     cresce dali, com `clip-path`, ate o tamanho inteiro. Fechando, o
+     caminho e o inverso: ele se recolhe de volta para esse ponto.
+
+     O botao NAO se liga ao corpo: ele fica preso a barra pela propria
+     bolha (o encaixe), e o corpo abre por cima, separado. Um pescoco
+     entre os dois fazia o botao parecer puxado para dentro do menu.
+
+     Nada aqui recebe toque, a nao ser o corpo quando aberto. A caixa
+     que posiciona e a sombra sao `pointer-events: none` — e por isso
+     que o espaco em volta do botao nao abre nem fecha nada.
+
+     z-index 0: abaixo da lista (que e 1), onde mora o botao, e acima
+     do encaixe, que vem antes no HTML. */
   .rail__gaveta {
     position: absolute;
-    bottom: calc(100% + 8px);
+    /* 10px de folga acima da bolha do botao, que aflora 20px da barra */
+    bottom: calc(100% + 30px);
     left: 0;
     right: 0;
+    z-index: 0;
+    display: block;
+    visibility: hidden;
+    pointer-events: none;
+    transition: visibility 0s linear 0.36s;
+  }
+
+  .rail__gaveta.is-aberta {
+    visibility: visible;
+    transition: visibility 0s;
+  }
+
+  /* A sombra fica numa peca de fora porque `filter` e aplicado ANTES
+     do `clip-path` da propria peca: na mesma, a sombra seria cortada.
+     Aqui ela acompanha o recorte do corpo quadro a quadro. */
+  .rail__gaveta-sombra {
+    filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.2));
+  }
+
+  .rail__gaveta-corpo {
     display: grid;
     gap: 2px;
     padding: 6px;
     border-radius: 18px;
-    background: var(--vidro-menu);
-    border: 1px solid var(--vidro-borda);
-    box-shadow: var(--vidro-realce), 0 16px 34px rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(170%);
-    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(170%);
-
-    opacity: 0;
-    visibility: hidden;
+    background: var(--barra-cor);
+    box-shadow: inset 0 0 0 1px var(--vidro-borda);
     pointer-events: none;
-    /* Fechada ela e quase um ponto, no centro de baixo — que e onde o
-       botao esta. Abrindo, ela CRESCE dali: o gesto liga as duas pecas
-       em vez de mostrar um painel que apareceu do nada logo acima de um
-       botao que acabou de ser tocado. */
-    transform: translateY(30px) scale(0.24);
-    transform-origin: bottom center;
-    /* a curva passa um pouco do destino e volta: e o que da o "peso" de
-       uma peca que sobe, em vez de um slide linear */
-    transition:
-      opacity 0.18s var(--ease-out),
-      transform 0.38s cubic-bezier(0.34, 1.32, 0.42, 1),
-      visibility 0s linear 0.38s;
+
+    /* Fechado: uma fresta de 1px e 26px de largura, logo acima do
+       botao. Aberto: o retangulo inteiro. As quatro medidas do
+       `inset()` se interpolam, entao o corpo cresce para cima e para
+       os lados A PARTIR desse ponto, com os cantos se arredondando no
+       caminho. */
+    clip-path: inset(
+      calc(100% - 1px) calc(100% - var(--encaixe-x) - 13px) 0 calc(var(--encaixe-x) - 13px)
+        round 13px
+    );
+    transition: clip-path 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.04s;
   }
 
-  .rail__gaveta.is-aberta {
-    opacity: 1;
-    visibility: visible;
+  .rail__gaveta.is-aberta .rail__gaveta-corpo {
     pointer-events: auto;
-    transform: translateY(0) scale(1);
-    transition:
-      opacity 0.16s var(--ease-out),
-      transform 0.38s cubic-bezier(0.34, 1.32, 0.42, 1),
-      visibility 0s;
+    clip-path: inset(0 0 0 0 round 18px);
+    transition: clip-path 0.46s var(--curva-viagem) 0.04s;
   }
 
-  /* os itens entram em cascata, de baixo para cima — na ordem em que o
-     olho sobe do hamburguer */
+  /* os itens assentam enquanto o corpo termina de abrir — de baixo
+     para cima, na ordem em que o olho sobe do botao */
   .rail__gaveta .rail__item {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translate3d(0, 6px, 0);
     transition:
-      opacity 0.22s var(--ease-out),
-      transform 0.28s var(--ease-out);
+      opacity 0.12s var(--ease-out),
+      transform 0.12s var(--ease-out);
   }
 
   .rail__gaveta.is-aberta .rail__item {
     opacity: 1;
     transform: none;
+    transition:
+      opacity 0.26s var(--ease-out),
+      transform 0.36s var(--curva-viagem);
   }
 
-  .rail__gaveta.is-aberta .rail__item:nth-child(1) { transition-delay: 0.04s; }
-  .rail__gaveta.is-aberta .rail__item:nth-child(2) { transition-delay: 0.08s; }
-  .rail__gaveta.is-aberta .rail__item:nth-child(3) { transition-delay: 0.12s; }
-  .rail__gaveta.is-aberta .rail__item:nth-child(4) { transition-delay: 0.16s; }
+  .rail__gaveta.is-aberta .rail__item:nth-last-child(1) { transition-delay: 0.2s; }
+  .rail__gaveta.is-aberta .rail__item:nth-last-child(2) { transition-delay: 0.25s; }
+  .rail__gaveta.is-aberta .rail__item:nth-last-child(3) { transition-delay: 0.3s; }
+  .rail__gaveta.is-aberta .rail__item:nth-last-child(4) { transition-delay: 0.35s; }
+
+  /* com a gaveta aberta o botao flutuante do chat sai de cima dela */
+  .shell.tem-gaveta .bolhachat {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 0.16s var(--ease-out),
+      visibility 0s linear 0.16s;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rail__indicador,
+    .rail__glifo,
+    .rail__btn.is-atual .rail__glifo,
+    .rail__gaveta,
+    .rail__gaveta.is-aberta,
+    .rail__gaveta-corpo,
+    .rail__gaveta.is-aberta .rail__gaveta-corpo,
+    .rail__gaveta .rail__item,
+    .rail__gaveta.is-aberta .rail__item {
+      transition-duration: 0.01s;
+      transition-delay: 0s;
+    }
+  }
 
   /* ---- o hamburguer ----
      O conjunto da MEIA VOLTA enquanto as barras se cruzam: o X nasce
@@ -1137,6 +1243,16 @@
 
   .topbar__acoes {
     margin-left: auto;
+  }
+}
+
+/* Telefone estreito (~320px): com 18px de recheio o icone da ponta
+   ficava a menos de 48px da borda, e o batente do indicador (ver
+   `folga` no AppShell.jsx) o deixava uns 5px fora do centro. Com mais
+   respiro o centro do icone ja cai dentro do limite. */
+@media (max-width: 359px) {
+  .rail {
+    padding-inline: 24px;
   }
 }
 
@@ -1386,6 +1502,10 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 10px;
+  /* sai e volta de mansinho quando a gaveta do celular abre por cima */
+  transition:
+    opacity 0.2s var(--ease-out),
+    visibility 0s;
 }
 
 .bolhachat__botao {

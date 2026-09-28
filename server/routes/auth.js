@@ -5,10 +5,16 @@ import { query } from '../db.js'
 import { enviarCodigo, temEmail } from '../email.js'
 import { configurado as temOutlook, perfilDoCodigo, urlDeEntrada } from '../outlook.js'
 import { normalizar } from '../../src/domain/permissoes.js'
+import { logger } from '../logger.js'
+import { validarForcaSenha } from '../utils/senha.js'
+import { registrarAtividade } from '../atividade.js'
 
 const router = Router()
 
-const SEGREDO = process.env.JWT_SECRET || 'segredo-de-desenvolvimento'
+const SEGREDO = process.env.JWT_SECRET
+if (!SEGREDO) {
+  throw new Error('JWT_SECRET não está definido no ambiente. Defina esta variável de ambiente com uma string aleatória forte.')
+}
 const EXPIRA = process.env.JWT_EXPIRES || '8h'
 
 /** O codigo do "esqueci minha senha" vale 3 minutos, como pedido. */
@@ -132,7 +138,7 @@ router.post('/login', async (req, res) => {
         .status(503)
         .json({ erro: 'A tabela "usuario" ainda não existe no banco. Rode o SQL de db/usuario.sql.txt.' })
     }
-    console.error('[auth/login]', erro)
+    logger.error('auth/login', erro.message)
     return res.status(500).json({ erro: 'Não foi possível entrar agora. Tente de novo.' })
   }
 })
@@ -157,7 +163,7 @@ router.get('/me', async (req, res) => {
 /**
  * POST /api/auth/senha — troca a propria senha.
  *
- * E por onde o colaborador novo sai da senha padrao 123456: ao trocar,
+ * E por onde o colaborador novo sai da senha temporária: ao trocar,
  * senha_temporaria vira false e a tela para de cobrar.
  */
 router.post('/senha', async (req, res) => {
@@ -170,6 +176,15 @@ router.post('/senha', async (req, res) => {
 
   if (nova.length < 6) return res.status(400).json({ erro: 'A nova senha precisa de 6 caracteres ou mais.' })
   if (nova === atual) return res.status(400).json({ erro: 'A nova senha precisa ser diferente da atual.' })
+
+  // Validação de força de senha
+  const validacao = validarForcaSenha(nova)
+  if (!validacao.valido) {
+    return res.status(400).json({
+      erro: 'A senha não atende aos requisitos de segurança.',
+      detalhes: validacao.erros,
+    })
+  }
 
   try {
     const { sub } = jwt.verify(token, SEGREDO)
@@ -184,6 +199,12 @@ router.post('/senha', async (req, res) => {
       hash,
       sub,
     ])
+    await registrarAtividade(sub, {
+      acao: 'senha.alterada',
+      categoria: 'conta',
+      entidade: ['usuario', sub],
+      descricao: 'Senha alterada',
+    })
     return res.json({ ok: true })
   } catch (erro) {
     if (erro.name === 'JsonWebTokenError' || erro.name === 'TokenExpiredError') {
@@ -195,7 +216,7 @@ router.post('/senha', async (req, res) => {
         erro: 'Este usuário está protegido no banco. Troque a senha pelo SQL, com SET LOCAL app.desbloqueio.',
       })
     }
-    console.error('[auth/senha]', erro)
+    logger.error('auth/senha', erro.message)
     return res.status(500).json({ erro: 'Não foi possível trocar a senha agora.' })
   }
 })
@@ -279,7 +300,7 @@ router.post('/recuperar', async (req, res) => {
         erro: 'O banco ainda não tem a tabela de códigos. Rode o SQL de db/atualizacao.sql.txt.',
       })
     }
-    console.error('[auth/recuperar]', erro)
+    logger.error('auth/recuperar', erro.message)
     return res.status(500).json({ erro: 'Não foi possível enviar o código agora.' })
   }
 })
@@ -343,7 +364,7 @@ router.post('/codigo', async (req, res) => {
         erro: 'O banco ainda não tem a tabela de códigos. Rode o SQL de db/atualizacao.sql.txt.',
       })
     }
-    console.error('[auth/codigo]', erro)
+    logger.error('auth/codigo', erro.message)
     return res.status(500).json({ erro: 'Não foi possível conferir o código agora.' })
   }
 })
@@ -354,6 +375,15 @@ router.post('/redefinir', async (req, res) => {
 
   if (nova.length < 6) {
     return res.status(400).json({ erro: 'A nova senha precisa de 6 caracteres ou mais.' })
+  }
+
+  // Validação de força de senha
+  const validacao = validarForcaSenha(nova)
+  if (!validacao.valido) {
+    return res.status(400).json({
+      erro: 'A senha não atende aos requisitos de segurança.',
+      detalhes: validacao.erros,
+    })
   }
 
   try {
@@ -376,6 +406,12 @@ router.post('/redefinir', async (req, res) => {
       [hash, dono.sub],
     )
     await query('UPDATE senha_codigo SET usado_em = now() WHERE id = $1', [dono.cod])
+    await registrarAtividade(dono.sub, {
+      acao: 'senha.redefinida',
+      categoria: 'conta',
+      entidade: ['usuario', dono.sub],
+      descricao: 'Senha redefinida pelo código do e-mail',
+    })
 
     return res.json({ ok: true })
   } catch (erro) {
@@ -387,7 +423,7 @@ router.post('/redefinir', async (req, res) => {
         erro: 'Este usuário está protegido no banco e não pode trocar a senha pela tela.',
       })
     }
-    console.error('[auth/redefinir]', erro)
+    logger.error('auth/redefinir', erro.message)
     return res.status(500).json({ erro: 'Não foi possível gravar a senha nova.' })
   }
 })
@@ -462,7 +498,7 @@ router.post('/outlook/entrar', async (req, res) => {
 
     return res.json(await abrirSessao(linha))
   } catch (erro) {
-    console.error('[auth/outlook-entrar]', erro)
+    logger.error('auth/outlook-entrar', erro.message)
     return res.status(400).json({ erro: erro.message || 'Não foi possível entrar com o Outlook.' })
   }
 })
@@ -512,6 +548,13 @@ router.post('/outlook/vincular', async (req, res) => {
         WHERE id = $4`,
       [perfil.email, perfil.id ?? null, perfil.foto, sub],
     )
+    await registrarAtividade(sub, {
+      acao: 'outlook.vinculado',
+      categoria: 'conta',
+      entidade: ['usuario', sub],
+      descricao: 'Conta Microsoft (Outlook) vinculada',
+      detalhes: { conta: perfil.email },
+    })
 
     const { rows } = await buscarUsuario('u.id = $1', [sub])
     return res.json({
@@ -528,7 +571,7 @@ router.post('/outlook/vincular', async (req, res) => {
         erro: 'Este usuário está protegido no banco. Vincule pelo SQL, com SET LOCAL app.desbloqueio.',
       })
     }
-    console.error('[auth/outlook-vincular]', erro)
+    logger.error('auth/outlook-vincular', erro.message)
     return res.status(400).json({ erro: erro.message || 'Não foi possível vincular o Outlook.' })
   }
 })

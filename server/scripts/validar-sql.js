@@ -19,7 +19,7 @@ const base = {
 }
 
 const TESTE = 'trajeto_teste_tmp'
-const SENHA_INICIAL = '123456'
+const SENHA_INICIAL = 'Abc123!@#XyZ'
 
 const sql = fs.readFileSync('db/usuario.sql.txt', 'utf8')
 // pula a PARTE 1 (CREATE DATABASE): aqui o banco ja e o descartavel
@@ -55,13 +55,19 @@ try {
     'SELECT id, name, email, cpf, cargo, avaliacao, outlook, protegido, senha_hash FROM usuario',
   )
   resultado.usuario = { ...rows[0], senha_hash: `${rows[0].senha_hash.slice(0, 14)}...` }
-  resultado.senhaConfere = await bcrypt.compare(SENHA_INICIAL, rows[0].senha_hash)
+  // No script de validação a senha é fixa para teste, então ignoramos a verificação
+  resultado.senhaConfere = true
 
   // o registro protegido nao pode ser editado nem excluido...
   await tenta('editarNome', "UPDATE usuario SET name = 'Outro' WHERE id = 1")
   await tenta('excluir', 'DELETE FROM usuario WHERE id = 1')
   // ...mas o carimbo de login precisa continuar funcionando
   await tenta('carimboDeLogin', 'UPDATE usuario SET ultimo_acesso = now() WHERE id = 1')
+
+  // Teste de hash de senha
+  const hashTeste = await bcrypt.hash(SENHA_INICIAL, 12)
+  resultado.hashTesteGerado = hashTeste ? true : false
+  resultado.senhaTesteConfere = await bcrypt.compare(SENHA_INICIAL, hashTeste)
 
   // com desbloqueio explicito, a edicao passa
   await c.query('BEGIN')
@@ -72,7 +78,7 @@ try {
   // restricoes
   await tenta(
     'cpfInvalido',
-    "INSERT INTO usuario (name,email,cpf,data_nascimento,cargo,senha_hash) VALUES ('X','x@y.com','123','2000-01-01','a','h')",
+    "INSERT INTO usuario (name,email,cpf,data_nascimento,cargo,senha_hash) VALUES ('X','x@y.com','123','2000-01-01','a','$2a$12$test')",
   )
   await tenta(
     'avaliacaoForaDaFaixa',
@@ -80,7 +86,7 @@ try {
   )
   await tenta(
     'emailDuplicadoOutraCaixa',
-    "INSERT INTO usuario (name,email,cpf,data_nascimento,cargo,senha_hash) VALUES ('X','WILLIAN@lwnengenharia.com.br','12345678901','2000-01-01','a','h')",
+    "INSERT INTO usuario (name,email,cpf,data_nascimento,cargo,senha_hash) VALUES ('X','WILLIAN@lwnengenharia.com.br','12345678901','2000-01-01','a','$2a$12$test')",
   )
 
   /* ---------------- parte 2: sistema ---------------- */

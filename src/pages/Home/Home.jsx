@@ -13,6 +13,7 @@ import useClima, { familiaDoTempo, nomeDoTempo } from '@/hooks/useClima'
 import { dataBR, dataHora, hojeISO } from '@/utils/formato'
 import useTarefas from './useTarefas'
 import Painel from './Painel'
+import Historico from './Historico'
 import './Home.css'
 
 const Icone = {
@@ -441,6 +442,11 @@ export default function Home() {
             aoAbrir={(alvo) => navigate(`/app/obras/${alvo.obra.id}`)}
           />
         )}
+
+        {/* O Historico mora embaixo da Grade — do globo, quando nao ha
+            nada pendente; da tabela de tarefas, quando ha. A Grade e o
+            "meu dia" daqui para a frente; o Historico, o que ja foi. */}
+        {aba === 'grade' && <Historico />}
 
         {aba === 'quadro' && (
           <Quadro

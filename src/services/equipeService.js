@@ -1,14 +1,14 @@
 /**
  * Cargos e usuarios (server/routes/equipe.js).
  *
- * Colaborador novo entra com a senha padrao 123456 e com
- * senha_temporaria ligado: o sistema cobra a troca no primeiro acesso.
+ * Colaborador novo entra com uma senha temporária gerada automaticamente
+ * e com senha_temporaria ligado: o sistema cobra a troca no primeiro acesso.
+ *
+ * A senha temporária é gerada pelo servidor e devolvida na resposta do
+ * cadastro para ser mostrada ao administrador.
  */
 
 import { del, get, patch, post } from './api'
-
-/** A mesma do servidor; a tela mostra ao cadastrar. */
-export const SENHA_PADRAO = '123456'
 
 /* ---------------- Cargos ---------------- */
 
@@ -72,8 +72,8 @@ export async function carregarEquipe() {
 }
 
 export async function criarUsuario(campos) {
-  const { usuario } = await post('/equipe/usuarios', campos)
-  return usuario
+  const resposta = await post('/equipe/usuarios', campos)
+  return resposta
 }
 
 /**

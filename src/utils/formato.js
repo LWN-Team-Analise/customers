@@ -34,6 +34,14 @@ export function dataHora(iso) {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} às ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+const REAIS = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+
+/** 41.5 -> 'R$ 41,50'. Vazio ou invalido vira 'R$ 0,00'. */
+export function reais(valor) {
+  const numero = Number(valor)
+  return REAIS.format(Number.isFinite(numero) ? numero : 0)
+}
+
 /** '01234-567' a partir de qualquer coisa com 8 digitos. */
 export function formatarCEP(valor) {
   const d = String(valor ?? '').replace(/\D/g, '').slice(0, 8)

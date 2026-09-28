@@ -1,8 +1,39 @@
 import { Router } from 'express'
 import { query } from '../db.js'
 import { exige, exigeSessao, tratar } from '../sessao.js'
+import { descreverObra, registrarAtividade } from '../atividade.js'
 
 const router = Router()
+
+/**
+ * Historico de uma mudanca no roteiro. A obra entra quando a mudanca
+ * foi feita de dentro de uma (e o `obraId` que viaja na chamada).
+ */
+async function registrarRoteiro(req, acao, descricao, detalhes) {
+  const obraId = obraDaChamada(req)
+  await registrarAtividade(req, {
+    acao,
+    categoria: 'roteiro',
+    entidade: obraId ? ['obra', obraId] : ['roteiro', null],
+    descricao,
+    detalhes: { ...(obraId ? await descreverObra(obraId) : {}), ...detalhes },
+  })
+}
+
+/** Os nomes que o historico escreve: a etapa e o card de um check/card. */
+async function nomesDoCard(cardId) {
+  const { rows } = await query(
+    `SELECT kd.titulo, et.nome AS etapa,
+            (SELECT string_agg(c.nome, ' + ' ORDER BY cc.ordem)
+               FROM etapa_card_cargo cc JOIN cargo c ON c.id = cc.cargo_id
+              WHERE cc.card_id = kd.id) AS setores
+       FROM etapa_card kd JOIN etapa et ON et.id = kd.etapa_id
+      WHERE kd.id = $1`,
+    [cardId],
+  )
+  const l = rows[0]
+  return l ? { etapa: l.etapa, card: l.titulo || l.setores || null } : {}
+}
 
 /* ============================================================
    O roteiro anda para a FRENTE
@@ -169,6 +200,7 @@ router.post('/etapas', exigeSessao, exige('editar_etapa'), async (req, res) => {
        RETURNING id, ordem, nome, descricao, vigente_de`,
       [nome, descricao || null, desde],
     )
+    await registrarRoteiro(req, 'etapa.criada', 'Etapa criada no roteiro', { etapa: nome })
     return res.status(201).json({
       etapa: {
         id: String(rows[0].id),
@@ -212,10 +244,11 @@ router.patch('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res)
           SET nome      = coalesce($1, nome),
               descricao = CASE WHEN $2::boolean THEN $3 ELSE descricao END
         WHERE id = $4
-      RETURNING id`,
+      RETURNING id, nome`,
       [temNome ? nome : null, temDescricao, descricao || null, req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Etapa não encontrada.' })
+    await registrarRoteiro(req, 'etapa.editada', 'Etapa editada', { etapa: rows[0].nome })
     return res.json({ ok: true })
   } catch (erro) {
     return tratar(erro, res, 'roteiro/etapa-editar')
@@ -232,11 +265,12 @@ router.patch('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res)
 router.delete('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res) => {
   try {
     const ate = await momento(obraDaChamada(req))
-    const { rowCount } = await query(
-      'UPDATE etapa SET vigente_ate = $1 WHERE id = $2 AND vigente_ate IS NULL',
+    const { rows } = await query(
+      'UPDATE etapa SET vigente_ate = $1 WHERE id = $2 AND vigente_ate IS NULL RETURNING nome',
       [ate, req.params.id],
     )
-    if (rowCount === 0) return res.status(404).json({ erro: 'Etapa não encontrada.' })
+    if (!rows[0]) return res.status(404).json({ erro: 'Etapa não encontrada.' })
+    await registrarRoteiro(req, 'etapa.excluida', 'Etapa excluída do roteiro', { etapa: rows[0].nome })
     return res.status(204).end()
   } catch (erro) {
     return tratar(erro, res, 'roteiro/etapa-apagar')
@@ -289,6 +323,7 @@ router.post('/etapas/:id/cards', exigeSessao, exige('editar_cards'), async (req,
       return res.status(400).json({ erro: posto.erro })
     }
 
+    await registrarRoteiro(req, 'card.criado', 'Card criado no roteiro', await nomesDoCard(rows[0].id))
     return res.status(201).json({ id: String(rows[0].id) })
   } catch (erro) {
     return tratar(erro, res, 'roteiro/card-criar')
@@ -307,14 +342,29 @@ router.patch('/cards/:id', exigeSessao, exige('editar_cards'), async (req, res) 
       ])
     }
     /* trocar o cargo dono do card e permissao propria: da para deixar
-       alguem organizar cards sem poder mudar de quem eles sao */
+       alguem organizar cards sem poder mudar de quem eles sao.
+
+       So conta como TROCA se a lista mudou. A tela mandava os cargos em
+       toda edicao, iguais aos de antes, e quem tinha "alterar cards" sem
+       "alterar setores no card" levava 403 ate para renomear o card. */
     if (req.body?.cargos !== undefined) {
-      if (!req.cargo?.acessoTotal && !(req.cargo?.permissoes ?? []).includes('editar_cargos_card')) {
-        return res.status(403).json({ erro: 'Seu cargo não pode alterar os cargos do card.' })
+      const atuais = await query(
+        `SELECT c.chave FROM etapa_card_cargo cc JOIN cargo c ON c.id = cc.cargo_id
+          WHERE cc.card_id = $1 ORDER BY cc.ordem`,
+        [req.params.id],
+      )
+      const pedidos = [...new Set((req.body.cargos ?? []).map((c) => String(c).trim()).filter(Boolean))]
+      const mudou = pedidos.join('|') !== atuais.rows.map((l) => l.chave).join('|')
+
+      if (mudou) {
+        if (!req.cargo?.acessoTotal && !(req.cargo?.permissoes ?? []).includes('editar_cargos_card')) {
+          return res.status(403).json({ erro: 'Seu setor não pode alterar os setores do card.' })
+        }
+        const posto = await gravarCargos(req.params.id, req.body.cargos)
+        if (posto.erro) return res.status(400).json({ erro: posto.erro })
       }
-      const posto = await gravarCargos(req.params.id, req.body.cargos)
-      if (posto.erro) return res.status(400).json({ erro: posto.erro })
     }
+    await registrarRoteiro(req, 'card.editado', 'Card editado', await nomesDoCard(req.params.id))
     return res.json({ ok: true })
   } catch (erro) {
     return tratar(erro, res, 'roteiro/card-editar')
@@ -329,6 +379,7 @@ router.delete('/cards/:id', exigeSessao, exige('editar_cards'), async (req, res)
       [ate, req.params.id],
     )
     if (rowCount === 0) return res.status(404).json({ erro: 'Card não encontrado.' })
+    await registrarRoteiro(req, 'card.excluido', 'Card excluído do roteiro', await nomesDoCard(req.params.id))
     return res.status(204).end()
   } catch (erro) {
     return tratar(erro, res, 'roteiro/card-apagar')
@@ -387,6 +438,10 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
       }
     }
 
+    await registrarRoteiro(req, 'check.criado', 'Check criado no roteiro', {
+      ...(await nomesDoCard(req.params.id)),
+      check: titulo,
+    })
     return res.status(201).json({
       check: {
         id: String(rows[0].id),
@@ -421,6 +476,13 @@ router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res
       if (posto.erro) return res.status(400).json({ erro: posto.erro })
     }
 
+    const check = await query('SELECT card_id, titulo FROM etapa_check WHERE id = $1', [req.params.id])
+    if (check.rows[0]) {
+      await registrarRoteiro(req, 'check.editado', 'Check do roteiro editado', {
+        ...(await nomesDoCard(check.rows[0].card_id)),
+        check: check.rows[0].titulo,
+      })
+    }
     return res.json({ ok: true })
   } catch (erro) {
     return tratar(erro, res, 'roteiro/check-editar')
@@ -430,11 +492,16 @@ router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res
 router.delete('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res) => {
   try {
     const ate = await momento(obraDaChamada(req))
-    const { rowCount } = await query(
-      'UPDATE etapa_check SET vigente_ate = $1 WHERE id = $2 AND vigente_ate IS NULL',
+    const { rows } = await query(
+      `UPDATE etapa_check SET vigente_ate = $1 WHERE id = $2 AND vigente_ate IS NULL
+       RETURNING card_id, titulo`,
       [ate, req.params.id],
     )
-    if (rowCount === 0) return res.status(404).json({ erro: 'Check não encontrado.' })
+    if (!rows[0]) return res.status(404).json({ erro: 'Check não encontrado.' })
+    await registrarRoteiro(req, 'check.excluido', 'Check removido do roteiro', {
+      ...(await nomesDoCard(rows[0].card_id)),
+      check: rows[0].titulo,
+    })
     return res.status(204).end()
   } catch (erro) {
     return tratar(erro, res, 'roteiro/check-apagar')
@@ -511,7 +578,7 @@ router.patch('/cards/etiquetas/:id', exigeSessao, exige('editar_cards'), async (
     const nome = String(req.body.nome ?? '').trim()
     if (!nome) return res.status(400).json({ erro: 'Escreva o nome da etiqueta.' })
     valores.push(nome)
-    campos.push(`nome = ${valores.length}`)
+    campos.push(`nome = $${valores.length}`)
   }
   if (req.body?.cor !== undefined) {
     const cor = String(req.body.cor ?? '').trim()
@@ -519,14 +586,14 @@ router.patch('/cards/etiquetas/:id', exigeSessao, exige('editar_cards'), async (
       return res.status(400).json({ erro: 'Cor inválida.' })
     }
     valores.push(cor)
-    campos.push(`cor = ${valores.length}`)
+    campos.push(`cor = $${valores.length}`)
   }
   if (campos.length === 0) return res.status(400).json({ erro: 'Nada para alterar.' })
 
   valores.push(req.params.id)
   try {
     const { rows } = await query(
-      `UPDATE etiqueta_card SET ${campos.join(', ')} WHERE id = ${valores.length} RETURNING *`,
+      `UPDATE etiqueta_card SET ${campos.join(', ')} WHERE id = $${valores.length} RETURNING *`,
       valores,
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Etiqueta não encontrada.' })
