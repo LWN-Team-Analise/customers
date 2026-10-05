@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
+import { useAuth } from '@/context/AuthContext'
 import PainelEnvios from './PainelEnvios'
 import { IconeVoltar } from './icones'
 import './Despesas.css'
@@ -12,6 +13,7 @@ import './Despesas.css'
  * a API responde "os meus" quando a chamada nao diz de quem.
  */
 export default function MeusEnvios() {
+  const { user } = useAuth()
   return (
     <AppShell>
       <section className="envios">
@@ -26,7 +28,7 @@ export default function MeusEnvios() {
           </p>
         </header>
 
-        <PainelEnvios />
+        <PainelEnvios quem={user?.name} />
       </section>
     </AppShell>
   )

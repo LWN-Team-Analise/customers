@@ -4,7 +4,6 @@ import AppShell from '@/components/AppShell/AppShell'
 import Avatar from '@/components/Avatar/Avatar'
 import IconeClima from '@/components/Clima/IconeClima'
 import Globo from '@/components/Globo/Globo'
-import { useAuth } from '@/context/AuthContext'
 import { useDados } from '@/context/DadosContext'
 import { useTheme } from '@/context/ThemeContext'
 import { rotuloPrioridadeObra, tomPrioridadeObra } from '@/domain/obras'
@@ -14,6 +13,7 @@ import { dataBR, dataHora, hojeISO } from '@/utils/formato'
 import useTarefas from './useTarefas'
 import Painel from './Painel'
 import Historico from './Historico'
+import ModalPowerBI from './ModalPowerBI'
 import './Home.css'
 
 const Icone = {
@@ -29,6 +29,11 @@ const Icone = {
     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8">
       <rect x="3.5" y="4" width="17" height="16" rx="2" />
       <path d="M9.5 4v16M15 4v16" />
+    </svg>
+  ),
+  exportar: () => (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14" />
     </svg>
   ),
   painel: () => (
@@ -95,12 +100,6 @@ function Clima() {
       )}
     </div>
   )
-}
-
-const SAUDACAO = (hora) => {
-  if (hora < 12) return 'Bom dia'
-  if (hora < 18) return 'Boa tarde'
-  return 'Boa noite'
 }
 
 const DIAS = ['DOM.', 'SEG.', 'TER.', 'QUA.', 'QUI.', 'SEX.', 'SÁB.']
@@ -210,20 +209,28 @@ const COLUNAS = [
  *   Grade      — a tabela do que precisa ser feito, em ordem de urgencia;
  *   Quadro     — as mesmas tarefas em tres colunas, por estado;
  *   Dashboard  — os numeros que a lista sozinha nao mostra: quanto tempo
- *                uma obra leva, quanto tempo cada setor leva, e o quanto
- *                as entregas chegam antes ou depois do prazo.
+ *                uma obra leva, quanto tempo cada setor leva, o quanto
+ *                as entregas chegam antes ou depois do prazo, e quanto
+ *                se gastou em despesas. So para quem tem `ver_dashboard`:
+ *                sem ela a aba nem aparece. E dele que sai a exportacao
+ *                para o Power BI.
  *
  * Nao ha "adicionar tarefa" em lugar nenhum, e isso e proposital: tarefa
  * solta nao teria obra onde ser marcada nem quem a cobrasse. Quem cria
  * tarefa e quem monta o roteiro da obra.
  */
 export default function Home() {
-  const { user } = useAuth()
-  const { nomeDoCargo, corDoCargo, pessoaPorId, etapaDaObra, pendentesDaObra } = useDados()
+  const { nomeDoCargo, corDoCargo, pessoaPorId, etapaDaObra, pendentesDaObra, pode } = useDados()
   const navigate = useNavigate()
   const tarefas = useTarefas()
+  const veDashboard = pode('ver_dashboard')
 
-  const [aba, setAba] = useState('grade')
+  const [abaEscolhida, setAba] = useState('grade')
+  /* quem perde a permissao com a aba aberta volta para a Grade, em vez
+     de ficar olhando um painel que nao e mais dele */
+  const aba = abaEscolhida === 'painel' && !veDashboard ? 'grade' : abaEscolhida
+  const [powerBI, setPowerBI] = useState(false)
+  const [recado, setRecado] = useState('')
   /* o passo do Dashboard mora aqui porque o seletor dele vive na barra
      de abas, ao lado de Grade/Quadro/Dashboard */
   const [passo, setPasso] = useState('mes')
@@ -306,7 +313,6 @@ export default function Home() {
   )
 
   const agora = new Date()
-  const primeiroNome = String(user?.name ?? '').trim().split(/\s+/)[0]
 
   return (
     <AppShell>
@@ -321,18 +327,17 @@ export default function Home() {
 
           <Clima />
 
+          {/* So o recado do dia: a saudacao com o nome ja esta na barra
+              de cima, e repeti-la aqui empurrava o que importa — quanto
+              falta fazer — para a segunda linha. */}
           <div className="dia__texto">
-            <h1 className="dia__ola">
-              {SAUDACAO(agora.getHours())}
-              {primeiroNome ? `, ${primeiroNome}` : ''}
-            </h1>
-            <p className="dia__frase">
+            <h1 className="dia__frase">
               {faltando.length === 0
                 ? 'Nenhuma tarefa pendente hoje'
                 : `Você tem ${faltando.length} tarefa${
                     faltando.length > 1 ? 's' : ''
                   } para fazer agora.`}
-            </p>
+            </h1>
           </div>
 
           <p className="dia__resumo" data-alerta={vencidas > 0 ? 'sim' : undefined}>
@@ -355,7 +360,7 @@ export default function Home() {
             {[
               { id: 'grade', rotulo: 'Grade', Glifo: Icone.grade },
               { id: 'quadro', rotulo: 'Quadro', Glifo: Icone.quadro },
-              { id: 'painel', rotulo: 'Dashboard', Glifo: Icone.painel },
+              ...(veDashboard ? [{ id: 'painel', rotulo: 'Dashboard', Glifo: Icone.painel }] : []),
             ].map(({ id, rotulo, Glifo }) => (
               <button
                 key={id}
@@ -398,6 +403,20 @@ export default function Home() {
                 Mensal
               </button>
             </div>
+          )}
+
+          {/* os dados do Dashboard, para o Power BI: tudo, só obras ou
+              só despesas (ModalPowerBI) */}
+          {aba === 'painel' && (
+            <button
+              type="button"
+              className="acao acao--fraca inicio__exportar"
+              onClick={() => setPowerBI(true)}
+              title="Baixar os dados do Dashboard numa planilha que o Power BI abre"
+            >
+              <Icone.exportar />
+              Exportar para o Power BI
+            </button>
           )}
 
           {/* o Dashboard olha a empresa inteira: filtrar por setor ali
@@ -460,8 +479,21 @@ export default function Home() {
           />
         )}
 
+        {aba === 'painel' && recado && (
+          <p className="recado" role="status">
+            {recado}
+            <button type="button" onClick={() => setRecado('')} aria-label="Fechar aviso">
+              ×
+            </button>
+          </p>
+        )}
+
         {aba === 'painel' && <Painel mes={mes} passo={passo} />}
       </section>
+
+      {veDashboard && (
+        <ModalPowerBI aberto={powerBI} aoFechar={() => setPowerBI(false)} aoExportado={setRecado} />
+      )}
     </AppShell>
   )
 }

@@ -1,92 +1,38 @@
 import { useMemo, useState } from 'react'
 import { useDados } from '@/context/DadosContext'
 import { chaveDoCargo } from '@/domain/obras'
-import { dataBR } from '@/utils/formato'
 import { Colunas, Linha, Rosca } from './graficos'
+import PainelDespesas from './PainelDespesas'
+import Tile from './Tile'
+import {
+  diasEntre,
+  emTempo,
+  etapaDeCampo,
+  horasEntre,
+  media,
+  mesDoCarimbo,
+  soDia,
+  tempoEmCampo,
+} from './tempo'
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-
-/* ============================================================
-   Contas de tempo
-
-   Tudo aqui e feito em DIAS INTEIROS de calendario, e o calculo passa
-   por Date.UTC nas duas pontas de proposito: `new Date(a) - new Date(b)`
-   erra por uma hora em toda virada de horario de verao, e um relatorio
-   que muda de resultado em outubro nao serve para nada.
-
-   As datas chegam em dois formatos, porque as colunas sao de dois
-   tipos: `data_inicio` e `data_conclusao` sao DATE e chegam como
-   'AAAA-MM-DD'; `criado_em`, `concluida_em` e `feito_em` sao timestamp
-   e chegam como ISO. `soDia` nivela os dois.
-   ============================================================ */
-
-/** 'AAAA-MM' de um carimbo — e por ele que o filtro de mes casa. */
-function mesDoCarimbo(valor) {
-  const dia = soDia(valor)
-  return dia ? dia.slice(0, 7) : null
-}
-
-/** 'AAAA-MM-DD' de um timestamp ou de uma data, no calendario local. */
-export function soDia(valor) {
-  if (!valor) return null
-  const texto = String(valor)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto
-  const d = new Date(valor)
-  if (Number.isNaN(d.getTime())) return null
-  const mes = String(d.getMonth() + 1).padStart(2, '0')
-  const dia = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mes}-${dia}`
-}
-
-/** '31/08' — a data curta que cabe embaixo de uma coluna do grafico. */
-function diaEMes(valor) {
-  const dia = soDia(valor)
-  return dia ? `${dia.slice(8, 10)}/${dia.slice(5, 7)}` : ''
-}
-
-/** Dias inteiros de `de` ate `ate`. Negativo = `ate` veio antes. */
-function diasEntre(de, ate) {
-  const a = soDia(de)
-  const b = soDia(ate)
-  if (!a || !b) return null
-  const [ay, am, ad] = a.split('-').map(Number)
-  const [by, bm, bd] = b.split('-').map(Number)
-  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000)
-}
-
-/** Diferenca em HORAS entre dois carimbos — para as marcacoes do mesmo dia. */
-function horasEntre(de, ate) {
-  const a = new Date(de).getTime()
-  const b = new Date(ate).getTime()
-  if (Number.isNaN(a) || Number.isNaN(b)) return null
-  return (b - a) / 3_600_000
-}
-
-const media = (lista) =>
-  lista.length === 0 ? null : lista.reduce((s, n) => s + n, 0) / lista.length
-
-/** 18 -> "18 dias" | 0.4 -> "10 h" | 1 -> "1 dia" */
-function emTempo(dias) {
-  if (dias === null || dias === undefined) return '—'
-  if (Math.abs(dias) < 1) {
-    const h = Math.round(Math.abs(dias) * 24)
-    return h < 1 ? '<1 h' : `${h} h`
-  }
-  const n = Math.round(dias * 10) / 10
-  const texto = Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',')
-  return `${texto} ${Math.abs(n) === 1 ? 'dia' : 'dias'}`
-}
 
 /**
  * O Dashboard da pagina inicial.
  *
- * Ele responde tres perguntas que a lista de tarefas nao responde, e
+ * Ele responde as perguntas que a lista de tarefas nao responde, e
  * que so aparecem quando se olha o historico inteiro:
  *
- *   1. quanto tempo uma obra leva do inicio ate ser concluida;
+ *   1. quanto tempo uma obra leva do inicio ate ser concluida — e
+ *      quanto desse tempo ela passa EM CAMPO (a etapa de execucao);
  *   2. quanto tempo cada setor (ou cada pessoa) leva para dar a sua
  *      resposta dentro da obra;
- *   3. o quanto as obras chegam antes ou depois do prazo combinado.
+ *   3. o quanto as obras chegam antes ou depois do prazo combinado;
+ *   4. quanto a empresa gastou em despesas, refeicoes e bonus
+ *      (PainelDespesas.jsx).
+ *
+ * O Dashboard e de quem tem `ver_dashboard`; a aba nem aparece para
+ * os outros (Home.jsx).
  *
  * Tudo sai do que ja esta gravado — nao ha coluna nova, nem cronometro,
  * nem ninguem apontando hora. Os numeros vem de tres carimbos que o
@@ -97,7 +43,7 @@ function emTempo(dias) {
  * vendo: uma media de uma pessoa so nao e media de nada.
  */
 export default function Painel({ mes, passo = 'mes' }) {
-  const { obras, equipe, concluida, roteiroDaObra, clientePorId, nomeDoCargo, corDoCargo } =
+  const { obras, equipe, concluida, roteiro, roteiroDaObra, clientePorId, nomeDoCargo, corDoCargo } =
     useDados()
 
   /* o grafico de resposta troca de eixo: por setor ou por pessoa */
@@ -207,25 +153,57 @@ export default function Painel({ mes, passo = 'mes' }) {
   const duracaoMedia = media(duracoes.map((d) => d.dias))
 
   /* ---------------------------------------------------------
-     1b. Obras INICIADAS por mes
+     1b. Tempo medio de obra EM CAMPO
 
-     Conta quantas obras comecaram em cada mes da janela — abertas e
-     fechadas, porque o que se conta aqui e a entrada de trabalho, e
-     obra que ja terminou entrou do mesmo jeito.
+     Quanto a obra fica na etapa de execucao: de quando ela abre (a
+     anterior fechou) ate o ultimo check dela ser marcado. A conta e a
+     linha do tempo de tempo.js — a mesma da planilha do Power BI.
 
-     O inicio e `dataInicio`; sem ela, a data de cadastro, que e o
-     primeiro instante em que a obra existiu para a empresa.
+     Cada obra cai na coluna do dia (ou mes) em que a execucao FECHOU,
+     e a coluna e a media das que fecharam ali. Obra aberta tambem
+     entra: o que se mede e a etapa, e uma obra que ja saiu de campo
+     mas ainda nao foi entregue ja tem esse tempo.
+
+     Coluna sem obra fica VAZIA, e nao zero: zero diria "a obra ficou
+     zero dia em campo", quando o que houve foi nenhuma obra.
      --------------------------------------------------------- */
-  const iniciadas = useMemo(
+  const etapaCampo = useMemo(() => etapaDeCampo(roteiro), [roteiro])
+
+  const emCampo = useMemo(
     () =>
-      fatias.map((chave, i) => ({
+      obras
+        .map((o) => {
+          const medida = tempoEmCampo(o, roteiroDaObra(o))
+          if (!medida) return null
+          return { obra: o, dias: medida.dias, fechou: medida.fechou }
+        })
+        .filter(Boolean),
+    [obras, roteiroDaObra],
+  )
+
+  const campo = useMemo(() => {
+    const naJanela = emCampo.filter((c) => fatias.includes(fatiaDoCarimbo(c.fechou)))
+    const itens = fatias.map((chave, i) => {
+      const daqui = naJanela.filter((c) => fatiaDoCarimbo(c.fechou) === chave)
+      const valor = media(daqui.map((c) => c.dias))
+      const nomes = daqui.map((c) => c.obra.proposta || clientePorId(c.obra.clienteId)?.nome || 'obra')
+      /* dias com uma casa ("2,5"); a unidade o grafico poe junto */
+      const redondo = valor === null ? null : Math.round(valor * 10) / 10
+      return {
         chave,
         rotulo: rotuloDaFatia(chave, i),
-        valor: obras.filter((o) => fatiaDoCarimbo(o.dataInicio ?? o.criadoEm) === chave).length,
-      })),
+        valor: redondo,
+        texto: redondo === null ? 'nenhuma obra saiu de campo' : String(redondo).replace('.', ','),
+        nota: daqui.length > 0 ? `${daqui.length} obra${daqui.length > 1 ? 's' : ''}: ${nomes.join(', ')}` : undefined,
+      }
+    })
+    return {
+      itens,
+      media: media(naJanela.map((c) => c.dias)),
+      total: naJanela.length,
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [obras, fatias, passo],
-  )
+  }, [emCampo, fatias, passo, clientePorId])
 
   /* ---------------------------------------------------------
      2. Tempo de resposta por setor / por pessoa
@@ -404,7 +382,10 @@ export default function Painel({ mes, passo = 'mes' }) {
       lista={lista}
       eixoMeses={fatias.map(rotuloDaFatia)}
       passo={passo}
-      iniciadas={iniciadas}
+      campo={campo}
+      etapaCampo={etapaCampo}
+      fatias={fatias}
+      rotuloDaFatia={rotuloDaFatia}
       atrasoLinha={serieDeDesvio(atrasadas, 'var(--gr-ruim)', 'Atraso')}
       adiantoLinha={serieDeDesvio(adiantadas, 'var(--gr-bom)', 'Adiantamento')}
       desvios={desvios}
@@ -433,7 +414,10 @@ export function PainelVista({
   lista,
   eixoMeses,
   passo,
-  iniciadas,
+  campo,
+  etapaCampo,
+  fatias,
+  rotuloDaFatia,
   atrasoLinha,
   adiantoLinha,
   desvios,
@@ -602,20 +586,33 @@ export function PainelVista({
         <section className="cartao vidro">
           <header className="cartao__topo">
             <div>
-              <h2 className="cartao__titulo">
-                Obras iniciadas {passo === 'ano' ? 'por mês' : 'por dia'}
-              </h2>
+              <h2 className="cartao__titulo">Tempo médio de obra em campo</h2>
+              <p className="cartao__sub">
+                {etapaCampo
+                  ? `Da abertura ao fechamento da etapa ${
+                      etapaCampo.descricao || etapaCampo.nome
+                    }, pelo ${passo === 'ano' ? 'mês' : 'dia'} em que a obra saiu de campo.`
+                  : 'Quanto tempo a obra passa na etapa de execução.'}
+              </p>
             </div>
+            {campo.total > 0 && (
+              <span className="cartao__selo" title="Obras que saíram de campo no período">
+                {campo.total}
+              </span>
+            )}
           </header>
 
           <div className="cartao__corpo">
-            {iniciadas.every((m) => m.valor === 0) ? (
-              <p className="cartao__vazio">Nenhuma obra iniciada nestes seis meses.</p>
+            {!etapaCampo ? (
+              <p className="cartao__vazio">
+                O roteiro não tem uma etapa de execução (campo) — não há o que medir.
+              </p>
+            ) : campo.total === 0 ? (
+              <p className="cartao__vazio">
+                Nenhuma obra saiu de campo {passo === 'ano' ? 'neste ano' : 'neste mês'}.
+              </p>
             ) : (
-              <Colunas
-                itens={iniciadas.map((m) => ({ ...m, texto: String(m.valor) }))}
-                unidade="obras"
-              />
+              <Colunas itens={campo.itens} unidade="dias" referencia={campo.media} />
             )}
           </div>
         </section>
@@ -679,17 +676,8 @@ export function PainelVista({
           </div>
         </section>
       </div>
-    </div>
-  )
-}
 
-/** Um numero grande com o que ele quer dizer embaixo. */
-function Tile({ rotulo, valor, nota, tom }) {
-  return (
-    <article className="tile vidro" data-tom={tom}>
-      <p className="tile__rotulo">{rotulo}</p>
-      <strong className="tile__valor">{valor}</strong>
-      <p className="tile__nota">{nota}</p>
-    </article>
+      <PainelDespesas fatias={fatias} passo={passo} rotuloDaFatia={rotuloDaFatia} />
+    </div>
   )
 }

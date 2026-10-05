@@ -51,6 +51,11 @@ export const VISUALIZACAO = [
  * consegue abrir a aba.
  */
 export const ALTERACAO = [
+  /* O Dashboard da pagina inicial: os numeros da empresa inteira (tempo
+     de obra, prazo, despesas) e a exportacao para o Power BI. Nao e de
+     todo mundo — por isso tem chave propria, embaixo de "Pagina inicial":
+     sem ela, a pessoa ve a Grade e o Quadro, e a aba Dashboard some. */
+  { chave: 'ver_dashboard', rotulo: 'Ver dashboard', dependeDe: 'ver_inicio' },
   { chave: 'editar_usuario', rotulo: 'Adicionar / editar usuário', dependeDe: null },
   { chave: 'editar_cargo', rotulo: 'Adicionar / editar setor', dependeDe: null },
   { chave: 'editar_cargo_titulo', rotulo: 'Adicionar / editar cargo', dependeDe: null },
@@ -65,10 +70,13 @@ export const ALTERACAO = [
   { chave: 'editar_checks', rotulo: 'Adicionar / alterar checks', dependeDe: 'ver_obras' },
   { chave: 'enviar_avisos', rotulo: 'Enviar avisos', dependeDe: 'ver_avisos' },
   /* Despesas: ver a aba (e os proprios envios) e `ver_despesas`;
-     ENVIAR despesa, refeicao ou bonus e esta; abrir os envios dos
-     OUTROS (Despesas > Envios gerais) e a de baixo. */
+     ENVIAR despesa, refeicao ou bonus e `alterar_despesas`; abrir os
+     envios dos OUTROS (Despesas > Envios gerais) e `revisar_despesa_geral`;
+     EXCLUIR um lancamento e a ultima — os proprios, ou os de qualquer um
+     quando o setor tambem revisa. */
   { chave: 'alterar_despesas', rotulo: 'Alterar despesas', dependeDe: 'ver_despesas' },
   { chave: 'revisar_despesa_geral', rotulo: 'Revisar despesa geral', dependeDe: 'ver_despesas' },
+  { chave: 'excluir_despesas', rotulo: 'Excluir lançamento de despesa', dependeDe: 'ver_despesas' },
 ]
 
 /**

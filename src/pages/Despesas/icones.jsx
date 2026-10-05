@@ -78,3 +78,18 @@ export const IconeBaixar = () => (
     <path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14" />
   </svg>
 )
+
+/** Planilha: "Exportar para o Excel". */
+export const IconePlanilha = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" {...traco} strokeWidth="1.8">
+    <rect x="3.5" y="4" width="17" height="16" rx="2" />
+    <path d="M3.5 9.5h17M3.5 14.8h17M9.5 9.5V20" />
+  </svg>
+)
+
+/** Lixeira: excluir um lancamento. */
+export const IconeLixo = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" {...traco} strokeWidth="1.8">
+    <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
+  </svg>
+)

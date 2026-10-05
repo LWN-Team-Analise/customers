@@ -13,7 +13,7 @@
  * volta erro, e a tela mostra o recado.
  */
 
-import { get, post } from './api'
+import { del, get, post } from './api'
 
 function consulta(base, { usuarios, categoria } = {}) {
   const partes = []
@@ -44,3 +44,35 @@ export async function carregarPessoas() {
 
 /** O comprovante: { nome, tipo, conteudo } (data URL). */
 export const baixarAnexo = (id) => get(`/despesas/anexos/${id}`)
+
+/** Exclui um lancamento (exige excluir_despesas; o dos outros, revisar tambem). */
+export const excluir = (id) => del(`/despesas/envios/${encodeURIComponent(id)}`)
+
+/**
+ * Os envios de um periodo, numa lista so — e o que vira planilha.
+ *
+ *   periodo  { mes: 'AAAA-MM' } | { ano: 2026 } | {} (tudo)
+ *   filtros  os mesmos de carregarMes: { usuarios, categoria }
+ */
+export async function carregarParaExportar(periodo = {}, filtros) {
+  const base = periodo.mes
+    ? `/despesas/exportar?mes=${encodeURIComponent(periodo.mes)}`
+    : periodo.ano
+      ? `/despesas/exportar?ano=${encodeURIComponent(periodo.ano)}`
+      : '/despesas/exportar?periodo=tudo'
+  const { envios } = await get(consulta(base, filtros))
+  return envios ?? []
+}
+
+/**
+ * Os totais por dia, categoria e tipo — os graficos do Dashboard.
+ * Sem pessoa nenhuma (ver /painel na API). de/ate: 'AAAA-MM-DD',
+ * inclusive; sem eles, desde o primeiro envio.
+ */
+export async function carregarPainel({ de, ate } = {}) {
+  const partes = []
+  if (de) partes.push(`de=${encodeURIComponent(de)}`)
+  if (ate) partes.push(`ate=${encodeURIComponent(ate)}`)
+  const { linhas } = await get(`/despesas/painel${partes.length ? `?${partes.join('&')}` : ''}`)
+  return linhas ?? []
+}
