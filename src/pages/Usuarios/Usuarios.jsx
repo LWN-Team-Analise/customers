@@ -159,6 +159,19 @@ export default function Usuarios() {
         <header className="usuarios__topo">
           <h1 className="tela__titulo">Usuários</h1>
 
+          {/* quantos estao cadastrados — so os ativos: remover alguem
+              desliga o cadastro, e quem foi desligado sai da equipe.
+              Com filtro ligado, diz tambem quantos sobraram. */}
+          <p className="usuarios__total" aria-live="polite">
+            {lista.length !== equipe.length && (
+              <>
+                <strong>{lista.length}</strong> de{' '}
+              </>
+            )}
+            <strong>{equipe.length}</strong>{' '}
+            {equipe.length === 1 ? 'usuário cadastrado' : 'usuários cadastrados'}
+          </p>
+
           <div className="usuarios__acoes">
             {podeCargos && (
               <button

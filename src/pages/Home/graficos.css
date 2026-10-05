@@ -24,6 +24,13 @@
   --gr-c5: #2f8f5b;
   --gr-c6: #c2417a;
 
+  /* as categorias de despesa: azul, laranja e verde — o mesmo tom que
+     cada uma tem na aba Despesas. Apontam para a sequencia, entao o
+     tema escuro troca junto sem repetir a regra */
+  --gr-despesa: var(--gr-c1);
+  --gr-refeicao: var(--gr-c4);
+  --gr-bonus: var(--gr-c5);
+
   /* o trilho e a pista cinza que fica ATRAS da barra, do zero ao fim
      da escala. E ele que mostra "quanto falta" sem escrever nada */
   --gr-trilho: rgba(13, 13, 13, 0.05);

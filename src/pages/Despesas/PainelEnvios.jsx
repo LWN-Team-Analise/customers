@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Avatar from '@/components/Avatar/Avatar'
+import Confirma from '@/components/Confirma/Confirma'
 import Seletor from '@/components/Seletor/Seletor'
 import { useDados } from '@/context/DadosContext'
 import {
@@ -12,7 +13,8 @@ import {
 } from '@/domain/despesas'
 import * as despesasApi from '@/services/despesasService'
 import { dataBR, dataHora, hojeISO, reais } from '@/utils/formato'
-import { IconeBaixar, IconeCategoria, IconeSeta } from './icones'
+import { exportarEnvios } from './planilhaDespesas'
+import { IconeBaixar, IconeCategoria, IconeLixo, IconePlanilha, IconeSeta } from './icones'
 
 /**
  * Os envios de alguem, por mes ou por ano — a mesma peca serve a
@@ -33,6 +35,13 @@ import { IconeBaixar, IconeCategoria, IconeSeta } from './icones'
  * A visao, o mes, o ano e o tipo ficam no endereco
  * (?visao=ano&ano=2026&tipo=bonus): o "voltar" do navegador desfaz o
  * clique num mes da visao anual, e o link copiado abre no mesmo lugar.
+ *
+ * "Exportar para o Excel" baixa EXATAMENTE o que esta na tela: o mesmo
+ * periodo, o mesmo tipo e as mesmas pessoas. Com `usuarios='todos'` a
+ * planilha sai com uma aba por pessoa. `quem` e o nome que vai no
+ * titulo e no arquivo.
+ *
+ * A lixeira de cada envio so aparece para quem tem `excluir_despesas`.
  */
 
 const DIAS_DA_SEMANA = [
@@ -58,8 +67,9 @@ const TIPOS = [
   ...CHAVES_CATEGORIA.map((c) => ({ valor: c, rotulo: CATEGORIAS[c].rotulo })),
 ]
 
-export default function PainelEnvios({ usuarios, mostraPessoa = false }) {
-  const { pessoaPorId } = useDados()
+export default function PainelEnvios({ usuarios, mostraPessoa = false, quem }) {
+  const { pessoaPorId, pode } = useDados()
+  const podeExcluir = pode('excluir_despesas')
 
   const hoje = hojeISO()
   const mesAtual = hoje.slice(0, 7)
@@ -87,6 +97,11 @@ export default function PainelEnvios({ usuarios, mostraPessoa = false }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const carga = useRef(0)
+  /* sobe a cada exclusao: e o que faz a lista e os totais recarregarem */
+  const [versao, setVersao] = useState(0)
+  const [recado, setRecado] = useState('')
+  const [excluindo, setExcluindo] = useState(null)
+  const [exportando, setExportando] = useState(false)
 
   useEffect(() => {
     const minha = (carga.current += 1)
@@ -108,7 +123,7 @@ export default function PainelEnvios({ usuarios, mostraPessoa = false }) {
       .finally(() => {
         if (minha === carga.current) setCarregando(false)
       })
-  }, [visao, mes, ano, categoria, chaveUsuarios])
+  }, [visao, mes, ano, categoria, chaveUsuarios, versao])
 
   const [anos] = useState(() => Array.from({ length: 7 }, (_, i) => anoAtual - 6 + i))
   const opcoesAno = (anos.includes(ano) ? anos : [...anos, ano].sort()).map((a) => ({
@@ -125,6 +140,39 @@ export default function PainelEnvios({ usuarios, mostraPessoa = false }) {
       link.click()
     } catch (e) {
       setErro(e.message)
+    }
+  }
+
+  const excluir = async (envio) => {
+    try {
+      await despesasApi.excluir(envio.id)
+      setRecado(
+        `Lançamento excluído: ${rotuloDoTipo(envio.tipo)} de ${dataBR(envio.data)}, ${reais(envio.valor)}${
+          mostraPessoa && envio.usuarioNome ? ` — de ${envio.usuarioNome}` : ''
+        }.`,
+      )
+      setVersao((v) => v + 1)
+    } catch (e) {
+      setErro(e.message)
+    }
+  }
+
+  const exportar = async () => {
+    setExportando(true)
+    setErro('')
+    setRecado('')
+    try {
+      const { envios, total } = await exportarEnvios({
+        usuarios,
+        categoria,
+        periodo: visao === 'ano' ? { ano } : { mes },
+        quem,
+      })
+      setRecado(`Planilha gerada: ${plural(envios, 'envio', 'envios')}, ${reais(total)}.`)
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setExportando(false)
     }
   }
 
@@ -205,11 +253,32 @@ export default function PainelEnvios({ usuarios, mostraPessoa = false }) {
             </button>
           ))}
         </div>
+
+        {/* baixa o que esta na tela — periodo, tipo e pessoas */}
+        <button
+          type="button"
+          className="acao acao--fraca envios__exportar"
+          onClick={exportar}
+          disabled={exportando}
+          title="Baixar os envios deste período numa planilha do Excel"
+        >
+          <IconePlanilha />
+          {exportando ? 'Gerando planilha...' : 'Exportar para o Excel'}
+        </button>
       </div>
 
       {erro && (
         <p className="envios__erro" role="alert">
           {erro}
+        </p>
+      )}
+
+      {recado && (
+        <p className="recado" role="status">
+          {recado}
+          <button type="button" onClick={() => setRecado('')} aria-label="Fechar aviso">
+            ×
+          </button>
         </p>
       )}
 
@@ -231,6 +300,7 @@ export default function PainelEnvios({ usuarios, mostraPessoa = false }) {
               mostraPessoa={mostraPessoa}
               pessoaPorId={pessoaPorId}
               aoBaixar={baixar}
+              aoExcluir={podeExcluir ? setExcluindo : undefined}
             />
           ) : (
             <Ano dados={dados} aoAbrirMes={(m) => ir({ visao: 'mes', mes: `${ano}-${String(m).padStart(2, '0')}` })} />
@@ -245,6 +315,28 @@ export default function PainelEnvios({ usuarios, mostraPessoa = false }) {
           </footer>
         </div>
       )}
+
+      <Confirma
+        aberto={Boolean(excluindo)}
+        titulo="Excluir lançamento"
+        mensagem={
+          excluindo
+            ? `${rotuloDaCategoria(excluindo.categoria)} — ${rotuloDoTipo(excluindo.tipo)}, de ${dataBR(
+                excluindo.data,
+              )}, no valor de ${reais(excluindo.valor)}${
+                mostraPessoa && excluindo.usuarioNome ? `, enviado por ${excluindo.usuarioNome}` : ''
+              }.`
+            : ''
+        }
+        aviso={
+          excluindo?.anexos?.length
+            ? 'O comprovante anexado é excluído junto. Não há como desfazer.'
+            : 'Não há como desfazer.'
+        }
+        rotuloConfirmar="Excluir"
+        aoConfirmar={() => excluir(excluindo)}
+        aoFechar={() => setExcluindo(null)}
+      />
     </>
   )
 }
@@ -300,7 +392,7 @@ function PorPessoa({ pessoas, pessoaPorId, visao }) {
 }
 
 /** Visao mensal: um bloco por dia, na ordem do calendario. */
-function Mes({ dados, periodo, tipo, mostraPessoa, pessoaPorId, aoBaixar }) {
+function Mes({ dados, periodo, tipo, mostraPessoa, pessoaPorId, aoBaixar, aoExcluir }) {
   const porDia = useMemo(() => {
     const mapa = new Map()
     dados.envios.forEach((e) => {
@@ -339,6 +431,7 @@ function Mes({ dados, periodo, tipo, mostraPessoa, pessoaPorId, aoBaixar }) {
                 mostraPessoa={mostraPessoa}
                 foto={pessoaPorId(envio.usuarioId)?.foto}
                 aoBaixar={aoBaixar}
+                aoExcluir={aoExcluir}
               />
             ))}
           </ul>
@@ -348,7 +441,7 @@ function Mes({ dados, periodo, tipo, mostraPessoa, pessoaPorId, aoBaixar }) {
   )
 }
 
-function ItemEnvio({ envio, mostraPessoa, foto, aoBaixar }) {
+function ItemEnvio({ envio, mostraPessoa, foto, aoBaixar, aoExcluir }) {
   /* a obra e opcional: sem ela, fica so o cliente */
   const obra = [envio.clienteNome || 'Cliente removido', envio.obraProposta].filter(Boolean).join(' · ')
   const semNada = !envio.obraId && !envio.clienteNome
@@ -399,6 +492,18 @@ function ItemEnvio({ envio, mostraPessoa, foto, aoBaixar }) {
             <span>{anexo.nome}</span>
           </button>
         ))}
+        {aoExcluir && (
+          <button
+            type="button"
+            className="envio__excluir"
+            onClick={() => aoExcluir(envio)}
+            title="Excluir este lançamento"
+            aria-label={`Excluir ${rotuloDoTipo(envio.tipo)} de ${dataBR(envio.data)}`}
+          >
+            <IconeLixo />
+            <span>Excluir</span>
+          </button>
+        )}
       </div>
     </li>
   )

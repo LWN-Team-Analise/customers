@@ -140,7 +140,8 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-3.sql.txt`, `db/atualizacao-4.sql.txt`,
 > `db/atualizacao-5.sql.txt`, `db/atualizacao-6.sql.txt`,
 > `db/atualizacao-7.sql.txt`, `db/atualizacao-8.sql.txt`,
-> `db/atualizacao-9.sql.txt` e, por ultimo, `db/atualizacao-10.sql.txt`.
+> `db/atualizacao-9.sql.txt`, `db/atualizacao-10.sql.txt` e, por ultimo,
+> `db/atualizacao-11.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -192,6 +193,7 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-8.sql.txt` | despesas, refeicoes e bonus (aba Despesas) e o comprovante        |
 | `db/atualizacao-9.sql.txt` | historico de atividades (pagina inicial > Historico)             |
 | `db/atualizacao-10.sql.txt` | cliente no envio (obra opcional) e as permissoes da aba Despesas |
+| `db/atualizacao-11.sql.txt` | permissoes "Ver dashboard" e "Excluir lancamento de despesa"    |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,

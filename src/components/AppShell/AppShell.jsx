@@ -7,7 +7,6 @@ import Avatar from '@/components/Avatar/Avatar'
 import Busca from '@/components/Busca/Busca'
 import ChatSite from '@/components/ChatSite/ChatSite'
 import IlhaAviso from '@/components/IlhaAviso/IlhaAviso'
-import ChatBot from '@/components/ChatBot/ChatBot'
 import Confirma from '@/components/Confirma/Confirma'
 import { ehAplicativo } from '@/utils/dispositivo'
 import { primeiroNome, saudacao } from '@/utils/pessoa'
@@ -113,13 +112,6 @@ const Icone = {
   chatPequeno: () => (
     <svg viewBox="0 0 24 24" width="17" height="17" {...traco}>
       <path d="M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
-    </svg>
-  ),
-  robo: () => (
-    <svg viewBox="0 0 24 24" width="17" height="17" {...traco}>
-      <rect x="4" y="8" width="16" height="11" rx="3" />
-      <path d="M12 4.5V8M9.5 13h.01M14.5 13h.01M9.5 16h5" />
-      <circle cx="12" cy="3.4" r="1.2" />
     </svg>
   ),
   cadeado: () => (
@@ -511,18 +503,20 @@ function dentroDaTela({ x, y }, larg, alt) {
 /**
  * O botao redondo do canto inferior direito.
  *
- * Ele e sempre um "+" com menu: em qualquer tela ha pelo menos duas
- * coisas atras dele — o chat da equipe e o Chat LWN —, e um botao que faz
- * duas coisas precisa perguntar qual. Antes ele era atalho direto para o
- * chat e so virava menu na tela de Obras, onde havia a observacao do
- * quadro para acrescentar; com o bot entrando em todas as telas, o
- * atalho direto deixou de existir.
+ * Sem opcoes extras ele e o atalho direto do chat da equipe (o balao).
+ * Com elas — a observacao do quadro, na tela de Obras — ele vira um "+"
+ * com menu, porque um botao que faz duas coisas precisa perguntar qual.
+ *
+ * O Chat LWN (o bot) saiu do menu: o componente e a rota /api/bot
+ * continuam no codigo, so nao ha mais por onde abri-lo.
  *
  * Dentro de uma obra ele nao aparece: la o chat que vale e o da obra, e
  * dois botoes de chat na mesma tela so confundiriam.
  */
-function BotaoChat({ acoes = [], aoAbrirChat, aoAbrirBot }) {
+function BotaoChat({ acoes = [], aoAbrirChat }) {
   const [aberto, setAberto] = useState(false)
+  /* com opcoes extras o botao vira menu; sem elas, atalho direto */
+  const temMenu = acoes.length > 0
   const caixa = useRef(null)
   const [canto, setCanto] = useState(lerCanto)
   /* o arrasto em curso; enquanto vale, o clique nao conta */
@@ -649,12 +643,6 @@ function BotaoChat({ acoes = [], aoAbrirChat, aoAbrirBot }) {
       Glifo: Icone.chatPequeno,
       aoClicar: aoAbrirChat,
     },
-    {
-      id: 'bot',
-      rotulo: 'Chat LWN',
-      Glifo: Icone.robo,
-      aoClicar: aoAbrirBot,
-    },
   ]
 
   return (
@@ -663,7 +651,7 @@ function BotaoChat({ acoes = [], aoAbrirChat, aoAbrirBot }) {
       ref={caixa}
       style={canto ? { left: canto.x, top: canto.y, right: 'auto', bottom: 'auto' } : undefined}
     >
-      {aberto && (
+      {temMenu && aberto && (
         <div className="bolhachat__menu" role="menu">
           {itens.map(({ id, rotulo, Glifo, aoClicar }) => (
             <button
@@ -693,14 +681,19 @@ function BotaoChat({ acoes = [], aoAbrirChat, aoAbrirBot }) {
              arrasto cai nele mesmo — e abriria o menu a cada vez que
              alguem so quis mudar o botao de lugar */
           if (Date.now() - fimDoArrasto.current < 300) return
-          setAberto((v) => !v)
+          if (temMenu) setAberto((v) => !v)
+          else aoAbrirChat()
         }}
-        aria-haspopup="menu"
-        aria-expanded={aberto}
-        aria-label="Abrir o chat da equipe, o Chat LWN ou acrescentar"
-        title="Abrir — arraste para mudar de lugar, dois cliques voltam ao canto"
+        aria-haspopup={temMenu ? 'menu' : undefined}
+        aria-expanded={temMenu ? aberto : undefined}
+        aria-label={temMenu ? 'Adicionar observação ou abrir o chat da equipe' : 'Abrir o chat da equipe'}
+        title={
+          temMenu
+            ? 'Adicionar — arraste para mudar de lugar, dois cliques voltam ao canto'
+            : 'Chat da equipe — arraste para mudar de lugar, dois cliques voltam ao canto'
+        }
       >
-        <Icone.mais />
+        {temMenu ? <Icone.mais /> : <Icone.chat />}
       </button>
     </div>
   )
@@ -726,7 +719,6 @@ export default function AppShell({
   const { erro, limparErro, pode } = useDados()
   const navegar = useNavigate()
   const [chatAberto, setChatAberto] = useState(false)
-  const [botAberto, setBotAberto] = useState(false)
 
   /* a tela pode assumir o campo de busca; se nao assumir, ele e do
      sistema e abre a lista de resultados por conta propria */
@@ -1133,12 +1125,10 @@ export default function AppShell({
         <BotaoChat
           acoes={acoesFlutuantes}
           aoAbrirChat={() => setChatAberto(true)}
-          aoAbrirBot={() => setBotAberto(true)}
         />
       )}
 
       <ChatSite aberto={chatAberto} aoFechar={() => setChatAberto(false)} />
-      <ChatBot aberto={botAberto} aoFechar={() => setBotAberto(false)} />
 
       {/* ---------------- a senha ainda e a padrao ----------------
 

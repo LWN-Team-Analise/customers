@@ -227,6 +227,15 @@
   color: var(--text-strong);
 }
 
+/* os dois de criar obra: lado a lado, com respiro entre eles. Sem o
+   flex, eram dois inline-flex encostados um no outro — o JSX nao deixa
+   nem o espaco em branco entre as tags */
+.barra__criar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .barra__direita {
   display: flex;
   align-items: center;

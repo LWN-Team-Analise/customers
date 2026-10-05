@@ -51,17 +51,13 @@
   min-width: 0;
 }
 
-.dia__ola {
-  margin: 0 0 2px;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
+/* a frase do dia ocupa o lugar que era da saudacao: e ela a linha
+   principal da faixa agora */
 .dia__frase {
   margin: 0;
-  font-size: 0.88rem;
-  color: var(--text-muted);
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 /* o resumo da direita: o numero que resume o dia, e o alerta quando
@@ -907,15 +903,46 @@
    outro. Sao a MESMA pergunta vista dos dois lados, e ler uma
    embaixo da outra faria comparar de memoria. */
 .cartao--metade { grid-column: span 6; }
+/* Despesas, Refeicoes e Bonus por tipo: os tres lado a lado. Sao poucas
+   colunas cada (dois a quatro tipos), e um terco da largura sobra */
+.cartao--terco { grid-column: span 4; }
 
 /* abaixo disto, sete colunas deixam o grafico com menos de 400px
    uteis — o eixo e os nomes nao cabem, e o desenho para de comparar */
 @media (max-width: 1120px) {
   .cartao--largo,
   .cartao--estreito,
-  .cartao--metade {
+  .cartao--metade,
+  .cartao--terco {
     grid-column: span 12;
   }
+}
+
+/* ---------------- A secao de despesas ----------------
+
+   Vem depois dos graficos de obra, com titulo proprio: e outro
+   assunto (dinheiro, nao prazo), e sem o titulo os quatro numeros
+   dela pareceriam continuacao dos quatro de cima. */
+.dash__secao {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.dash__titulo {
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--control-border);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+
+.dash__aviso {
+  margin: 0;
+  padding: 18px 0;
 }
 
 .cartao__topo {
@@ -1175,5 +1202,135 @@
 @media (max-width: 860px) {
   .mes[data-fora-do-painel='sim'] {
     display: none;
+  }
+}
+
+/* ---------------- Exportar para o Power BI ---------------- */
+
+.inicio__exportar {
+  margin-left: auto;
+}
+
+.powerbi {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.powerbi__lead {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.powerbi__lead strong {
+  color: var(--text-strong);
+}
+
+.powerbi__opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.powerbi__opcoes legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* cada escolha e um cartao inteiro clicavel: o nome e, embaixo, o que
+   vai no arquivo — e a descricao que decide, nao o nome */
+.powerbi__opcao {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.powerbi__opcao:hover {
+  background: var(--control-bg-hover);
+}
+
+.powerbi__opcao.is-atual {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--control-bg));
+}
+
+:root[data-theme='dark'] .powerbi__opcao.is-atual {
+  border-color: var(--grad-a);
+  background: color-mix(in srgb, var(--grad-a) 14%, var(--control-bg));
+}
+
+.powerbi__opcao input {
+  flex-shrink: 0;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+
+:root[data-theme='dark'] .powerbi__opcao input {
+  accent-color: var(--grad-a);
+}
+
+.powerbi__opcao span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.powerbi__opcao strong {
+  font-size: 0.88rem;
+  color: var(--text-strong);
+}
+
+.powerbi__opcao em {
+  font-size: 0.78rem;
+  font-style: normal;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.powerbi__nota {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.powerbi__erro {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* no celular o botao ocupa a propria linha: espremido ao lado das
+   abas, ele cortava o rotulo */
+@media (max-width: 620px) {
+  .inicio__exportar {
+    justify-content: center;
+    width: 100%;
+    margin-left: 0;
   }
 }

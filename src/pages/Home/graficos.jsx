@@ -202,7 +202,7 @@ export function Rosca({ fatias, centro, rodape, tamanho = 190 }) {
                 onMouseMove={(e) =>
                   seguir(e, {
                     rotulo: f.rotulo,
-                    valor: `${f.valor} · ${Math.round(fracao * 100)}%`,
+                    valor: `${f.texto ?? f.valor} · ${Math.round(fracao * 100)}%`,
                     cor: f.cor,
                   })
                 }
@@ -231,7 +231,7 @@ export function Rosca({ fatias, centro, rodape, tamanho = 190 }) {
             <li key={f.rotulo}>
               <span className="gr__ponto" style={{ background: f.cor }} />
               {f.rotulo}
-              <strong>{f.valor}</strong>
+              <strong>{f.texto ?? f.valor}</strong>
               <span>{total > 0 ? `${Math.round((f.valor / total) * 100)}%` : '—'}</span>
             </li>
           ))}
@@ -251,9 +251,20 @@ export function Rosca({ fatias, centro, rodape, tamanho = 190 }) {
    O tracejado da media e o que responde "essa obra demorou mais que
    o normal?" sem ninguem somar de cabeca. Sem ele, uma coluna alta e
    so uma coluna alta.
+
+   Item com `valor: null` nao desenha coluna nenhuma — e o dia em que
+   nao houve o que medir. Uma coluna de 2px ali leria como "quase
+   zero", que e outra coisa. A dica continua dizendo o `texto` dele.
+
+   `eixo` e o que vai escrito em cima da escala, quando ele nao e a
+   `unidade` — o grafico em reais traz o "R$" no proprio `texto`, e
+   repetir a unidade na dica sairia "R$ 41,50 R$".
+
+   `textoCurto` e o numero escrito EM CIMA da coluna, quando o
+   `texto` inteiro ("R$ 1.234,56") nao cabe na largura dela.
    ============================================================ */
 
-export function Colunas({ itens, unidade = '', referencia = null, alturaTotal = 260 }) {
+export function Colunas({ itens, unidade = '', eixo = unidade, referencia = null, alturaTotal = 260 }) {
   const [caixa, largura] = useLargura()
   const [dica, seguir, sumir] = useDica(caixa)
   const gradiente = useId()
@@ -267,7 +278,7 @@ export function Colunas({ itens, unidade = '', referencia = null, alturaTotal = 
   const MARGEM = { topo: 22, direita: temMedia ? 104 : 6, baixo: 44, esquerda: 36 }
   const areaA = alturaTotal - MARGEM.topo - MARGEM.baixo
   const areaL = Math.max(largura - MARGEM.esquerda - MARGEM.direita, 10)
-  const { topo, marcas } = escala(Math.max(...itens.map((i) => i.valor), referencia ?? 0))
+  const { topo, marcas } = escala(Math.max(...itens.map((i) => i.valor ?? 0), referencia ?? 0))
 
   const y = (v) => MARGEM.topo + areaA - (v / topo) * areaA
   const passo = areaL / Math.max(itens.length, 1)
@@ -323,15 +334,16 @@ export function Colunas({ itens, unidade = '', referencia = null, alturaTotal = 
             </g>
           ))}
 
-          {unidade && (
+          {eixo && (
             <text x={MARGEM.esquerda - 8} y={MARGEM.topo - 11} textAnchor="end" className="gr__sub">
-              {unidade}
+              {eixo}
             </text>
           )}
 
           {itens.map((i, n) => {
             const cx = MARGEM.esquerda + passo * n + passo / 2
-            const h = Math.max((i.valor / topo) * areaA, 2)
+            const vazio = i.valor === null || i.valor === undefined
+            const h = vazio ? 0 : Math.max((i.valor / topo) * areaA, 2)
             const cor = i.cor ?? 'var(--gr-um)'
 
             return (
@@ -341,7 +353,7 @@ export function Colunas({ itens, unidade = '', referencia = null, alturaTotal = 
                 onMouseMove={(e) =>
                   seguir(e, {
                     rotulo: i.titulo ?? i.rotulo,
-                    valor: `${i.texto} ${unidade}`.trim(),
+                    valor: vazio ? i.texto : `${i.texto} ${unidade}`.trim(),
                     nota: i.nota,
                     cor,
                   })
@@ -364,26 +376,28 @@ export function Colunas({ itens, unidade = '', referencia = null, alturaTotal = 
                   height={areaA + 14 + MARGEM.baixo}
                 />
 
-                <path
-                  className="gr__barra"
-                  d={caminhoColuna({
-                    x: cx - grossura / 2,
-                    y: MARGEM.topo + areaA - h,
-                    largura: grossura,
-                    altura: h,
-                    raio: 5,
-                  })}
-                  fill={`url(#${gradiente}-${cores.indexOf(cor)})`}
-                />
+                {!vazio && (
+                  <path
+                    className="gr__barra"
+                    d={caminhoColuna({
+                      x: cx - grossura / 2,
+                      y: MARGEM.topo + areaA - h,
+                      largura: grossura,
+                      altura: h,
+                      raio: 5,
+                    })}
+                    fill={`url(#${gradiente}-${cores.indexOf(cor)})`}
+                  />
+                )}
 
-                {mostraValor && (
+                {mostraValor && !vazio && (
                   <text
                     x={cx}
                     y={MARGEM.topo + areaA - h - 9}
                     textAnchor="middle"
                     className="gr__valor"
                   >
-                    {i.texto}
+                    {i.textoCurto ?? i.texto}
                   </text>
                 )}
 
@@ -433,7 +447,7 @@ export function Colunas({ itens, unidade = '', referencia = null, alturaTotal = 
               >
                 média
                 <tspan dx="4" className="gr__medianum--forte">
-                  {curto(referencia)} {unidade}
+                  {curto(referencia)} {curto(referencia) === '1' && unidade === 'dias' ? 'dia' : unidade}
                 </tspan>
               </text>
             </g>

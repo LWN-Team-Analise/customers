@@ -5,8 +5,9 @@ import Avatar from '@/components/Avatar/Avatar'
 import { useDados } from '@/context/DadosContext'
 import * as despesasApi from '@/services/despesasService'
 import { dataBR, reais } from '@/utils/formato'
+import ModalExportar from './ModalExportar'
 import PainelEnvios from './PainelEnvios'
-import { IconeVoltar } from './icones'
+import { IconePlanilha, IconeVoltar } from './icones'
 import './Despesas.css'
 
 /**
@@ -20,6 +21,10 @@ import './Despesas.css'
  *                                   (mensal/anual e tipo).
  *
  * `todos` no lugar da pessoa abre a equipe inteira junta.
+ *
+ * "Exportar para o Excel" mora nas duas: na lista, ele abre a escolha de
+ * quem, periodo e tipo (ModalExportar); dentro de uma pessoa (ou de
+ * todos), ele baixa o que esta na tela (PainelEnvios).
  *
  * A rota exige `revisar_despesa_geral` na tela (ProtectedRoute) e a
  * API exige de novo em cada chamada — a lista de pessoas volta 403 e
@@ -54,6 +59,8 @@ export default function EnviosGerais() {
   const { pessoaPorId } = useDados()
   const { pessoas, erro } = useQuemEnviou()
   const [procura, setProcura] = useState('')
+  const [exportando, setExportando] = useState(false)
+  const [recado, setRecado] = useState('')
 
   const lista = useMemo(() => {
     const termo = procura.trim().toLowerCase()
@@ -71,15 +78,34 @@ export default function EnviosGerais() {
             <IconeVoltar />
             Despesas
           </Link>
-          <h1 className="tela__titulo">Envios gerais</h1>
-          <p className="tela__lead">
-            Quem já enviou despesa, refeição ou bônus. Clique numa pessoa para ver os envios dela.
-          </p>
+          <div className="envios__titulo">
+            <div>
+              <h1 className="tela__titulo">Envios gerais</h1>
+              <p className="tela__lead">
+                Quem já enviou despesa, refeição ou bônus. Clique numa pessoa para ver os envios dela.
+              </p>
+            </div>
+            {pessoas?.length > 0 && (
+              <button type="button" className="acao acao--fraca" onClick={() => setExportando(true)}>
+                <IconePlanilha />
+                Exportar para o Excel
+              </button>
+            )}
+          </div>
         </header>
 
         {erro && (
           <p className="envios__erro" role="alert">
             {erro}
+          </p>
+        )}
+
+        {recado && (
+          <p className="recado" role="status">
+            {recado}
+            <button type="button" onClick={() => setRecado('')} aria-label="Fechar aviso">
+              ×
+            </button>
           </p>
         )}
 
@@ -146,6 +172,13 @@ export default function EnviosGerais() {
           </>
         )}
       </section>
+
+      <ModalExportar
+        aberto={exportando}
+        aoFechar={() => setExportando(false)}
+        pessoas={pessoas ?? []}
+        aoExportado={setRecado}
+      />
     </AppShell>
   )
 }
@@ -190,7 +223,11 @@ export function EnviosDaPessoa() {
           )}
         </header>
 
-        <PainelEnvios usuarios={todos ? 'todos' : [String(usuarioId)]} mostraPessoa={todos} />
+        <PainelEnvios
+          usuarios={todos ? 'todos' : [String(usuarioId)]}
+          mostraPessoa={todos}
+          quem={todos ? 'Todos os usuários' : pessoa?.nome}
+        />
       </section>
     </AppShell>
   )

@@ -11,6 +11,23 @@
   flex-wrap: wrap;
 }
 
+/* o total de cadastrados, ao lado do titulo */
+.usuarios__total {
+  margin: 0;
+  padding: 4px 11px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.usuarios__total strong {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
 .usuarios__acoes {
   display: flex;
   align-items: center;

@@ -24,13 +24,18 @@ const reais = (valor) => REAIS.format(Number(valor) || 0)
 /* ============================================================
    DESPESAS — /api/despesas
 
-     POST /envios                 envia uma despesa, refeicao ou bonus
-     GET  /envios?mes=AAAA-MM     os envios do mes, dia a dia, com totais
-     GET  /resumo?ano=AAAA        o ano, mes a mes, com o total anual
-     GET  /pessoas                quem ja enviou algo (Envios gerais; so revisor)
-     GET  /anexos/:id             o comprovante (o arquivo em si)
+     POST   /envios               envia uma despesa, refeicao ou bonus
+     DELETE /envios/:id           exclui um lancamento (so quem pode excluir)
+     GET    /envios?mes=AAAA-MM   os envios do mes, dia a dia, com totais
+     GET    /resumo?ano=AAAA      o ano, mes a mes, com o total anual
+     GET    /exportar             os envios de um mes, de um ano ou de
+                                  tudo, numa lista so — a planilha do Excel
+     GET    /pessoas              quem ja enviou algo (Envios gerais; so revisor)
+     GET    /painel               os totais por dia, categoria e tipo, sem
+                                  ninguem — os graficos do Dashboard
+     GET    /anexos/:id           o comprovante (o arquivo em si)
 
-   /envios e /resumo aceitam os mesmos filtros, e eles se somam:
+   /envios, /resumo e /exportar aceitam os mesmos filtros, e eles se somam:
      ?usuarios=   de quem (ver escopoDaConsulta)
      ?categoria=  despesa | refeicao | bonus (vazio = todas)
 
@@ -46,10 +51,19 @@ const reais = (valor) => REAIS.format(Number(valor) || 0)
                            comprovante de outra pessoa volta 404, como se
                            nao existisse — o id de um anexo nao conta se
                            ele existe.
+     excluir_despesas      excluir um lancamento. Os PROPRIOS, ou os de
+                           qualquer um quando tambem revisa — o mesmo
+                           alcance do que a pessoa enxerga.
 
-   As duas de baixo dependem de ver_despesas (src/domain/permissoes.js):
+   As tres de baixo dependem de ver_despesas (src/domain/permissoes.js):
    a lista do setor e normalizada ao ser lida, entao sem a visualizacao
-   nenhuma das duas vale, mesmo que esteja gravada.
+   nenhuma delas vale, mesmo que esteja gravada.
+
+   /painel e a excecao: ele e do Dashboard da pagina inicial, e pede
+   `ver_dashboard`, nao `ver_despesas`. Por isso ele so devolve
+   SOMAS por dia, categoria e tipo — sem pessoa, sem obra, sem envio.
+   Quem ve o Dashboard ve quanto a empresa gastou; quem gastou o que
+   continua sendo de quem revisa.
 
    Os TOTAIS (do dia, do mes, do ano, por pessoa) saem do banco,
    com SUM sobre NUMERIC. A tela so escreve o que recebeu.
@@ -61,6 +75,8 @@ const texto = (valor) => String(valor ?? '').trim()
 const PERMISSAO_VER = 'ver_despesas'
 const PERMISSAO_ENVIAR = 'alterar_despesas'
 const PERMISSAO_REVISAR = 'revisar_despesa_geral'
+const PERMISSAO_EXCLUIR = 'excluir_despesas'
+const PERMISSAO_DASHBOARD = 'ver_dashboard'
 
 /** Tabela que ainda nao existe vira recado com o arquivo certo, nao 500. */
 function falhou(erro, res, onde) {
@@ -254,6 +270,9 @@ const paraEnvio = (l) => ({
   observacao: l.observacao ?? '',
   usuarioId: String(l.usuario_id),
   usuarioNome: l.usuario_nome ?? '',
+  /* setor e cargo de HOJE da pessoa — so a planilha usa */
+  usuarioSetor: l.usuario_setor ?? '',
+  usuarioCargo: l.usuario_cargo ?? '',
   /* sem obra (enviado sem, ou excluida depois): null. O cliente vem
      da obra quando ha obra, e do proprio envio quando nao ha */
   obraId: l.obra_id === null || l.obra_id === undefined ? null : String(l.obra_id),
@@ -275,6 +294,7 @@ const paraEnvio = (l) => ({
 const CONSULTA_ENVIOS = `
   SELECT e.id, e.categoria, e.tipo, e.data, e.valor, e.justificativa, e.observacao,
          e.criado_em, e.usuario_id, u.name AS usuario_nome,
+         s.nome AS usuario_setor, coalesce(t.nome, u.cargo_titulo) AS usuario_cargo,
          e.obra_id, o.proposta AS obra_proposta, o.descricao AS obra_descricao,
          o.concluida_em AS obra_concluida_em,
          c.id AS cliente_id, c.nome AS cliente_nome,
@@ -283,8 +303,10 @@ const CONSULTA_ENVIOS = `
                  ) ORDER BY a.id), '[]'::json)
             FROM despesa_anexo a WHERE a.envio_id = e.id) AS anexos
     FROM despesa_envio e
-    JOIN usuario u      ON u.id = e.usuario_id
-    LEFT JOIN obra o    ON o.id = e.obra_id
+    JOIN usuario u           ON u.id = e.usuario_id
+    LEFT JOIN cargo s        ON s.id = u.cargo_id
+    LEFT JOIN cargo_titulo t ON t.id = u.cargo_titulo_id
+    LEFT JOIN obra o         ON o.id = e.obra_id
     LEFT JOIN cliente c ON c.id = coalesce(o.cliente_id, e.cliente_id)`
 
 const soma = (l) => ({ total: Number(l?.total ?? 0), quantidade: Number(l?.quantidade ?? 0) })
@@ -441,6 +463,68 @@ router.post('/envios', exigeSessao, exige(PERMISSAO_ENVIAR), async (req, res) =>
 })
 
 /* ============================================================
+   EXCLUIR um lancamento
+
+   So com `excluir_despesas`. O alcance e o mesmo do que a pessoa
+   enxerga: os proprios envios sempre; os dos outros so se ela tambem
+   revisa. Envio de outra pessoa, para quem nao revisa, "nao existe"
+   (404) — do mesmo jeito que o comprovante.
+
+   O comprovante vai junto (ON DELETE CASCADE em despesa_anexo). O
+   Historico guarda o que foi excluido — tipo, valor, data e de quem
+   era —, porque registro de dinheiro que some sem rastro nenhum e o
+   tipo de coisa que alguem vai precisar explicar depois.
+   ============================================================ */
+
+router.delete('/envios/:id', exigeSessao, exige(PERMISSAO_EXCLUIR), async (req, res) => {
+  const id = texto(req.params.id)
+  const naoAchou = () => res.status(404).json({ erro: 'Lançamento não encontrado. Ele pode já ter sido excluído.' })
+  if (!/^\d{1,15}$/.test(id)) return naoAchou()
+
+  try {
+    const { rows } = await query(
+      `SELECT e.id, e.usuario_id, e.categoria, e.tipo, e.data, e.valor, e.obra_id,
+              u.name AS usuario_nome, c.nome AS cliente_nome
+         FROM despesa_envio e
+         JOIN usuario u      ON u.id = e.usuario_id
+         LEFT JOIN cliente c ON c.id = e.cliente_id
+        WHERE e.id = $1`,
+      [id],
+    )
+    const envio = rows[0]
+    if (!envio) return naoAchou()
+
+    const meu = Number(envio.usuario_id) === Number(req.dono.sub)
+    if (!meu && !cargoPode(req.cargo, PERMISSAO_REVISAR)) return naoAchou()
+
+    /* o nome da obra e lido ANTES: depois do DELETE nao ha mais o que ler */
+    const obra = envio.obra_id ? await descreverObra(envio.obra_id) : { cliente: envio.cliente_nome }
+
+    const { rowCount } = await query('DELETE FROM despesa_envio WHERE id = $1', [id])
+    if (rowCount === 0) return naoAchou()
+
+    const nome = { despesa: 'Despesa', refeicao: 'Refeição', bonus: 'Bônus' }[envio.categoria]
+    await registrarAtividade(req, {
+      acao: `${envio.categoria}.excluido`,
+      categoria: 'despesa',
+      entidade: ['despesa_envio', envio.id],
+      descricao: `${nome} excluíd${envio.categoria === 'bonus' ? 'o' : 'a'}`,
+      detalhes: {
+        tipo: rotuloDoTipo(envio.tipo),
+        de: meu ? null : envio.usuario_nome,
+        ...obra,
+        valor: reais(Number(envio.valor)),
+        data: String(envio.data).slice(0, 10).split('-').reverse().join('/'),
+      },
+    })
+
+    return res.status(204).end()
+  } catch (erro) {
+    return falhou(erro, res, 'despesas/excluir')
+  }
+})
+
+/* ============================================================
    MES — os envios, dia a dia
    ============================================================ */
 
@@ -583,6 +667,112 @@ router.get('/resumo', exigeSessao, exige(PERMISSAO_VER), async (req, res) => {
     })
   } catch (erro) {
     return falhou(erro, res, 'despesas/ano')
+  }
+})
+
+/* ============================================================
+   EXPORTAR — a lista que vira planilha do Excel
+
+     ?mes=AAAA-MM   o mes
+     ?ano=AAAA      o ano inteiro
+     (nenhum)       tudo o que ja foi enviado
+
+   Mais os mesmos ?usuarios= e ?categoria= de /envios, com as mesmas
+   travas (escopoDaConsulta): sem revisar, so os proprios.
+
+   Volta os envios inteiros, sem o arquivo do comprovante (so o
+   nome). Os totais a planilha soma por formula — quem abre o Excel
+   ve a conta, e nao so o resultado.
+   ============================================================ */
+
+/** O periodo do pedido: [inicio, fim) e o nome dele, ou null se ja recusou. */
+function periodoDaConsulta(req, res) {
+  const mes = texto(req.query.mes)
+  const ano = texto(req.query.ano)
+
+  if (mes) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes) || mes < '2000-01' || mes > '2100-12') {
+      res.status(400).json({ erro: 'Mês inválido. Use AAAA-MM.' })
+      return null
+    }
+    return { tipo: 'mes', valor: mes, limites: limitesDoMes(mes) }
+  }
+  if (ano) {
+    const n = Number(ano)
+    if (!/^\d{4}$/.test(ano) || n < 2000 || n > 2100) {
+      res.status(400).json({ erro: 'Ano inválido.' })
+      return null
+    }
+    return { tipo: 'ano', valor: ano, limites: [`${n}-01-01`, `${n + 1}-01-01`] }
+  }
+  return { tipo: 'tudo', valor: null, limites: [DATA_MINIMA, '2101-01-01'] }
+}
+
+router.get('/exportar', exigeSessao, exige(PERMISSAO_VER), async (req, res) => {
+  const periodo = periodoDaConsulta(req, res)
+  if (!periodo) return undefined
+
+  const categoria = categoriaDaConsulta(req, res)
+  if (categoria === false) return undefined
+
+  try {
+    const escopo = await escopoDaConsulta(req, res)
+    if (!escopo) return undefined
+
+    const f = filtros(escopo.ids, categoria)
+    const { rows } = await query(
+      `${CONSULTA_ENVIOS} WHERE e.data >= $1 AND e.data < $2 ${f.sql}
+        ORDER BY lower(u.name), e.data, e.criado_em, e.id`,
+      [...periodo.limites, ...f.params],
+    )
+
+    return res.json({
+      periodo: { tipo: periodo.tipo, valor: periodo.valor },
+      revisor: escopo.revisor,
+      envios: rows.map(paraEnvio),
+    })
+  } catch (erro) {
+    return falhou(erro, res, 'despesas/exportar')
+  }
+})
+
+/* ============================================================
+   PAINEL — os graficos de despesa do Dashboard
+
+     ?de=AAAA-MM-DD&ate=AAAA-MM-DD   (os dois inclusive)
+     (nenhum)                         desde o primeiro envio
+
+   Pede `ver_dashboard` (ver o topo do arquivo). Por isso a resposta
+   e so de somas — uma linha por dia + categoria + tipo, com quantos
+   envios e quanto deu. Nao ha pessoa, obra nem envio nenhum aqui.
+   ============================================================ */
+
+router.get('/painel', exigeSessao, exige(PERMISSAO_DASHBOARD), async (req, res) => {
+  const de = texto(req.query.de) || DATA_MINIMA
+  const ate = texto(req.query.ate) || '2100-12-31'
+  if (!dataValida(de) || !dataValida(ate) || de > ate) {
+    return res.status(400).json({ erro: 'Período inválido. Use AAAA-MM-DD.' })
+  }
+
+  try {
+    const { rows } = await query(
+      `SELECT e.data, e.categoria, e.tipo, count(*)::int AS quantidade, sum(e.valor) AS total
+         FROM despesa_envio e
+        WHERE e.data >= $1 AND e.data <= $2
+        GROUP BY e.data, e.categoria, e.tipo
+        ORDER BY e.data, e.categoria, e.tipo`,
+      [de, ate],
+    )
+    return res.json({
+      linhas: rows.map((l) => ({
+        data: String(l.data).slice(0, 10),
+        categoria: l.categoria,
+        tipo: l.tipo,
+        ...soma(l),
+      })),
+    })
+  } catch (erro) {
+    return falhou(erro, res, 'despesas/painel')
   }
 })
 

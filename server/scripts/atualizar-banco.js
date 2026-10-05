@@ -31,6 +31,7 @@ const ARQUIVOS = [
   'db/atualizacao-8.sql.txt',
   'db/atualizacao-9.sql.txt',
   'db/atualizacao-10.sql.txt',
+  'db/atualizacao-11.sql.txt',
 ]
 
 /**
@@ -78,11 +79,19 @@ const CONFERENCIA = [
   ['despesa_anexo', "SELECT to_regclass('public.despesa_anexo') IS NOT NULL AS ok"],
   ['atividade', "SELECT to_regclass('public.atividade') IS NOT NULL AS ok"],
   ['despesa_envio.cliente_id', col('despesa_envio', 'cliente_id')],
+  ['ver_dashboard no acesso total', permissaoNoAcessoTotal('ver_dashboard')],
+  ['excluir_despesas no acesso total', permissaoNoAcessoTotal('excluir_despesas')],
 ]
 
 function col(tabela, coluna) {
   return `SELECT EXISTS (SELECT 1 FROM information_schema.columns
             WHERE table_schema='public' AND table_name='${tabela}' AND column_name='${coluna}') AS ok`
+}
+
+/* ok quando nenhum setor de acesso total ficou sem a chave */
+function permissaoNoAcessoTotal(chave) {
+  return `SELECT NOT EXISTS (SELECT 1 FROM cargo
+            WHERE acesso_total AND NOT ('${chave}' = ANY (permissoes))) AS ok`
 }
 
 function nulavel(tabela, coluna) {
