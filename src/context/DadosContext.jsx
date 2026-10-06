@@ -14,6 +14,7 @@ import {
   obraFechada,
   podeEditarCheck,
   progressoDaObra,
+  progressoExecucao,
   prontaParaConcluir as roteiroCompleto,
   roteiroVigente,
   setoresPendentes,
@@ -41,6 +42,7 @@ const INICIAL = {
   obras: [],
   observacoesQuadro: [],
   etiquetas: [],
+  ensaios: [],
   cargos: [],
   titulos: [],
   equipe: [],
@@ -77,6 +79,7 @@ export function DadosProvider({ children }) {
         obras: quadro.obras ?? [],
         observacoesQuadro: quadro.observacoesQuadro ?? [],
         etiquetas: quadro.etiquetas ?? [],
+        ensaios: quadro.ensaios ?? [],
         termos: { ...TERMOS_PADRAO, ...(quadro.termos ?? {}) },
         cargos: equipe.cargos ?? [],
         titulos: equipe.titulos ?? [],
@@ -395,6 +398,54 @@ export function DadosProvider({ children }) {
   const definirPrazo = useCallback(
     (obraId, campos) => gravar(() => dados.definirPrazo(obraId, campos)),
     [gravar],
+  )
+
+  /* ============================================================
+     Execucao e ENSAIOS
+
+     O periodo de execucao (entrada em campo -> prazo final), o
+     Planejamento de ensaios (quais ensaios a obra vai fazer) e a
+     execucao dia a dia (ensaio + dia + percentual). As regras
+     moram no servidor; aqui so grava e recarrega.
+     ============================================================ */
+
+  /** { inicio?, prazoFinal } — o prazo final e obrigatorio. */
+  const definirExecucao = useCallback(
+    (obraId, campos) => gravar(() => dados.definirExecucao(obraId, campos)),
+    [gravar],
+  )
+
+  /** A lista de ids na ordem escolhida; `concluir` ja marca o check. */
+  const planejarEnsaios = useCallback(
+    (obraId, ensaioIds, concluir) => gravar(() => dados.planejarEnsaios(obraId, ensaioIds, concluir)),
+    [gravar],
+  )
+
+  /** Um dia: valores = [{ ensaioId, percentual }], percentual null apaga. */
+  const registrarExecucaoDia = useCallback(
+    (obraId, dia, valores) => gravar(() => dados.registrarExecucaoDia(obraId, dia, valores)),
+    [gravar],
+  )
+
+  const adicionarEnsaio = useCallback((campos) => gravar(() => dados.criarEnsaio(campos)), [gravar])
+  const atualizarEnsaio = useCallback(
+    (id, campos) => gravar(() => dados.editarEnsaio(id, campos)),
+    [gravar],
+  )
+  const removerEnsaio = useCallback((id) => gravar(() => dados.apagarEnsaio(id)), [gravar])
+
+  const ensaioPorId = useCallback(
+    (id) => estado.ensaios.find((e) => String(e.id) === String(id)) ?? null,
+    [estado.ensaios],
+  )
+
+  /** O catalogo que ainda vale (o que saiu continua so nas obras que o tinham). */
+  const ensaiosAtivos = useMemo(() => estado.ensaios.filter((e) => e.ativo), [estado.ensaios])
+
+  /** O andamento da execucao dos ensaios desta obra (ver progressoExecucao). */
+  const execucaoDaObra = useCallback(
+    (obra) => progressoExecucao(obra, (id) => ensaioPorId(id)?.nome ?? 'Ensaio removido'),
+    [ensaioPorId],
   )
 
   /* ---------------- Observacoes da obra ---------------- */
@@ -998,6 +1049,15 @@ export function DadosProvider({ children }) {
       alternarCheck,
       responderCheck,
       definirPrazo,
+      definirExecucao,
+      planejarEnsaios,
+      registrarExecucaoDia,
+      adicionarEnsaio,
+      atualizarEnsaio,
+      removerEnsaio,
+      ensaioPorId,
+      ensaiosAtivos,
+      execucaoDaObra,
 
       adicionarObservacao,
       editarObservacao,
@@ -1107,6 +1167,15 @@ export function DadosProvider({ children }) {
       alternarCheck,
       responderCheck,
       definirPrazo,
+      definirExecucao,
+      planejarEnsaios,
+      registrarExecucaoDia,
+      adicionarEnsaio,
+      atualizarEnsaio,
+      removerEnsaio,
+      ensaioPorId,
+      ensaiosAtivos,
+      execucaoDaObra,
       adicionarObservacao,
       editarObservacao,
       removerObservacao,

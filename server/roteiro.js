@@ -11,10 +11,19 @@
  * mexe em nada.
  */
 
-/** cargos: chaves da tabela cargo. Mais de uma = card com gradiente. */
+/**
+ * cargos: a chave do setor dono do card (um so).
+ *
+ * As tres primeiras etapas tem PAPEL no fluxo (planejamento,
+ * intermediaria, execucao) e todas as de fabrica nascem FIXAS: nao se
+ * renomeiam nem se excluem (ver db/atualizacao-14.sql.txt). Os checks
+ * em objeto ({ titulo, tipo }) sao os do sistema — o Planejamento e a
+ * Execucao dos ensaios.
+ */
 export const ROTEIRO = [
   {
     nome: 'Comercial',
+    papel: 'planejamento',
     cards: [
       {
         cargos: ['comercial'],
@@ -27,10 +36,15 @@ export const ROTEIRO = [
           'Venda alinhada com técnica e qualidade',
         ],
       },
+      {
+        cargos: ['tecnico'],
+        checks: [{ titulo: 'Planejamento de ensaios', tipo: 'planejamento_ensaios' }],
+      },
     ],
   },
   {
     nome: 'Planejamento',
+    papel: 'intermediaria',
     cards: [
       {
         cargos: ['adm'],
@@ -55,10 +69,12 @@ export const ROTEIRO = [
   },
   {
     nome: 'Execução',
+    papel: 'execucao',
     cards: [
       {
         cargos: ['tecnico'],
         checks: [
+          { titulo: 'Execução dos ensaios', tipo: 'execucao_ensaios' },
           'Execução',
           'Cronograma de ensaio detalhado',
           'Lançar dados da obra em % de execução',
@@ -117,11 +133,27 @@ export async function plantarRoteiro(pool) {
     const cargos = await cliente.query('SELECT id, chave FROM cargo')
     const idDoCargo = Object.fromEntries(cargos.rows.map((c) => [c.chave, c.id]))
 
+    /* banco que ja tem as colunas da atualizacao 14 planta as etapas
+       fixas e os checks do sistema prontos; sem elas, planta como antes
+       e a atualizacao 14 marca tudo depois (pelo -infinity e pelo nome) */
+    const { rows: colunas } = await cliente.query(
+      `SELECT count(*)::int AS n FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND ((table_name = 'etapa' AND column_name IN ('fixa', 'papel'))
+            OR (table_name = 'etapa_check' AND column_name = 'tipo'))`,
+    )
+    const completo = colunas[0].n === 3
+
     for (const [i, etapa] of ROTEIRO.entries()) {
-      const { rows: nova } = await cliente.query(
-        'INSERT INTO etapa (ordem, nome) VALUES ($1, $2) RETURNING id',
-        [i + 1, etapa.nome],
-      )
+      const { rows: nova } = completo
+        ? await cliente.query(
+            'INSERT INTO etapa (ordem, nome, fixa, papel) VALUES ($1, $2, true, $3) RETURNING id',
+            [i + 1, etapa.nome, etapa.papel ?? null],
+          )
+        : await cliente.query('INSERT INTO etapa (ordem, nome) VALUES ($1, $2) RETURNING id', [
+            i + 1,
+            etapa.nome,
+          ])
 
       for (const [j, card] of etapa.cards.entries()) {
         const { rows: novoCard } = await cliente.query(
@@ -137,11 +169,20 @@ export async function plantarRoteiro(pool) {
           )
         }
 
-        for (const [k, titulo] of card.checks.entries()) {
-          await cliente.query(
-            'INSERT INTO etapa_check (card_id, ordem, titulo) VALUES ($1, $2, $3)',
-            [novoCard[0].id, k, titulo],
-          )
+        for (const [k, item] of card.checks.entries()) {
+          const titulo = typeof item === 'string' ? item : item.titulo
+          const tipo = typeof item === 'string' ? 'comum' : item.tipo
+          if (completo) {
+            await cliente.query(
+              'INSERT INTO etapa_check (card_id, ordem, titulo, tipo) VALUES ($1, $2, $3, $4)',
+              [novoCard[0].id, k, titulo, tipo],
+            )
+          } else {
+            await cliente.query(
+              'INSERT INTO etapa_check (card_id, ordem, titulo) VALUES ($1, $2, $3)',
+              [novoCard[0].id, k, titulo],
+            )
+          }
         }
       }
     }

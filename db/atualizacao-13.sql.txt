@@ -1,27 +1,30 @@
 -- ============================================================
---  ATUALIZACAO 13 — PRAZOS, CARD SIM/NAO E INFORMACOES DO CARD
+--  ATUALIZACAO 13 — PRAZOS, CHECK SIM/NAO E INFORMACOES
 --
 --  Tres coisas novas no roteiro e na obra:
 --
---  1. CARD DE PERGUNTA (etapa_card.sim_nao)
---     Um card pode virar pergunta: ao marcar um check dele, a
---     pessoa responde SIM ou NAO. Os dois contam como feito — o
---     "nao" e uma resposta, nao uma pendencia ("Hospedagem: nao
---     tem"). A resposta fica em obra_check.resposta:
---         NULL  = check comum (card que nao e pergunta);
+--  1. CHECK DE PERGUNTA (etapa_check.sim_nao)
+--     Cada CHECK decide sozinho se pede resposta. Com a caixa
+--     "Obrigatorio responder Sim ou Nao?" marcada, marcar o check
+--     abre a pergunta. Os dois contam como feito — o "nao" e uma
+--     resposta, nao uma pendencia ("Hospedagem: nao tem"). A
+--     resposta fica em obra_check.resposta:
+--         NULL  = check comum;
 --         true  = sim;
 --         false = nao (a tela mostra um X e a palavra "Nao").
+--     Mora no CHECK, e nao no card: no mesmo card um check pode
+--     pedir resposta e o do lado nao.
 --
---  2. INFORMACOES DO CARD (etapa_card.informacoes)
---     Texto livre que aparece ao passar o mouse sobre o card:
---     o que aquele card faz, o que conta como feito.
+--  2. INFORMACOES (etapa_card.informacoes e etapa_check.informacoes)
+--     Texto livre que aparece ao passar o mouse: o que aquele card
+--     (ou aquele check) faz, o que conta como feito.
 --
 --  3. PRAZOS DA OBRA (obra_prazo_etapa e obra_prazo_check)
 --     Data limite por obra: para uma etapa inteira, ou para um
 --     check so. E por OBRA, e nao no roteiro, porque o roteiro e
 --     o mesmo para todas e o prazo de cada uma e um.
 --     Quem define e quem tem a permissao nova `definir_prazos`.
---     E o que pinta o card do quadro de amarelo quando atrasa.
+--     E o que pinta o card do quadro quando atrasa.
 --
 --  A permissao nova so entra sozinha no setor com acesso total
 --  (diretoria), como foi feito com as outras. Os demais setores
@@ -35,19 +38,22 @@
 
 BEGIN;
 
--- 1. card de pergunta + informacoes
-ALTER TABLE public.etapa_card ADD COLUMN IF NOT EXISTS sim_nao boolean NOT NULL DEFAULT false;
+-- 1. check de pergunta + informacoes
+ALTER TABLE public.etapa_check ADD COLUMN IF NOT EXISTS sim_nao boolean NOT NULL DEFAULT false;
+ALTER TABLE public.etapa_check ADD COLUMN IF NOT EXISTS informacoes text;
 ALTER TABLE public.etapa_card ADD COLUMN IF NOT EXISTS informacoes text;
 
-COMMENT ON COLUMN public.etapa_card.sim_nao IS
-    'true = ao marcar um check deste card a pessoa responde Sim ou Nao (os dois contam como feito).';
+COMMENT ON COLUMN public.etapa_check.sim_nao IS
+    'true = ao marcar este check a pessoa responde Sim ou Nao (os dois contam como feito).';
+COMMENT ON COLUMN public.etapa_check.informacoes IS
+    'O que o check pede. Aparece ao passar o mouse sobre ele. NULL = sem dica.';
 COMMENT ON COLUMN public.etapa_card.informacoes IS
     'O que o card faz. Aparece ao passar o mouse sobre ele. NULL = sem dica.';
 
 ALTER TABLE public.obra_check ADD COLUMN IF NOT EXISTS resposta boolean;
 
 COMMENT ON COLUMN public.obra_check.resposta IS
-    'So em card de pergunta: true = sim, false = nao. NULL = check comum.';
+    'So em check de pergunta: true = sim, false = nao. NULL = check comum.';
 
 -- 2. prazos por obra
 CREATE TABLE IF NOT EXISTS public.obra_prazo_etapa (
@@ -83,9 +89,13 @@ COMMIT;
 --  CONFERENCIA — deve devolver "t" em todas as linhas
 -- ============================================================
 
-SELECT 'etapa_card.sim_nao' AS item,
+SELECT 'etapa_check.sim_nao' AS item,
        EXISTS (SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'etapa_card' AND column_name = 'sim_nao') AS ok
+                WHERE table_name = 'etapa_check' AND column_name = 'sim_nao') AS ok
+UNION ALL
+SELECT 'etapa_check.informacoes',
+       EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'etapa_check' AND column_name = 'informacoes')
 UNION ALL
 SELECT 'etapa_card.informacoes',
        EXISTS (SELECT 1 FROM information_schema.columns

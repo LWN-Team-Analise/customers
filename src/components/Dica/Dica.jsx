@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import './Dica.css'
 
@@ -13,20 +13,50 @@ import './Dica.css'
  *   <Dica as="article" texto={card.informacoes} className="setorcard">...</Dica>
  *
  * Sem `texto`, e so o elemento — nada de bolha vazia.
+ *
+ * Dica DENTRO de dica (o check com informacoes, dentro do card com
+ * informacoes): so a de dentro aparece enquanto o mouse esta nela, e a
+ * de fora volta quando ele sai. Duas bolhas ao mesmo tempo se cobriam.
  */
+
+/* as dicas abertas, da de fora para a de dentro: so a do topo aparece */
+const pilha = []
+
 export default function Dica({ as: Elemento = 'div', texto, titulo, children, ...resto }) {
   const alvo = useRef(null)
   const bolha = useRef(null)
   const [aberta, setAberta] = useState(false)
+  const [escondida, setEscondida] = useState(false)
   const [lugar, setLugar] = useState(null)
+  const eu = useRef({ esconder: setEscondida })
 
   const temDica = Boolean(String(texto ?? '').trim())
 
-  const abrir = useCallback(() => temDica && setAberta(true), [temDica])
-  const fechar = useCallback(() => {
-    setAberta(false)
-    setLugar(null)
+  const sair = useCallback(() => {
+    const i = pilha.indexOf(eu.current)
+    if (i < 0) return
+    const eraTopo = i === pilha.length - 1
+    pilha.splice(i, 1)
+    if (eraTopo) pilha[pilha.length - 1]?.esconder(false)
   }, [])
+
+  const abrir = useCallback(() => {
+    if (!temDica || pilha.includes(eu.current)) return
+    pilha[pilha.length - 1]?.esconder(true)
+    pilha.push(eu.current)
+    setEscondida(false)
+    setAberta(true)
+  }, [temDica])
+
+  const fechar = useCallback(() => {
+    sair()
+    setAberta(false)
+    setEscondida(false)
+    setLugar(null)
+  }, [sair])
+
+  /* saiu da tela aberta (o card foi refeito): nao fica preso na pilha */
+  useEffect(() => sair, [sair])
 
   /* posiciona depois de a bolha existir, para saber a altura dela */
   useLayoutEffect(() => {
@@ -44,7 +74,7 @@ export default function Dica({ as: Elemento = 'div', texto, titulo, children, ..
       left,
       lado: cabeEmCima ? 'cima' : 'baixo',
     })
-  }, [aberta])
+  }, [aberta, escondida])
 
   return (
     <>
@@ -60,6 +90,7 @@ export default function Dica({ as: Elemento = 'div', texto, titulo, children, ..
       </Elemento>
 
       {aberta &&
+        !escondida &&
         createPortal(
           <div
             ref={bolha}

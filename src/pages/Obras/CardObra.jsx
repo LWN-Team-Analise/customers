@@ -1,51 +1,76 @@
-import { useMemo } from 'react'
 import Avatar, { PilhaAvatares } from '@/components/Avatar/Avatar'
-import { useAuth } from '@/context/AuthContext'
 import { useDados } from '@/context/DadosContext'
 import {
-  avisoDeEtapa,
-  cargosDoCheck,
+  etapaDeExecucao,
   nomeProprioDaEtapa,
-  chaveDoCargo,
   obraConcluida,
-  podeEditarCheck,
+  PAPEL_DA_ETAPA,
   rotuloPrioridadeObra,
   tituloDaObra,
   tomPrioridadeObra,
 } from '@/domain/obras'
 import { useTheme } from '@/context/ThemeContext'
-import { corAdaptada, textoSobre } from '@/utils/cor'
+import { textoSobre } from '@/utils/cor'
 import { dataBR, dataHora } from '@/utils/formato'
 import './CardObra.css'
 
+/** "venceu em 03/10", "vence hoje", "vence em 2 dias". */
+function quando(m) {
+  if (m.dias < 0) return `venceu em ${dataBR(m.prazo).slice(0, 5)}`
+  if (m.dias === 0) return 'vence hoje'
+  if (m.dias === 1) return 'vence amanhã'
+  return `vence em ${m.dias} dias`
+}
+
 /**
- * Card da obra no quadro. A cor de fundo vem do tipo (padrao = azul de
- * "Obras padrao", emergencia = laranja/vermelho, aviso = amarelo); as
- * etiquetas de setor puxam a cor do cargo cadastrado.
+ * O motivo da cor, numa linha:
+ *   "Atrasada há 2 dias — prazo final 04/10"
+ *   "Prazo final vence amanhã"
+ *   "Prazo de "Hospedagem" venceu em 03/10 — Administrativo"
+ *   "Prazo da 2ª Etapa vence em 2 dias — Qualidade, Time Técnico"
+ * Os setores no fim sao quem ainda deve naquele prazo.
+ */
+function textoDoMotivo(m, rotuloEtapa, nomeDoCargo) {
+  if (m.alvo === 'obra') {
+    if (m.dias < 0) {
+      return `Atrasada há ${-m.dias} dia${m.dias < -1 ? 's' : ''} — prazo final ${dataBR(m.prazo).slice(0, 5)}`
+    }
+    return `Prazo final ${quando(m)}`
+  }
+  const alvo = m.alvo === 'etapa' ? `Prazo da ${rotuloEtapa(m.numero)}` : `Prazo de "${m.titulo}"`
+  const quem = m.setores?.length ? ` — ${m.setores.map(nomeDoCargo).join(', ')}` : ''
+  return `${alvo} ${quando(m)}${quem}`
+}
+
+/**
+ * Card da obra no quadro. So o card: os checks moram dentro da obra,
+ * que abre no clique.
+ *
+ * A COR conta como a obra esta (situacaoDaObra, em src/domain/obras.js):
+ *
+ *   verde     obra padrao com os prazos em dia;
+ *   azul      obra de emergencia com os prazos em dia;
+ *   amarelo   um check ou uma etapa passou do prazo — ou o prazo final
+ *             esta chegando;
+ *   laranja   prazo final muito perto;
+ *   vermelho  prazo final amanha ou hoje — ou ja vencido (ai com o selo
+ *             "Atrasada").
+ *
+ * Quando a cor nao e a de sempre, uma linha diz o PORQUE (o motivo mais
+ * urgente; os outros ficam na dica dele).
  *
  *   foto da empresa · proposta - nome · etapa atual   [téc] [gq]
- *   descricao
- *   prioridade + data de conclusao        fotos de quem mexeu
+ *   motivo da cor
+ *   descricao · execucao dos ensaios
+ *   prioridade + datas                    fotos de quem mexeu
  *
  * O titulo e "1042/2026 - Acme": o n. da proposta na frente, porque e
  * por ele que a obra e procurada. Obra antiga, sem proposta cadastrada,
  * mostra so o nome do cliente.
- *
- * Com `aoAbrir` o card inteiro vira botao — e assim que a coluna de
- * avisos dispara o aviso clicando em qualquer lugar.
  */
-export default function CardObra({
-  obra,
-  cliente,
-  pessoas = [],
-  tom,
-  aoAbrir,
-  rotuloAcao,
-  comChecks = false,
-  aoAvisarEtapa,
-  children,
-}) {
+export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbrir }) {
   const {
+    corSuaveDoCargo,
     cargoPorChave,
     roteiroDaObra,
     etapaDaObra,
@@ -53,10 +78,10 @@ export default function CardObra({
     concluida,
     etiquetasDaObra,
     termoEtapa,
+    rotuloEtapa,
     nomeDoCargo,
-    alternarCheck,
+    execucaoDaObra,
   } = useDados()
-  const { user } = useAuth()
   const { isDark } = useTheme()
 
   const numeroEtapa = etapaDaObra(obra)
@@ -72,13 +97,7 @@ export default function CardObra({
 
      Quando o ULTIMO check da obra e marcado, o trabalho acabou — mesmo
      que ninguem tenha clicado em "Concluir obra" ainda. O card diz
-     quando isso aconteceu, e a hora e a da ultima marcacao: e ela que
-     responde "quando ficou pronto".
-
-     Nao e a mesma coisa que `obra.concluidaEm`, que e o carimbo do
-     clique. Enquanto o clique nao vem, a obra continua no quadro — e e
-     exatamente ai que este aviso serve, porque e o que faz alguem
-     lembrar de fechar. */
+     quando isso aconteceu: e o que faz alguem lembrar de fechar. */
   const tudoMarcado = obraConcluida(roteiro, obra.checks)
   const prontaEm = tudoMarcado
     ? Object.values(obra.checks ?? {})
@@ -90,150 +109,86 @@ export default function CardObra({
   const marcas = etiquetasDaObra(obra)
   const pendentes = pendentesDaObra(obra, numeroEtapa)
   const fechada = concluida(obra)
-  const cor = tom ?? obra.tipo
+  const tom = situacao?.tom ?? (obra.tipo === 'emergencia' ? 'emergencia' : 'ok')
+  const motivos = situacao?.motivos ?? []
 
-  /* ---- O (!) de "falta a data de conclusao" ----
+  /* ---- O (!) de "falta o prazo final" ----
 
-     As mesmas tres condicoes da tela da obra, e pelos mesmos motivos:
-     na EMERGENCIA a data e obrigatoria no cadastro, entao ali ela nao
+     Na EMERGENCIA o prazo e obrigatorio no cadastro, entao ali ele nao
      pode faltar; na obra ja CONCLUIDA o prazo daquela ja passou, e
      piscar sobre registro fechado e ruido. */
   const faltaPrazo = !obra.dataConclusao && !fechada && obra.tipo !== 'emergencia'
 
-  /* ---- Os checks da etapa, aqui mesmo ----
+  /* a barra de execucao aparece da etapa de execucao em diante — antes
+     disso ela seria sempre 0% e so ocuparia lugar */
+  const execucao = execucaoDaObra(obra)
+  const etapaExec = etapaDeExecucao(roteiro)
+  const mostraExecucao =
+    execucao !== null &&
+    (obra.tipo === 'emergencia' || !etapaExec || numeroEtapa >= etapaExec.numero || execucao.geral > 0)
 
-     Todos os setores da etapa em que a obra parou, agrupados por
-     setor. Os do SEU cargo sao marcaveis daqui; os dos outros
-     aparecem travados, com cadeado.
-
-     Mostrar so os seus escondia o essencial: quem esta segurando a
-     etapa. Mostrar os das outras etapas encheria o card com trabalho
-     que nem comecou. Entao e a etapa atual, inteira.
-
-     Quem decide se da para clicar e `podeEditarCheck` — a mesma
-     resposta que o servidor da antes de gravar. */
-  const meuSetor = chaveDoCargo(user)
-
-  const grupos = useMemo(() => {
-    if (!comChecks || fechada || !etapa) return []
-
-    const porSetor = new Map()
-
-    ;(etapa.cards ?? []).forEach((card) => {
-      ;(card.checks ?? []).forEach((check) => {
-        const donos = cargosDoCheck(check, card)
-        /* check sem dono nenhum no roteiro fica com o card; sem nem
-           isso, ele nao pertence a setor algum e nao entra */
-        if (donos.length === 0) return
-        donos.forEach((cargo) => {
-          if (!porSetor.has(cargo)) porSetor.set(cargo, [])
-          porSetor.get(cargo).push({ check, card })
-        })
-      })
-    })
-
-    return [...porSetor.entries()]
-      .map(([cargo, itens]) => ({
-        cargo,
-        itens,
-        meu: cargo === meuSetor,
-        feitos: itens.filter(({ check }) => obra.checks?.[check.id]).length,
-      }))
-      /* o seu setor na frente: e o unico bloco em que ha o que fazer */
-      .sort((a, b) => Number(b.meu) - Number(a.meu))
-  }, [comChecks, fechada, etapa, meuSetor, obra.checks])
-
-  /* Com checks dentro, o card NAO pode ser um <button>: botao dentro
-     de botao e HTML invalido, e o clique no check subiria para o card
-     e abriria a obra no lugar de marcar. Vira uma <div> que responde
-     ao clique, e o nome da obra assume o caminho de teclado — o mesmo
-     arranjo das linhas da Grade da pagina inicial. */
-  /* a cor do cargo pronta para FUNDO ESCURO, sempre — e nao a do tema
-     da tela. O card e azul-marinho ou laranja nos dois temas, entao um
-     setor de cor escura (o azul da GQ) precisa clarear ali mesmo no
-     tema claro, senao a caixinha some dentro do card. */
-  const corDeSetor = (chave) => corAdaptada(cargoPorChave(chave)?.cor ?? '#6b7280', true)
-
-  /* ---- O recado de fechamento de etapa ----
-
-     A conta e feita ANTES de gravar, com o mapa de checks que a tela
-     tem agora: depois da gravacao o `recarregar` ja trouxe o estado
-     novo, e nao daria mais para saber se ESTE clique foi o que fechou
-     a sua parte. Desmarcar nunca anuncia nada.
-
-     Quem GUARDA o aviso e a pagina, nao este card. Quando a etapa
-     fecha, a obra muda de grupo no quadro e o card e remontado do
-     zero — e o aviso morria junto, justamente no caso que ele mais
-     precisa contar. */
-  const marcar = (checkId, jaMarcado) => {
-    if (!jaMarcado) {
-      const novo = avisoDeEtapa(roteiro, obra.checks, checkId, meuSetor)
-      if (novo) aoAvisarEtapa?.(novo)
-    }
-    alternarCheck(obra.id, checkId)
-  }
-
-  const temChecks = grupos.length > 0
-  const Elemento = aoAbrir && !temChecks ? 'button' : 'div'
+  const nomeDaEtapa = etapa
+    ? nomeProprioDaEtapa(etapa.nome, rotuloDaEtapa) || PAPEL_DA_ETAPA[etapa.papel] || ''
+    : ''
 
   return (
-    <Elemento
-      type={aoAbrir ? 'button' : undefined}
-      className={`obracard ${aoAbrir ? 'obracard--clicavel' : ''}`.trim()}
-      data-tom={cor}
+    <button
+      type="button"
+      className="obracard"
+      data-tom={tom}
       onClick={aoAbrir}
-      title={rotuloAcao}
+      title={motivos.length > 1 ? motivos.map((m) => textoDoMotivo(m, rotuloEtapa, nomeDoCargo)).join('\n') : undefined}
     >
       <header className="obracard__topo">
         <Avatar nome={cliente?.nome} foto={cliente?.logo} tamanho={26} quadrado />
         <span className="obracard__quem">
-          {temChecks && aoAbrir ? (
-            <button
-              type="button"
-              className="obracard__empresa obracard__abrir"
-              onClick={(e) => {
-                e.stopPropagation()
-                aoAbrir()
-              }}
-              title={rotuloAcao ?? 'Abrir a obra'}
-            >
-              {tituloDaObra(obra, cliente)}
-            </button>
-          ) : (
-            <strong className="obracard__empresa">{tituloDaObra(obra, cliente)}</strong>
-          )}
-          {/* "3ª — comercial". O nome so entra quando acrescenta: uma
+          <strong className="obracard__empresa">{tituloDaObra(obra, cliente)}</strong>
+          {/* "3ª — execução". O nome so entra quando acrescenta: uma
               etapa chamada "3° Etapa" no roteiro daria "3ª — 3° etapa" */}
           <span className="obracard__etapa">
             {termoEtapa} atual:{' '}
             {fechada || !etapa
               ? 'concluída'
-              : [`${etapa.numero}ª`, nomeProprioDaEtapa(etapa.nome, rotuloDaEtapa).toLowerCase()]
-                  .filter(Boolean)
-                  .join(' — ')}
+              : [`${etapa.numero}ª`, nomeDaEtapa.toLowerCase()].filter(Boolean).join(' — ')}
           </span>
         </span>
 
         {pendentes.length > 0 && (
           <span className="obracard__setores" title="Setores que ainda devem informação">
-            {pendentes.map((s) => {
-              const cargo = cargoPorChave(s)
-              return (
-                <span
-                  key={s}
-                  className="obracard__setor"
-                  style={{ '--setor-cor': cargo?.cor ?? '#6b7280' }}
-                >
-                  {cargo?.curto ?? s.slice(0, 3)}
-                </span>
-              )
-            })}
+            {pendentes.map((s) => (
+              <span
+                key={s}
+                className="obracard__setor"
+                style={{ '--setor-cor': corSuaveDoCargo(s) }}
+              >
+                {cargoPorChave(s)?.curto ?? s.slice(0, 3)}
+              </span>
+            ))}
           </span>
         )}
       </header>
 
+      {/* o porque da cor, quando ela nao e a de sempre */}
+      {motivos.length > 0 && (
+        <p className="obracard__motivo">
+          {tom === 'vencido' && <span className="obracard__atrasada">Atrasada</span>}
+          <span>{textoDoMotivo(motivos[0], rotuloEtapa, nomeDoCargo)}</span>
+          {motivos.length > 1 && <em>+{motivos.length - 1}</em>}
+        </p>
+      )}
+
       {/* a descricao e opcional: sem ela o card nao abre um vazio no meio */}
       {obra.descricao && <p className="obracard__desc">{obra.descricao}</p>}
+
+      {mostraExecucao && (
+        <span className="obracard__exec" title="Execução dos ensaios (média dos ensaios planejados)">
+          <span>Execução</span>
+          <span className="obracard__barra" role="img" aria-label={`${execucao.geral}% executado`}>
+            <span style={{ width: `${execucao.geral}%` }} />
+          </span>
+          <strong>{execucao.geral}%</strong>
+        </span>
+      )}
 
       {marcas.length > 0 && (
         <span className="obracard__etiquetas">
@@ -257,15 +212,8 @@ export default function CardObra({
             Prioridade: <strong>{rotuloPrioridadeObra(obra)}</strong>
           </span>
 
-          {/* As duas pontas do prazo, uma ao lado da outra. So a data de
-              conclusao aparecia aqui, e sozinha ela nao diz nada: "30/09"
-              e um prazo apertado ou folgado conforme a obra tenha
-              comecado ontem ou em marco.
-
-              A conclusao aparece SEMPRE, mesmo em branco. Antes ela
-              sumia quando faltava, e o card sem prazo ficava igual ao
-              card cujo prazo ninguem tinha olhado — a falta nao se via
-              de lugar nenhum, so entrando na obra. */}
+          {/* as duas pontas do prazo: o inicio e o prazo final. O prazo
+              aparece SEMPRE, mesmo em branco — a falta tem de se ver */}
           <span className="obracard__datas">
             {obra.dataInicio && (
               <span className="obracard__data">
@@ -275,20 +223,16 @@ export default function CardObra({
 
             {obra.dataConclusao ? (
               <span className="obracard__data">
-                conclusão: <strong>{dataBR(obra.dataConclusao)}</strong>
+                prazo final: <strong>{dataBR(obra.dataConclusao)}</strong>
               </span>
             ) : (
               <span className="obracard__data obracard__semprazo">
-                conclusão: <strong>sem data</strong>
-                {/* o mesmo (!) da tela da obra — mesma classe, mesma
-                    piscada. Aqui ele nao e botao: o card inteiro ja
-                    abre a obra, que e onde a data se preenche, e um
-                    botao dentro do card disputaria esse clique. */}
+                prazo final: <strong>sem data</strong>
                 {faltaPrazo && (
                   <span
                     className="pendencia pendencia--parada"
-                    title="Esta obra está sem data de conclusão. Abra a obra para preencher."
-                    aria-label="Pendente: obra sem data de conclusão"
+                    title="Esta obra está sem prazo final. Abra a obra para preencher."
+                    aria-label="Pendente: obra sem prazo final"
                   >
                     !
                   </span>
@@ -299,8 +243,6 @@ export default function CardObra({
         </span>
 
         <span className="obracard__fim">
-          {/* embaixo dos avatares, no canto: o carimbo de que não sobrou
-              check nenhum nesta obra */}
           {pessoas.length > 0 && <PilhaAvatares pessoas={pessoas} tamanho={24} limite={3} />}
           {prontaEm && (
             <span className="obracard__pronta">
@@ -309,87 +251,6 @@ export default function CardObra({
           )}
         </span>
       </footer>
-
-      {temChecks && (
-        <div className="obracard__meus">
-          {grupos.map((g) => (
-            /* Cada setor num bloco, e o bloco inteiro corre na cor do
-               cargo: o ponto, o nome e o contorno das caixinhas. E o
-               que responde "de quem e este pedaco" antes de a pessoa
-               ler uma palavra. */
-            <section
-              key={g.cargo}
-              className="obracard__setorgrupo"
-              data-meu={g.meu ? 'sim' : undefined}
-              style={{ '--check-cor': corDeSetor(g.cargo) }}
-            >
-              <p className="obracard__meustopo">
-                <span className="obracard__meucargo">
-                  {!g.meu && <Cadeado />}
-                  {nomeDoCargo(g.cargo)}
-                </span>
-                <em>
-                  {g.feitos} de {g.itens.length}
-                </em>
-              </p>
-
-              <ul className="obracard__checks">
-                {g.itens.map(({ check, card }) => {
-                  const marcado = Boolean(obra.checks?.[check.id])
-                  const posso = podeEditarCheck(user, check, card, obra)
-                  return (
-                    <li key={`${g.cargo}-${check.id}`}>
-                      <button
-                        type="button"
-                        className="obracard__check"
-                        data-feito={marcado ? 'sim' : undefined}
-                        disabled={!posso}
-                        aria-pressed={marcado}
-                        title={
-                          posso
-                            ? marcado
-                              ? 'Desmarcar'
-                              : 'Marcar como feito'
-                            : `Este check é do setor ${nomeDoCargo(g.cargo)}`
-                        }
-                        /* o clique para AQUI: sem isso ele sobe para o card
-                           e abre a obra, que e o contrario do que o botao
-                           existe para fazer */
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          marcar(check.id, marcado)
-                        }}
-                      >
-                        <span className="obracard__caixa" aria-hidden="true">
-                          <Risco />
-                        </span>
-                        {check.titulo}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
-          ))}
-        </div>
-      )}
-
-      {children}
-    </Elemento>
+    </button>
   )
 }
-
-/** O cadeado do setor que nao e o seu. */
-const Cadeado = () => (
-  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
-    <path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7" />
-  </svg>
-)
-
-/** O tique de dentro da caixinha. */
-const Risco = () => (
-  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m5 12.5 4.5 4.5L19 7" />
-  </svg>
-)

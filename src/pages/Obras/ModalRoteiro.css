@@ -136,7 +136,7 @@
 }
 
 /* A previa no estilo novo do card: contorno e nome na cor suave do
-   setor, sem fundo; com mais de um setor, o fio de cores no alto. */
+   setor, sem fundo. */
 .formrot__amostra {
   position: relative;
   overflow: hidden;
@@ -147,10 +147,62 @@
   font-weight: 700;
 }
 
-.formrot__amostra::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: var(--amostra-fio);
+/* ---------------- O check: caixa de marcar e avisos ---------------- */
+
+/* "Obrigatorio responder Sim ou Nao?" — caixa de marcar de verdade, e
+   nao escolha entre duas opcoes: cada check responde a sua */
+.formrot__marca {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.formrot__marca input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* o recado de peca do sistema (check dos ensaios, etapa fixa) */
+.formrot__sistema {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text-base);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* duas datas lado a lado (periodo de execucao) */
+.formrot__datas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .formrot__datas {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* "vai virar emergencia": no azul da emergencia, nao no vermelho de erro */
+.formrot__emergencia {
+  margin: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--quadro-emerg-borda);
+  border-radius: var(--radius-sm);
+  background: var(--quadro-emerg-bg);
+  color: var(--text-strong);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }

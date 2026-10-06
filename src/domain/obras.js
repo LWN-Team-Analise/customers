@@ -299,31 +299,127 @@ export function estadoDaEtapa(roteiro, obra, numero) {
 }
 
 /* ------------------------------------------------------------
+   As etapas do FLUXO
+
+   As tres primeiras etapas de fabrica tem um papel fixo (vem do
+   banco, etapa.papel — ver db/atualizacao-14.sql.txt):
+
+     planejamento   1a — Planejamento / Time Tecnico. Mora ali o
+                    "Planejamento de ensaios";
+     intermediaria  2a — a etapa do meio;
+     execucao       3a — Execucao. Exige o prazo final da obra, e e
+                    ali que os ensaios sao executados dia a dia.
+
+   Etapa FIXA (etapa.fixa) e de fabrica: nao se renomeia, nao se
+   reordena e nao se exclui. So a criada a mao segue editavel.
+   ------------------------------------------------------------ */
+
+export const PAPEL_DA_ETAPA = {
+  planejamento: 'Planejamento técnico',
+  intermediaria: 'Intermediária',
+  execucao: 'Execução',
+}
+
+/** A etapa de execucao do roteiro desta obra (ou null). */
+export function etapaDeExecucao(roteiro) {
+  return (roteiro ?? []).find((e) => e.papel === 'execucao') ?? null
+}
+
+/** Os checks do sistema: o que abre a escolha e o que abre a execucao. */
+export const CHECK_PLANEJAMENTO = 'planejamento_ensaios'
+export const CHECK_EXECUCAO = 'execucao_ensaios'
+
+/** true para os dois checks do sistema (nao se excluem nem se renomeiam). */
+export function checkDoSistema(check) {
+  return Boolean(check?.tipo) && check.tipo !== 'comum'
+}
+
+/* ------------------------------------------------------------
+   EMERGENCIA = execucao em menos de 3 dias
+
+   Periodo de execucao: da entrada em campo (execucaoInicio; sem ela,
+   o inicio da obra) ate o prazo final (dataConclusao, a entrega da
+   documentacao). Menos de DIAS_EMERGENCIA dias e Obra Emergencial —
+   o servidor aplica a mesma conta ao gravar (server/routes/dados.js).
+   ------------------------------------------------------------ */
+
+export const DIAS_EMERGENCIA = 3
+
+/** A execucao cabe em menos de 3 dias? */
+export function execucaoCurta(inicio, fim) {
+  if (!inicio || !fim) return false
+  return diasAte(fim, inicio) < DIAS_EMERGENCIA
+}
+
+/* ------------------------------------------------------------
+   A execucao dos ENSAIOS
+
+   O Planejamento de ensaios escolhe os ensaios da obra
+   (obra.ensaios, a lista de ids). Na execucao, cada ensaio ganha um
+   percentual por DIA (obra.execucao[ensaioId] = [{ dia, percentual }],
+   do dia mais antigo ao mais novo). O andamento de agora de um
+   ensaio e o percentual do dia mais recente; o da execucao inteira e
+   a media dos ensaios. Ela so fecha com todos em 100%.
+   ------------------------------------------------------------ */
+
+/**
+ * { itens: [{ id, nome, percentual, dias }], geral, dias, completo },
+ * ou null quando a obra nao planejou ensaio nenhum.
+ */
+export function progressoExecucao(obra, nomeDoEnsaio = (id) => id) {
+  const ids = obra?.ensaios ?? []
+  if (ids.length === 0) return null
+  const itens = ids.map((id) => {
+    const dias = obra.execucao?.[id] ?? []
+    return {
+      id,
+      nome: nomeDoEnsaio(id),
+      percentual: dias.length > 0 ? dias[dias.length - 1].percentual : 0,
+      dias,
+    }
+  })
+  const geral = Math.round(itens.reduce((soma, i) => soma + i.percentual, 0) / itens.length)
+  const dias = [...new Set(itens.flatMap((i) => i.dias.map((d) => d.dia)))].sort()
+  return { itens, geral, dias, completo: itens.every((i) => i.percentual >= 100) }
+}
+
+/* ------------------------------------------------------------
    Prazos e a COR do card no quadro
 
-   Tres cores, e cada uma responde uma pergunta so:
+   O tom do card, do mais calmo ao mais urgente:
 
-     verde   ('ok')         obra padrao com os prazos em dia;
-     azul    ('emergencia') obra de emergencia com os prazos em dia;
-     amarelo ('atraso')     alguma coisa venceu — ou esta para vencer
-                            e longe de terminar. Vale para os dois
-                            tipos: atraso pesa mais que o tipo.
+     verde    ('ok')          obra padrao com os prazos em dia;
+     azul     ('emergencia')  obra de emergencia com os prazos em dia;
+     amarelo  ('atraso')      um check ou uma etapa passou do prazo —
+                              ou esta para vencer longe de terminar;
+                              ou o prazo final esta chegando;
+     laranja  ('laranja')     prazo final muito perto;
+     vermelho ('vermelho')    prazo final amanha ou hoje;
+     vencido  ('vencido')     o prazo final ja passou — fica marcado
+                              como atrasado ate a obra fechar.
 
-   O que conta como prazo:
-     - a data de conclusao da obra;
-     - o prazo de cada ETAPA nesta obra (obra.prazos.etapas);
-     - o prazo de cada CHECK nesta obra (obra.prazos.checks).
+   Vale o MAIS urgente de todos os motivos.
 
-   "Para vencer" e faltar AVISO_ANTES_DIAS dias ou menos com o
-   trabalho daquele prazo abaixo de PERTO_DE_TERMINAR por cento. Para
-   um check so, "longe de terminar" e simplesmente nao estar feito.
+   O prazo final pesa de jeitos diferentes conforme a etapa:
+     - antes da EXECUCAO, so avisa quando faltam AVISO_ANTES_DIAS
+       dias ou menos com a obra abaixo de PERTO_DE_TERMINAR por cento
+       (amarelo);
+     - da EXECUCAO em diante ele vira o relogio da obra: a cor anda
+       do verde ao vermelho conforme o tempo que resta do periodo de
+       execucao (urgenciaDoPrazoFinal), e o vermelho chega 1 dia antes
+       do prazo;
+     - na EMERGENCIA o periodo inteiro ja e menor que 3 dias, entao a
+       escala nao diz nada: ela fica azul ate o prazo vencer.
 
-   Etapa ou check ja feitos nao atrasam nada, mesmo com o prazo no
+   Check ou etapa ja feitos nao atrasam nada, mesmo com o prazo no
    passado: o prazo serviu.
    ------------------------------------------------------------ */
 
 export const AVISO_ANTES_DIAS = 3
 export const PERTO_DE_TERMINAR = 80
+
+/** O peso de cada tom: o card fica com o mais pesado. */
+export const PESO_DO_TOM = { ok: 0, emergencia: 0, atraso: 1, laranja: 2, vermelho: 3, vencido: 4 }
 
 /** Dias de `hoje` ate `data` ('AAAA-MM-DD'); negativo quando ja passou. */
 export function diasAte(data, hoje) {
@@ -337,14 +433,36 @@ export function diasAte(data, hoje) {
 const pct = (feitos, total) => (total === 0 ? 0 : Math.round((feitos / total) * 100))
 
 /**
+ * O relogio do prazo final na execucao: 'ok' | 'atraso' (amarelo) |
+ * 'laranja' | 'vermelho' | 'vencido'.
+ *
+ * Mede o que RESTA do periodo de execucao (do inicio ao prazo):
+ *   - mais da metade e mais de 3 dias ........ verde;
+ *   - metade ou menos, ou 3 dias ou menos .... amarelo;
+ *   - um quarto ou menos, ou 2 dias .......... laranja;
+ *   - 1 dia (amanha) ou o proprio dia ........ vermelho;
+ *   - passou ................................. vencido.
+ */
+export function urgenciaDoPrazoFinal(inicio, prazo, hoje) {
+  if (!prazo) return null
+  const restam = diasAte(prazo, hoje)
+  if (restam < 0) return 'vencido'
+  if (restam <= 1) return 'vermelho'
+  const total = inicio ? Math.max(1, diasAte(prazo, inicio)) : null
+  const fracao = total ? restam / total : 1
+  if (restam <= 2 || fracao <= 0.25) return 'laranja'
+  if (restam <= AVISO_ANTES_DIAS || fracao <= 0.5) return 'atraso'
+  return 'ok'
+}
+
+/**
  * A situacao da obra no quadro.
  *
- * Devolve { tom, motivos }, com `tom` em 'ok' | 'emergencia' | 'atraso'
- * e cada motivo como
- *   { nivel: 'atraso' | 'perto', alvo: 'obra' | 'etapa' | 'check',
- *     prazo, dias, numero?, titulo?, setores: [chaves] }
- * — os vencidos primeiro. Os `setores` sao quem ainda deve naquele
- * prazo: e o "atraso por causa de um setor" que a tela escreve.
+ * Devolve { tom, motivos }. `tom` e um dos de PESO_DO_TOM e cada motivo
+ *   { tom, venceu, alvo: 'obra' | 'etapa' | 'check', prazo, dias,
+ *     numero?, titulo?, setores: [chaves] }
+ * — do mais urgente para o menos. Os `setores` sao quem ainda deve
+ * naquele prazo: e o "atraso por causa de um setor" que a tela escreve.
  */
 export function situacaoDaObra(roteiro, obra, hoje) {
   const tomBase = obra?.tipo === 'emergencia' ? 'emergencia' : 'ok'
@@ -354,18 +472,41 @@ export function situacaoDaObra(roteiro, obra, hoje) {
   const prazos = obra.prazos ?? {}
   const motivos = []
 
+  /* prazo de etapa ou de check: venceu, ou esta para vencer longe de
+     terminar — os dois deixam o card amarelo */
   const avaliar = (prazo, andamento, extra) => {
     if (!prazo) return
     const dias = diasAte(prazo, hoje)
-    if (dias < 0) motivos.push({ nivel: 'atraso', prazo, dias, ...extra })
+    if (dias < 0) motivos.push({ tom: 'atraso', venceu: true, prazo, dias, ...extra })
     else if (dias <= AVISO_ANTES_DIAS && andamento < PERTO_DE_TERMINAR) {
-      motivos.push({ nivel: 'perto', prazo, dias, ...extra })
+      motivos.push({ tom: 'atraso', venceu: false, prazo, dias, ...extra })
     }
   }
 
-  /* a obra inteira: so enquanto sobrar check em aberto */
-  if (!obraConcluida(roteiro, marcados)) {
-    avaliar(obra.dataConclusao, progressoDaObra(roteiro, marcados), { alvo: 'obra', setores: [] })
+  /* o prazo FINAL da obra: so enquanto sobrar check em aberto */
+  if (obra.dataConclusao && !obraConcluida(roteiro, marcados)) {
+    const prazo = obra.dataConclusao
+    const dias = diasAte(prazo, hoje)
+    const execucao = etapaDeExecucao(roteiro)
+    const naExecucao =
+      obra.tipo !== 'emergencia' &&
+      execucao !== null &&
+      etapaAtual(roteiro, marcados) >= execucao.numero
+
+    let tom = null
+    if (dias < 0) tom = 'vencido'
+    else if (naExecucao) {
+      tom = urgenciaDoPrazoFinal(obra.execucaoInicio ?? obra.dataInicio, prazo, hoje)
+    } else if (
+      obra.tipo !== 'emergencia' &&
+      dias <= AVISO_ANTES_DIAS &&
+      progressoDaObra(roteiro, marcados) < PERTO_DE_TERMINAR
+    ) {
+      tom = 'atraso'
+    }
+    if (tom && tom !== 'ok') {
+      motivos.push({ tom, venceu: dias < 0, alvo: 'obra', prazo, dias, naExecucao, setores: [] })
+    }
   }
 
   ;(roteiro ?? []).forEach((etapa) => {
@@ -394,8 +535,13 @@ export function situacaoDaObra(roteiro, obra, hoje) {
     })
   })
 
-  motivos.sort((a, b) => (a.nivel === b.nivel ? a.dias - b.dias : a.nivel === 'atraso' ? -1 : 1))
-  return { tom: motivos.length > 0 ? 'atraso' : tomBase, motivos }
+  motivos.sort(
+    (a, b) =>
+      PESO_DO_TOM[b.tom] - PESO_DO_TOM[a.tom] ||
+      Number(b.venceu) - Number(a.venceu) ||
+      a.dias - b.dias,
+  )
+  return { tom: motivos.length > 0 ? motivos[0].tom : tomBase, motivos }
 }
 
 /**
@@ -461,9 +607,10 @@ export function podeEditarCpf(usuario) {
 /**
  * Quem marca os checks de um card.
  *
- * Cada cargo mexe so no que e dele: o ADM nao fecha check do Tecnico.
- * Card de mais de um cargo aceita qualquer um deles. A excecao e o cargo
- * com acesso total (diretoria), que edita qualquer card.
+ * Cada setor mexe so no que e dele: o ADM nao fecha check do Tecnico.
+ * A excecao e o setor com acesso total (diretoria), que edita qualquer
+ * card. (Card antigo, de antes de o card ser de um setor so, ainda pode
+ * ter mais de um — e ai continua aceitando os que tem.)
  */
 export function podeEditarCard(usuario, card) {
   if (!usuario) return false
@@ -511,10 +658,7 @@ export function podeEditarCheck(usuario, check, card, obra) {
 }
 
 /* ------------------------------------------------------------
-   Aparencia do card de setor
-
-   Um cargo -> cor cheia. Dois ou mais -> gradiente com as cores de
-   cada um, na ordem em que foram escolhidos.
+   Aparencia do card de setor: a cor do setor dono do card
    ------------------------------------------------------------ */
 
 export function corDoCard(card, corDoCargo) {
@@ -531,13 +675,13 @@ export function fundoDoCard(card, corDoCargo) {
 }
 
 /**
- * As cores do card no estilo NOVO (contorno, sem fundo): a primeira
- * pinta o contorno e o nome; com mais de um setor, todas vao num fio
- * de gradiente no alto do card. `cor` e a cor suave de cada setor.
+ * A cor do card no estilo NOVO (contorno, sem fundo): a cor SUAVE do
+ * setor dono pinta o contorno e o nome. O card e de um setor so — o
+ * gradiente de varios setores saiu. `cor` e a funcao de cor suave.
  */
-export function coresDoCard(card, cor) {
-  const cores = (card?.cargos ?? []).map(cor).filter(Boolean)
-  return cores.length > 0 ? cores : ['#6b7280']
+export function corDoSetorDoCard(card, cor) {
+  const primeira = (card?.cargos ?? []).map(cor).find(Boolean)
+  return primeira ?? '#6b7280'
 }
 
 /** Nome que aparece no topo do card: o titulo escrito ou os cargos dele. */

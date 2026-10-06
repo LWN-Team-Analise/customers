@@ -82,25 +82,41 @@ const obraDaChamada = (req) => req.body?.obraId ?? req.query?.obraId ?? null
    obra antiga continua desenhando o roteiro que ela teve.
    ------------------------------------------------------------ */
 
+/** Tenta a leitura nova; sem as colunas novas (42703), cai na de antes. */
+function comReserva(nova, antiga) {
+  return query(nova).catch((erro) => {
+    if (erro.code !== '42703') throw erro
+    return query(antiga)
+  })
+}
+
 export async function lerRoteiro() {
+  /* As colunas novas (fixa/papel da etapa, informacoes do card,
+     sim_nao/informacoes/tipo do check) vem das atualizacoes 13 e 14.
+     Num banco sem elas as colunas nao existem, e o roteiro inteiro nao
+     pode parar por isso: cada leitura cai na de antes, e as pecas vem
+     como sempre vieram (etapa editavel, card e check comuns). */
   const [etapas, cards, cargos, checks, cargosCheck, etiquetas] = await Promise.all([
-    query(
+    comReserva(
+      `SELECT id, ordem, nome, descricao, fixa, papel, vigente_de, vigente_ate
+         FROM etapa ORDER BY ordem, id`,
       'SELECT id, ordem, nome, descricao, vigente_de, vigente_ate FROM etapa ORDER BY ordem, id',
     ),
-    /* sim_nao e informacoes vem da atualizacao 13. Num banco sem ela as
-       colunas nao existem, e o roteiro inteiro nao pode parar por isso:
-       cai na leitura de antes e os cards vem como cards comuns */
-    query(`SELECT id, etapa_id, ordem, titulo, sim_nao, informacoes, vigente_de, vigente_ate
-             FROM etapa_card ORDER BY ordem, id`).catch((erro) => {
-      if (erro.code !== '42703') throw erro
-      return query(`SELECT id, etapa_id, ordem, titulo, vigente_de, vigente_ate
-                      FROM etapa_card ORDER BY ordem, id`)
-    }),
+    comReserva(
+      `SELECT id, etapa_id, ordem, titulo, informacoes, vigente_de, vigente_ate
+         FROM etapa_card ORDER BY ordem, id`,
+      `SELECT id, etapa_id, ordem, titulo, vigente_de, vigente_ate
+         FROM etapa_card ORDER BY ordem, id`,
+    ),
     query(`SELECT cc.card_id, c.chave, cc.ordem
              FROM etapa_card_cargo cc JOIN cargo c ON c.id = cc.cargo_id
             ORDER BY cc.ordem`),
-    query(`SELECT id, card_id, ordem, titulo, vigente_de, vigente_ate
-             FROM etapa_check ORDER BY ordem, id`),
+    comReserva(
+      `SELECT id, card_id, ordem, titulo, sim_nao, informacoes, tipo, vigente_de, vigente_ate
+         FROM etapa_check ORDER BY ordem, id`,
+      `SELECT id, card_id, ordem, titulo, vigente_de, vigente_ate
+         FROM etapa_check ORDER BY ordem, id`,
+    ),
     query(`SELECT kc.check_id, c.chave, kc.ordem
              FROM etapa_check_cargo kc JOIN cargo c ON c.id = kc.cargo_id
             ORDER BY kc.ordem`),
@@ -145,6 +161,14 @@ export async function lerRoteiro() {
       ordem: l.ordem,
       titulo: l.titulo,
       cargos: cargosDoCheck[l.id] ?? [],
+      /* check de pergunta: marcar pede Sim ou Nao. E do CHECK, nao do
+         card — no mesmo card um pede resposta e o do lado nao */
+      simNao: l.sim_nao ?? false,
+      /* o que o check pede — a dica que aparece ao passar o mouse */
+      informacoes: l.informacoes ?? '',
+      /* 'comum', ou um dos dois do sistema: 'planejamento_ensaios' e
+         'execucao_ensaios' (ver db/atualizacao-14.sql.txt) */
+      tipo: l.tipo ?? 'comum',
       vigenteDe: l.vigente_de,
       vigenteAte: l.vigente_ate,
     })
@@ -158,8 +182,6 @@ export async function lerRoteiro() {
       id: String(l.id),
       ordem: l.ordem,
       titulo: l.titulo,
-      /* card de pergunta: marcar um check dele pede Sim ou Nao */
-      simNao: l.sim_nao ?? false,
       /* o que o card faz — a dica que aparece ao passar o mouse */
       informacoes: l.informacoes ?? '',
       cargos: cargosDoCard[l.id] ?? [],
@@ -180,6 +202,11 @@ export async function lerRoteiro() {
     /* a linha de apoio embaixo do nome ("aguardando aprovacao").
        Texto livre e opcional: etapa sem descricao mostra so o nome. */
     descricao: e.descricao ?? '',
+    /* etapa de fabrica: nao se renomeia, nao se reordena, nao se exclui */
+    fixa: e.fixa ?? false,
+    /* 'planejamento' | 'intermediaria' | 'execucao' nas tres primeiras
+       fixas; null nas outras */
+    papel: e.papel ?? null,
     cards: cardsDaEtapa[e.id] ?? [],
     vigenteDe: e.vigente_de,
     vigenteAte: e.vigente_ate,
@@ -196,7 +223,27 @@ router.get('/', exigeSessao, async (_req, res) => {
 
 /* ------------------------------------------------------------
    Etapas
+
+   As etapas de FABRICA (etapa.fixa, atualizacao 14) sao o
+   esqueleto do fluxo — planejamento, intermediaria, execucao — e
+   nao se renomeiam, nao se reordenam e nao se excluem. So as
+   criadas a mao seguem editaveis. A tela esconde o lapis; aqui e
+   o que impede chamar a API na mao.
    ------------------------------------------------------------ */
+
+const ETAPA_FIXA =
+  'Esta etapa é fixa do fluxo da obra: não pode ser renomeada, reordenada nem excluída. Só as etapas criadas manualmente podem ser editadas.'
+
+/** A etapa e fixa? Banco sem a coluna (sem a atualizacao 14): nenhuma e. */
+async function etapaFixa(id) {
+  try {
+    const { rows } = await query('SELECT fixa FROM etapa WHERE id = $1', [id])
+    return rows[0]?.fixa === true
+  } catch (erro) {
+    if (erro.code === '42703') return false
+    throw erro
+  }
+}
 
 router.post('/etapas', exigeSessao, exige('editar_etapa'), async (req, res) => {
   const nome = String(req.body?.nome ?? '').trim()
@@ -250,6 +297,7 @@ router.patch('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res)
   }
 
   try {
+    if (await etapaFixa(req.params.id)) return res.status(409).json({ erro: ETAPA_FIXA })
     const { rows } = await query(
       `UPDATE etapa
           SET nome      = coalesce($1, nome),
@@ -275,6 +323,7 @@ router.patch('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res)
  */
 router.delete('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res) => {
   try {
+    if (await etapaFixa(req.params.id)) return res.status(409).json({ erro: ETAPA_FIXA })
     const ate = await momento(obraDaChamada(req))
     const { rows } = await query(
       'UPDATE etapa SET vigente_ate = $1 WHERE id = $2 AND vigente_ate IS NULL RETURNING nome',
@@ -289,19 +338,29 @@ router.delete('/etapas/:id', exigeSessao, exige('editar_etapa'), async (req, res
 })
 
 /* ------------------------------------------------------------
-   Cards — um card pertence a 1..N cargos
+   Cards — um card e de UM setor
+
+   Card de varios setores (com o gradiente das cores deles, e
+   qualquer um marcando qualquer check) saiu: o card e do setor, e
+   quem marca cada check e decidido NO CHECK ("Quem marca este
+   check"). Card antigo que ja tinha mais de um setor continua de
+   pe; so nao se cria nem se troca para mais de um.
    ------------------------------------------------------------ */
 
-/** Regrava os cargos do card. Lista vazia nao passa: card sem dono nao marca nada. */
+/** Regrava o setor do card. Lista vazia nao passa: card sem dono nao marca nada. */
 async function gravarCargos(cardId, chaves) {
   const limpas = [...new Set((chaves ?? []).map((c) => String(c).trim()).filter(Boolean))]
-  if (limpas.length === 0) return { erro: 'Escolha ao menos um cargo para o card.' }
+  if (limpas.length === 0) return { erro: 'Escolha o setor do card.' }
+  if (limpas.length > 1) {
+    return {
+      erro: 'O card é de um setor só. Para outro setor marcar um check, escolha em "Quem marca este check".',
+    }
+  }
 
   const { rows } = await query('SELECT id, chave FROM cargo WHERE chave = ANY($1)', [limpas])
   if (rows.length !== limpas.length) return { erro: 'Cargo não encontrado.' }
 
   await query('DELETE FROM etapa_card_cargo WHERE card_id = $1', [cardId])
-  // a ordem segue a que o usuario escolheu: e ela que decide o sentido do gradiente
   for (const [i, chave] of limpas.entries()) {
     const cargo = rows.find((r) => r.chave === chave)
     await query('INSERT INTO etapa_card_cargo (card_id, cargo_id, ordem) VALUES ($1, $2, $3)', [
@@ -313,12 +372,11 @@ async function gravarCargos(cardId, chaves) {
   return { ok: true }
 }
 
-/** O texto de "Informacoes do card": vazio vira NULL, e com teto. */
+/** O texto de "Informacoes" (do card ou do check): vazio vira NULL, e com teto. */
 const informacoesDoCorpo = (valor) => String(valor ?? '').trim().slice(0, 600) || null
 
 router.post('/etapas/:id/cards', exigeSessao, exige('editar_cards'), async (req, res) => {
   const titulo = String(req.body?.titulo ?? '').trim() || null
-  const simNao = req.body?.simNao === true
   const informacoes = informacoesDoCorpo(req.body?.informacoes)
 
   try {
@@ -326,12 +384,22 @@ router.post('/etapas/:id/cards', exigeSessao, exige('editar_cards'), async (req,
     if (!etapa.rows[0]) return res.status(404).json({ erro: 'Etapa não encontrada.' })
 
     const desde = await momento(obraDaChamada(req))
+    /* sem a atualizacao 13 nao ha coluna de informacoes: o card nasce
+       sem a dica, mas nasce */
     const { rows } = await query(
-      `INSERT INTO etapa_card (etapa_id, ordem, titulo, sim_nao, informacoes, vigente_de)
-       VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_card WHERE etapa_id = $1), -1) + 1, $2, $3, $4, $5)
+      `INSERT INTO etapa_card (etapa_id, ordem, titulo, informacoes, vigente_de)
+       VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_card WHERE etapa_id = $1), -1) + 1, $2, $3, $4)
        RETURNING id`,
-      [req.params.id, titulo, simNao, informacoes, desde],
-    )
+      [req.params.id, titulo, informacoes, desde],
+    ).catch((erro) => {
+      if (erro.code !== '42703') throw erro
+      return query(
+        `INSERT INTO etapa_card (etapa_id, ordem, titulo, vigente_de)
+         VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_card WHERE etapa_id = $1), -1) + 1, $2, $3)
+         RETURNING id`,
+        [req.params.id, titulo, desde],
+      )
+    })
 
     const posto = await gravarCargos(rows[0].id, req.body?.cargos)
     if (posto.erro) {
@@ -354,15 +422,6 @@ router.patch('/cards/:id', exigeSessao, exige('editar_cards'), async (req, res) 
     if (req.body?.titulo !== undefined) {
       await query('UPDATE etapa_card SET titulo = $1 WHERE id = $2', [
         String(req.body.titulo).trim() || null,
-        req.params.id,
-      ])
-    }
-    /* Virar (ou deixar de ser) pergunta vale para o card em todas as
-       obras que o enxergam — e o mesmo card. O que ja foi marcado fica:
-       check marcado antes da mudanca continua feito, so sem resposta. */
-    if (req.body?.simNao !== undefined) {
-      await query('UPDATE etapa_card SET sim_nao = $1 WHERE id = $2', [
-        req.body.simNao === true,
         req.params.id,
       ])
     }
@@ -419,7 +478,32 @@ router.delete('/cards/:id', exigeSessao, exige('editar_cards'), async (req, res)
 
 /* ------------------------------------------------------------
    Checks
+
+   Tudo o que diz como o check se COMPORTA mora nele:
+     sim_nao      "Obrigatorio responder Sim ou Nao?";
+     informacoes  a dica ao passar o mouse;
+     cargos       quem marca (vazio = o setor do card).
+
+   Os dois checks do SISTEMA (tipo 'planejamento_ensaios' e
+   'execucao_ensaios', atualizacao 14) sustentam o fluxo dos
+   ensaios: nao se excluem, nao mudam de nome e nao viram
+   pergunta. Quem marca e a dica continuam editaveis.
    ------------------------------------------------------------ */
+
+const CHECK_DO_SISTEMA =
+  'Este check é do sistema (fluxo dos ensaios): não pode ser excluído, renomeado nem virar pergunta.'
+
+/** O tipo do check ('comum' num banco sem a atualizacao 14), ou null se nao existe. */
+async function tipoDoCheck(id) {
+  try {
+    const { rows } = await query('SELECT tipo FROM etapa_check WHERE id = $1', [id])
+    return rows[0] ? rows[0].tipo : null
+  } catch (erro) {
+    if (erro.code !== '42703') throw erro
+    const { rows } = await query('SELECT id FROM etapa_check WHERE id = $1', [id])
+    return rows[0] ? 'comum' : null
+  }
+}
 
 /**
  * Regrava os cargos donos de UM check.
@@ -454,12 +538,23 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
     if (!card.rows[0]) return res.status(404).json({ erro: 'Card não encontrado.' })
 
     const desde = await momento(obraDaChamada(req))
+    const simNao = req.body?.simNao === true
+    const informacoes = informacoesDoCorpo(req.body?.informacoes)
+    /* sem a atualizacao 13 o check nasce comum e sem dica — mas nasce */
     const { rows } = await query(
-      `INSERT INTO etapa_check (card_id, ordem, titulo, vigente_de)
-       VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check WHERE card_id = $1), -1) + 1, $2, $3)
+      `INSERT INTO etapa_check (card_id, ordem, titulo, sim_nao, informacoes, vigente_de)
+       VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check WHERE card_id = $1), -1) + 1, $2, $3, $4, $5)
        RETURNING id, ordem, titulo, vigente_de`,
-      [req.params.id, titulo, desde],
-    )
+      [req.params.id, titulo, simNao, informacoes, desde],
+    ).catch((erro) => {
+      if (erro.code !== '42703') throw erro
+      return query(
+        `INSERT INTO etapa_check (card_id, ordem, titulo, vigente_de)
+         VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check WHERE card_id = $1), -1) + 1, $2, $3)
+         RETURNING id, ordem, titulo, vigente_de`,
+        [req.params.id, titulo, desde],
+      )
+    })
 
     if (req.body?.cargos !== undefined) {
       const posto = await gravarCargosDoCheck(rows[0].id, req.body.cargos)
@@ -479,6 +574,9 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
         ordem: rows[0].ordem,
         titulo: rows[0].titulo,
         cargos: req.body?.cargos ?? [],
+        simNao,
+        informacoes: informacoes ?? '',
+        tipo: 'comum',
         vigenteDe: rows[0].vigente_de,
         vigenteAte: null,
       },
@@ -490,14 +588,37 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
 
 router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res) => {
   try {
+    const tipo = await tipoDoCheck(req.params.id)
+    if (!tipo) return res.status(404).json({ erro: 'Check não encontrado.' })
+
     if (req.body?.titulo !== undefined) {
       const titulo = String(req.body.titulo).trim()
       if (!titulo) return res.status(400).json({ erro: 'Escreva o que precisa ser feito.' })
-      const { rows } = await query(
-        'UPDATE etapa_check SET titulo = $1 WHERE id = $2 RETURNING id',
-        [titulo, req.params.id],
-      )
-      if (!rows[0]) return res.status(404).json({ erro: 'Check não encontrado.' })
+      const atual = await query('SELECT titulo FROM etapa_check WHERE id = $1', [req.params.id])
+      if (tipo !== 'comum' && atual.rows[0]?.titulo !== titulo) {
+        return res.status(409).json({ erro: CHECK_DO_SISTEMA })
+      }
+      await query('UPDATE etapa_check SET titulo = $1 WHERE id = $2', [titulo, req.params.id])
+    }
+
+    /* Virar (ou deixar de ser) pergunta vale para o check em todas as
+       obras que o enxergam — e o mesmo check. O que ja foi marcado fica:
+       marcado antes da mudanca continua feito, so sem resposta. */
+    if (req.body?.simNao !== undefined) {
+      if (tipo !== 'comum' && req.body.simNao === true) {
+        return res.status(409).json({ erro: CHECK_DO_SISTEMA })
+      }
+      await query('UPDATE etapa_check SET sim_nao = $1 WHERE id = $2', [
+        req.body.simNao === true,
+        req.params.id,
+      ])
+    }
+
+    if (req.body?.informacoes !== undefined) {
+      await query('UPDATE etapa_check SET informacoes = $1 WHERE id = $2', [
+        informacoesDoCorpo(req.body.informacoes),
+        req.params.id,
+      ])
     }
 
     if (req.body?.cargos !== undefined) {
@@ -522,6 +643,8 @@ router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res
 
 router.delete('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res) => {
   try {
+    const tipo = await tipoDoCheck(req.params.id)
+    if (tipo && tipo !== 'comum') return res.status(409).json({ erro: CHECK_DO_SISTEMA })
     const ate = await momento(obraDaChamada(req))
     const { rows } = await query(
       `UPDATE etapa_check SET vigente_ate = $1 WHERE id = $2 AND vigente_ate IS NULL

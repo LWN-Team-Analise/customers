@@ -15,14 +15,19 @@ import {
   cardConcluido,
   cardsQueValem,
   chaveDoCargo,
+  CHECK_EXECUCAO,
+  CHECK_PLANEJAMENTO,
   checkTemDonoProprio,
-  coresDoCard,
+  corDoSetorDoCard,
+  diasAte,
   estadoDoPrazo,
   nomeDoCard,
+  PAPEL_DA_ETAPA,
   podeEditarCheck,
   rotuloPrioridadeObra,
   tituloDaObra,
   tomPrioridadeObra,
+  urgenciaDoPrazoFinal,
 } from '@/domain/obras'
 import { textoSobre } from '@/utils/cor'
 import { dataBR, dataExtensa, dataHora, hojeISO } from '@/utils/formato'
@@ -30,6 +35,9 @@ import ModalCard from './ModalCard'
 import ModalCheck from './ModalCheck'
 import ModalResposta from './ModalResposta'
 import ModalPrazo from './ModalPrazo'
+import ModalPlanejamento from './ModalPlanejamento'
+import ModalExecucao from './ModalExecucao'
+import ModalPeriodo from './ModalPeriodo'
 import ModalEtapa from './ModalEtapa'
 import ModalFechaEtapa from './ModalFechaEtapa'
 import ModalChat from './ModalChat'
@@ -89,6 +97,13 @@ const Icone = {
     <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="5" width="16" height="15" rx="2" />
       <path d="M8 3v4M16 3v4M4 10h16" />
+    </svg>
+  ),
+  /* o cadeado pequeno da etapa fixa */
+  fixa: () => (
+    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+      <path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" />
     </svg>
   ),
   /* o "i" das informacoes do card */
@@ -164,6 +179,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     alternarCheck,
     responderCheck,
     definirPrazo,
+    execucaoDaObra,
     removerObra,
     adicionarObservacao,
     editarObservacao,
@@ -203,8 +219,17 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const [menuFlutuante, setMenuFlutuante] = useState(false)
   /* a pergunta Sim/Nao de um check de card de pergunta: {card, check} */
   const [respondendo, setRespondendo] = useState(null)
-  /* o prazo sendo definido: {tipo: 'etapa'|'check', id, nome, prazo} */
+  /* o prazo sendo definido: {tipo: 'etapa'|'check', id, nome, prazo} —
+     ou, pelo "Prazos dos checks" da etapa, {nome, checks: [...]} para a
+     pessoa escolher o check */
   const [prazoAlvo, setPrazoAlvo] = useState(null)
+  /* os dois checks dos ensaios abrem pop-up proprio: {card, check} */
+  const [planejando, setPlanejando] = useState(null)
+  const [executando, setExecutando] = useState(null)
+  /* o periodo de execucao (entrada em campo -> prazo final) */
+  const [periodo, setPeriodo] = useState(false)
+  /* tentou marcar check da execucao sem o prazo final */
+  const [faltaPrazoFinal, setFaltaPrazoFinal] = useState(false)
 
   /* pop-ups da obra */
   const [chat, setChat] = useState(false)
@@ -251,10 +276,32 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     alternarCheck(obra.id, checkId)
   }
 
-  /* Card de PERGUNTA nao marca direto: abre o Sim/Nao. O resto segue
-     marcando e desmarcando no clique, como sempre. */
-  const clicarCheck = (card, check) => {
-    if (card.simNao) {
+  /**
+   * O clique num check. Quatro caminhos, conforme o CHECK (e nao o card):
+   *
+   *   - "Planejamento de ensaios" abre a escolha dos ensaios (arrastar);
+   *   - "Execucao dos ensaios" abre a execucao dia a dia;
+   *   - check de pergunta (check.simNao) abre o Sim/Nao;
+   *   - o resto marca e desmarca no clique, como sempre.
+   *
+   * Na etapa de EXECUCAO nada se marca sem o prazo final da obra (o
+   * servidor recusa igual): em vez de deixar o check piscar, a tela ja
+   * diz o motivo. Desmarcar continua livre.
+   */
+  const clicarCheck = (etapa, card, check) => {
+    if (check.tipo === CHECK_PLANEJAMENTO) {
+      setPlanejando({ card, check })
+      return
+    }
+    if (check.tipo === CHECK_EXECUCAO) {
+      setExecutando({ card, check })
+      return
+    }
+    if (etapa.papel === 'execucao' && !obra.dataConclusao && !obra.checks?.[check.id]) {
+      setFaltaPrazoFinal(true)
+      return
+    }
+    if (check.simNao) {
       setRespondendo({ card, check })
       return
     }
@@ -535,7 +582,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               concluída também não — o prazo daquela já passou, e
               piscar sobre registro fechado é ruído. */}
           <div className="info info--conclusao">
-            <span className="info__nome">Data de conclusão</span>
+            <span className="info__nome">Prazo final</span>
             <span className="info__valor">
               {dataExtensa(obra.dataConclusao) || <em className="info__vazio">sem data</em>}
             </span>
@@ -563,7 +610,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                     key={card.id}
                     className={`info__setor ${pronto ? 'is-pronto' : ''}`.trim()}
                     /* contorno e texto na cor suave do setor, sem fundo */
-                    style={{ '--setor-cor': coresDoCard(card, corSuaveDoCargo)[0] }}
+                    style={{ '--setor-cor': corDoSetorDoCard(card, corSuaveDoCargo) }}
                     title={pronto ? 'Concluído' : 'Pendente'}
                   >
                     {nomeDoCard(card, nomeDoCargo)}
@@ -699,6 +746,17 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                 andamento,
               })
               const nomeEtapa = etapa.nome || rotuloEtapa(etapa.numero)
+              const ehExecucao = etapa.papel === 'execucao'
+              /* os checks da etapa, para o "Prazos dos checks" escolher um */
+              const checksParaPrazo = etapa.cards.flatMap((card) =>
+                card.checks
+                  .filter((k) => !obra.checks[k.id])
+                  .map((k) => ({
+                    id: k.id,
+                    rotulo: `${k.titulo} — ${nomeDoCard(card, nomeDoCargo)}`,
+                    prazo: obra.prazos?.checks?.[k.id] ?? null,
+                  })),
+              )
 
               return (
                 <section key={etapa.id} className="etapa vidro" data-estado={estado}>
@@ -711,14 +769,42 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                     <h2 className="etapa__titulo" title={rotuloEtapa(etapa.numero)}>
                       {etapa.nome || rotuloEtapa(etapa.numero)}
                     </h2>
+                    {/* etapa de fabrica: o esqueleto do fluxo, que nao se
+                        renomeia nem se exclui */}
+                    {etapa.fixa && (
+                      <span
+                        className="etapa__fixa"
+                        title="Etapa fixa do fluxo: não pode ser renomeada, reordenada nem excluída"
+                      >
+                        <Icone.fixa />
+                        {PAPEL_DA_ETAPA[etapa.papel] ?? 'Fixa'}
+                      </span>
+                    )}
                     {estado === 'concluida' && <Icone.ok />}
                     {estado === 'atual' && <Icone.atual />}
                     {estado === 'bloqueada' && <Icone.travada />}
                     <span className="etapa__contagem">
                       {prontos}/{valem.length}
                     </span>
-                    {mexeNoRoteiro && (
+                    {(mexeNoRoteiro || podePrazos) && (
                       <span className="etapa__ferramentas">
+                        {/* escolher UM check da etapa e dar prazo a ele */}
+                        {podePrazos && checksParaPrazo.length > 0 && (
+                          <button
+                            type="button"
+                            className="etapa__botao"
+                            onClick={() =>
+                              setPrazoAlvo({
+                                nome: `Prazos dos checks — ${nomeEtapa}`,
+                                checks: checksParaPrazo,
+                              })
+                            }
+                            title="Definir o prazo de um check desta etapa"
+                            aria-label={`Prazos dos checks de ${nomeEtapa}`}
+                          >
+                            <Icone.prazo tamanho={14} />
+                          </button>
+                        )}
                         {podeCards && (
                           <button
                             type="button"
@@ -730,7 +816,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                             <Icone.mais tamanho={15} />
                           </button>
                         )}
-                        {podeEtapa && (
+                        {podeEtapa && !etapa.fixa && (
                           <button
                             type="button"
                             className="etapa__botao"
@@ -748,6 +834,18 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                   {/* a linha de apoio: em que pé a etapa está. Só
                       aparece quando alguém escreveu alguma coisa. */}
                   {etapa.descricao && <p className="etapa__desc">{etapa.descricao}</p>}
+
+                  {/* A EXECUÇÃO: o período (entrada em campo -> prazo
+                      final), obrigatório, e o andamento dos ensaios */}
+                  {ehExecucao && (
+                    <BlocoExecucao
+                      obra={obra}
+                      hoje={hoje}
+                      execucao={execucaoDaObra(obra)}
+                      podePeriodo={podePrazos}
+                      aoDefinir={() => setPeriodo(true)}
+                    />
+                  )}
 
                   {/* O PRAZO da etapa nesta obra. Quem pode definir vê o
                       botão mesmo sem prazo; quem não pode só vê quando há
@@ -803,7 +901,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                         nomeDoCargo={nomeDoCargo}
                         cargoPorChave={cargoPorChave}
                         pessoaPorId={pessoaPorId}
-                        aoMarcar={(check) => clicarCheck(card, check)}
+                        aoMarcar={(check) => clicarCheck(etapa, card, check)}
+                        execucao={execucaoDaObra(obra)}
                         aoEditarCard={() => setEditandoCard({ etapa, card })}
                         aoNovoCheck={() => setEditandoCheck({ card })}
                         aoEditarCheck={(check) => setEditandoCheck({ card, check })}
@@ -1079,8 +1178,79 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         nomeCard={editandoCheck?.card ? nomeDoCard(editandoCheck.card, nomeDoCargo) : ''}
         check={editandoCheck?.check ?? null}
         obraId={obra.id}
+        prazoAtual={
+          editandoCheck?.check ? (obra.prazos?.checks?.[editandoCheck.check.id] ?? null) : null
+        }
         aoFechar={() => setEditandoCheck(null)}
       />
+
+      <ModalPlanejamento
+        aberto={Boolean(planejando)}
+        obra={obra}
+        podeEditar={
+          !soLeitura &&
+          Boolean(planejando) &&
+          podeEditarCheck(user, planejando.check, planejando.card, obra)
+        }
+        marcado={Boolean(planejando && obra.checks[planejando.check.id])}
+        aoDesmarcar={() => alternarCheck(obra.id, planejando.check.id)}
+        aoFechar={() => setPlanejando(null)}
+      />
+
+      <ModalExecucao
+        aberto={Boolean(executando)}
+        obra={obra}
+        podeEditar={
+          !soLeitura &&
+          Boolean(executando) &&
+          podeEditarCheck(user, executando.check, executando.card, obra)
+        }
+        marcado={Boolean(executando && obra.checks[executando.check.id])}
+        podePeriodo={podePrazos}
+        aoDefinirPeriodo={() => setPeriodo(true)}
+        aoConcluir={() => alternarCheck(obra.id, executando.check.id)}
+        aoDesmarcar={() => alternarCheck(obra.id, executando.check.id)}
+        aoFechar={() => setExecutando(null)}
+      />
+
+      <ModalPeriodo aberto={periodo} obra={obra} aoFechar={() => setPeriodo(false)} />
+
+      <Modal
+        aberto={faltaPrazoFinal}
+        aoFechar={() => setFaltaPrazoFinal(false)}
+        titulo="Falta o prazo final"
+        largura={430}
+      >
+        <div className="formrot">
+          <p className="formrot__sistema" role="note">
+            A etapa de execução só anda com o prazo final da obra — a data até a qual a obra e a
+            documentação precisam ficar prontas.{' '}
+            {podePrazos
+              ? 'Defina o período de execução e marque o check de novo.'
+              : 'Peça a quem pode definir prazos para preenchê-lo.'}
+          </p>
+          <footer className="formobra__acoes">
+            <button
+              type="button"
+              className="formobra__cancelar"
+              onClick={() => setFaltaPrazoFinal(false)}
+            >
+              Fechar
+            </button>
+            {podePrazos && (
+              <Button
+                type="button"
+                onClick={() => {
+                  setFaltaPrazoFinal(false)
+                  setPeriodo(true)
+                }}
+              >
+                Definir prazo final
+              </Button>
+            )}
+          </footer>
+        </div>
+      </Modal>
 
       <ModalResposta
         aberto={Boolean(respondendo)}
@@ -1096,9 +1266,9 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
       <ModalPrazo
         aberto={Boolean(prazoAlvo)}
         alvo={prazoAlvo}
-        aoSalvar={(prazo) =>
+        aoSalvar={(prazo, alvoId) =>
           definirPrazo(obra.id, {
-            ...(prazoAlvo.tipo === 'etapa' ? { etapaId: prazoAlvo.id } : { checkId: prazoAlvo.id }),
+            ...(prazoAlvo.tipo === 'etapa' ? { etapaId: alvoId } : { checkId: alvoId }),
             prazo,
           })
         }
@@ -1211,18 +1381,84 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 }
 
 /**
+ * O bloco da etapa de EXECUCAO: o periodo (entrada em campo -> prazo
+ * final) e o andamento dos ensaios.
+ *
+ * O prazo final e OBRIGATORIO aqui: sem ele a etapa nao anda (os checks
+ * dela nao marcam), e o bloco diz isso em vermelho. Com ele, a faixa
+ * pega a mesma cor que o card da obra tem no quadro — do verde ao
+ * vermelho conforme o tempo que resta (urgenciaDoPrazoFinal).
+ */
+function BlocoExecucao({ obra, hoje, execucao, podePeriodo, aoDefinir }) {
+  const inicio = obra.execucaoInicio ?? obra.dataInicio
+  const prazo = obra.dataConclusao
+  const restam = prazo ? diasAte(prazo, hoje) : null
+  const tom = prazo ? urgenciaDoPrazoFinal(inicio, prazo, hoje) : 'vencido'
+
+  const quando =
+    restam === null
+      ? null
+      : restam < 0
+        ? `atrasada há ${-restam} dia${restam < -1 ? 's' : ''}`
+        : restam === 0
+          ? 'vence hoje'
+          : restam === 1
+            ? 'vence amanhã'
+            : `faltam ${restam} dias`
+
+  return (
+    <div className="execbloco" data-tom={tom}>
+      <div className="execbloco__linha">
+        <Icone.prazo tamanho={14} />
+        {prazo ? (
+          <span className="execbloco__periodo">
+            Execução: <strong>{dataBR(inicio)}</strong> → prazo final <strong>{dataBR(prazo)}</strong>
+          </span>
+        ) : (
+          <span className="execbloco__periodo">
+            <strong>Prazo final obrigatório.</strong> Os checks desta etapa ficam parados até ele
+            ser definido.
+          </span>
+        )}
+        {quando && <em className="execbloco__selo">{quando}</em>}
+        {podePeriodo && (
+          <button type="button" className="execbloco__botao" onClick={aoDefinir}>
+            {prazo ? 'Alterar' : 'Definir prazo final'}
+          </button>
+        )}
+      </div>
+
+      {execucao && (
+        <div className="execbloco__andamento" title="Média do percentual de cada ensaio planejado">
+          <span>Ensaios</span>
+          <span className="barrinha" role="img" aria-label={`${execucao.geral}% dos ensaios executados`}>
+            <span className="barrinha__cheio" style={{ width: `${execucao.geral}%` }} />
+          </span>
+          <strong>{execucao.geral}%</strong>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Card de um setor dentro da etapa: contorno e nome na cor SUAVE do
- * setor, fundo transparente, e a lista de checks. Com mais de um setor,
- * um fio no alto leva as cores de todos.
+ * setor, fundo transparente, e a lista de checks. O card e de um setor
+ * so — o gradiente de varios setores saiu.
  *
  * Duas travas diferentes, e o cadeado diz qual e:
  *  - `travado`: a etapa ainda nao abriu (so em obra padrao);
- *  - `semPermissao`: a etapa abriu, mas o card e de outro cargo.
+ *  - `semPermissao`: a etapa abriu, mas o card e de outro setor.
  *
- * Card de PERGUNTA (card.simNao): o check respondido "nao" aparece com
- * um X e a palavra "Nao"; o "sim", com o tique e "Sim".
+ * Tudo o que diz como cada check se comporta e DO CHECK:
+ *  - check de pergunta (check.simNao): o respondido "nao" aparece com um
+ *    X e a palavra "Nao"; o "sim", com o tique e "Sim";
+ *  - os dois do sistema (Planejamento e Execucao dos ensaios) abrem o
+ *    proprio pop-up e mostram quantos ensaios / quanto ja foi executado;
+ *  - as informacoes do check aparecem ao passar o mouse nele.
  *
- * As informacoes do card (card.informacoes) aparecem ao passar o mouse.
+ * As informacoes do card (card.informacoes) aparecem ao passar o mouse
+ * no card.
  */
 function CardSetor({
   card,
@@ -1233,6 +1469,7 @@ function CardSetor({
   podeChecks,
   podePrazos,
   hoje,
+  execucao,
   corSuaveDoCargo,
   nomeDoCargo,
   cargoPorChave,
@@ -1245,9 +1482,9 @@ function CardSetor({
 }) {
   const feitas = card.checks.filter((c) => obra.checks[c.id]).length
   const pronto = card.checks.length > 0 && feitas === card.checks.length
-  /* "de outro" e quando NENHUM check do card e do seu cargo */
+  /* "de outro" e quando NENHUM check do card e do seu setor */
   const semPermissao = !card.checks.some((c) => podeEditarCheck(usuario, c, card, obra))
-  const cores = coresDoCard(card, corSuaveDoCargo)
+  const cor = corDoSetorDoCard(card, corSuaveDoCargo)
   const titulo = nomeDoCard(card, nomeDoCargo)
 
   /**
@@ -1281,9 +1518,9 @@ function CardSetor({
   const donos = card.cargos.map((c) => cargoPorChave(c)?.nome ?? c).join(', ')
 
   return (
-    /* a dica (card.informacoes) abre ao passar o mouse em qualquer ponto
-       do card — e e o card inteiro, e nao so um icone, porque e por cima
-       dele que a mao ja esta quando a pessoa se pergunta "isto e o que?" */
+    /* a dica (card.informacoes) abre ao passar o mouse no card; num check
+       que tem as proprias informacoes, a do check toma o lugar enquanto o
+       mouse esta nele (ver Dica) */
     <Dica
       as="article"
       texto={card.informacoes}
@@ -1291,10 +1528,7 @@ function CardSetor({
       className={`setorcard ${pronto ? 'is-pronto' : ''} ${
         semPermissao && !travado ? 'is-deoutro' : ''
       }`.trim()}
-      style={{
-        '--setor-cor': cores[0],
-        '--setor-fio': cores.length > 1 ? `linear-gradient(90deg, ${cores.join(', ')})` : 'none',
-      }}
+      style={{ '--setor-cor': cor }}
     >
       <header className="setorcard__topo">
         {/* o nome inteiro na dica: o titulo corta com reticencias para
@@ -1305,11 +1539,6 @@ function CardSetor({
         {card.informacoes && (
           <span className="setorcard__info" aria-label={`Informações: ${card.informacoes}`}>
             <Icone.info />
-          </span>
-        )}
-        {card.simNao && (
-          <span className="setorcard__pergunta" title="Os checks deste card pedem Sim ou Não">
-            Sim/Não
           </span>
         )}
         {semPermissao && !travado && (
@@ -1369,10 +1598,10 @@ function CardSetor({
         {card.checks.map((check) => {
           const marca = obra.checks[check.id]
           const feito = Boolean(marca)
-          /* so em card de pergunta: true = sim, false = nao. Check
-             marcado antes de o card virar pergunta fica sem resposta, e
+          /* so em check de pergunta: true = sim, false = nao. Check
+             marcado antes de virar pergunta fica sem resposta, e
              aparece como um check comum feito. */
-          const resposta = card.simNao && feito ? (marca.resposta ?? null) : null
+          const resposta = check.simNao && feito ? (marca.resposta ?? null) : null
           const meu = podeEditarCheck(usuario, check, card, obra)
           const proprio = checkTemDonoProprio(check)
           const donosDoCheck = proprio
@@ -1380,23 +1609,33 @@ function CardSetor({
             : donos
           const prazo = obra.prazos?.checks?.[check.id] ?? null
           const situacaoPrazo = estadoDoPrazo(prazo, hoje, { feito })
+          const planejamento = check.tipo === CHECK_PLANEJAMENTO
+          const execucaoDosEnsaios = check.tipo === CHECK_EXECUCAO
+          const doSistema = planejamento || execucaoDosEnsaios
+          /* os dois do sistema abrem o pop-up mesmo para quem nao marca:
+             la a pessoa VE os ensaios, so nao mexe */
+          const abreSemPermissao = doSistema && !travado
           return (
-            <li key={check.id}>
+            <Dica as="li" key={check.id} texto={check.informacoes} titulo={check.titulo}>
               <button
                 type="button"
                 className={`tarefa ${feito ? 'is-feita' : ''} ${resposta === false ? 'is-nao' : ''} ${
-                  !meu ? 'is-deoutro' : ''
-                }`.trim()}
+                  !meu && !abreSemPermissao ? 'is-deoutro' : ''
+                } ${doSistema ? 'is-sistema' : ''}`.trim()}
                 onClick={() => aoMarcar(check)}
-                disabled={travado || !meu}
+                disabled={travado || (!meu && !abreSemPermissao)}
                 title={
-                  travado
+                  travado || check.informacoes
                     ? undefined
-                    : meu
-                      ? card.simNao
-                        ? 'Responder Sim ou Não'
-                        : undefined
-                      : `Somente ${donosDoCheck} marca este check`
+                    : planejamento
+                      ? 'Escolher os ensaios desta obra'
+                      : execucaoDosEnsaios
+                        ? 'Registrar a execução dos ensaios'
+                        : meu
+                          ? check.simNao
+                            ? 'Responder Sim ou Não'
+                            : undefined
+                          : `Somente ${donosDoCheck} marca este check`
                 }
                 aria-pressed={feito}
               >
@@ -1418,6 +1657,19 @@ function CardSetor({
                   <span className="tarefa__resposta" data-resposta={resposta ? 'sim' : 'nao'}>
                     {resposta ? 'Sim' : 'Não'}
                   </span>
+                )}
+                {/* o check que ainda pede resposta: o selo avisa antes do clique */}
+                {check.simNao && !feito && <span className="tarefa__pergunta">Sim/Não</span>}
+                {/* os do sistema dizem em que pe estao */}
+                {planejamento && (
+                  <span className="tarefa__ensaios">
+                    {(obra.ensaios ?? []).length === 0
+                      ? 'escolher'
+                      : `${obra.ensaios.length} ensaio${obra.ensaios.length > 1 ? 's' : ''}`}
+                  </span>
+                )}
+                {execucaoDosEnsaios && (
+                  <span className="tarefa__ensaios">{execucao ? `${execucao.geral}%` : 'sem ensaios'}</span>
                 )}
                 {/* dono diferente do card: a etiqueta diz de quem e */}
                 {proprio && (
@@ -1462,7 +1714,7 @@ function CardSetor({
                   <Icone.lapis />
                 </button>
               )}
-            </li>
+            </Dica>
           )
         })}
 

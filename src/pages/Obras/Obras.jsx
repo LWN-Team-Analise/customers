@@ -7,6 +7,7 @@ import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import {
   nomeProprioDaEtapa,
+  PAPEL_DA_ETAPA,
   PRIORIDADES,
   PRIORIDADE_PESO,
   situacaoDaObra,
@@ -274,10 +275,12 @@ export default function Obras() {
   ])
 
   /**
-   * O QUADRO: uma coluna por etapa do roteiro, lado a lado, e a ultima
-   * com as obras de emergencia.
+   * O QUADRO: uma coluna por etapa do roteiro, lado a lado, e na ponta
+   * direita as obras de emergencia — com as observacoes do quadro logo
+   * embaixo delas.
    *
    *   1ª Etapa | 2ª Etapa | 3ª Etapa | ... | Obras emergenciais
+   *                                         Observações
    *
    * A obra PADRAO entra na coluna da etapa em que esta agora — e e o
    * tamanho das pilhas que responde, de longe, "onde as obras estao
@@ -300,8 +303,9 @@ export default function Obras() {
         numero: etapa.numero,
         rotulo,
         /* o nome so entra quando ACRESCENTA: uma etapa chamada "3° Etapa"
-           no roteiro daria "3ª Etapa  3° Etapa" */
-        nome: nomeProprioDaEtapa(etapa.nome, rotulo),
+           no roteiro daria "3ª Etapa  3° Etapa". Sem nome proprio, a
+           etapa fixa mostra o papel dela no fluxo ("Execução") */
+        nome: nomeProprioDaEtapa(etapa.nome, rotulo) || PAPEL_DA_ETAPA[etapa.papel] || '',
         obras: [],
       }
     })
@@ -316,7 +320,8 @@ export default function Obras() {
 
   const emergencia = visiveis.filter((o) => o.tipo === 'emergencia')
 
-  /* a cor de cada card: verde, azul ou amarelo (ver situacaoDaObra) */
+  /* a cor de cada card: verde, azul, ou a escala do prazo do amarelo
+     ao vermelho (ver situacaoDaObra) */
   const hoje = hojeISO()
   const situacaoDe = (obra) => situacaoDaObra(roteiroDaObra(obra), obra, hoje)
 
@@ -485,7 +490,7 @@ export default function Obras() {
             <div className="barra__criar">
               <button
                 type="button"
-                className="acao acao--padrao"
+                className="acao acao--obra-padrao"
                 onClick={() => setModalObra('padrao')}
                 title="Adicionar obra padrão"
               >
@@ -494,7 +499,7 @@ export default function Obras() {
               </button>
               <button
                 type="button"
-                className="acao acao--emergencia"
+                className="acao acao--obra-emergencia"
                 onClick={() => setModalObra('emergencia')}
                 title="Adicionar obra emergência"
               >
@@ -543,11 +548,11 @@ export default function Obras() {
         )}
 
         {/* ---------------- quadro ----------------
-            Uma coluna por etapa, lado a lado, e a de emergencia no fim.
-            O quadro ocupa a largura inteira; as observacoes do quadro
-            descem para baixo dele. */}
+            Uma coluna por etapa, lado a lado, ocupando a largura. Na
+            ponta direita, a coluna das emergencias e, EMBAIXO dela, as
+            observacoes do quadro. */}
         <div className="areaquadro">
-          <div className="quadro" style={{ '--colunas': colunas.length + 1 }}>
+          <div className="quadro" style={{ '--colunas': colunas.length }}>
             {colunas.map((coluna, i) => (
               <Coluna
                 key={coluna.id}
@@ -571,7 +576,9 @@ export default function Obras() {
                 ))}
               </Coluna>
             ))}
+          </div>
 
+          <div className="lateral">
             <Coluna
               titulo="Obras emergenciais"
               tom="emergencia"
@@ -589,90 +596,90 @@ export default function Obras() {
                 />
               ))}
             </Coluna>
+
+            {/* ---------------- observacoes do quadro ----------------
+                Valem para o quadro inteiro, nao para uma obra: e o
+                bloco de recados da equipe sobre as obras em geral.
+                Ficam embaixo das obras emergenciais. */}
+            <aside className="quadroobs">
+              <header className="quadroobs__topo">
+                <h2 className="quadroobs__titulo">Observações</h2>
+                <span className="quadroobs__contagem">{observacoesQuadro.length}</span>
+                {/* O historico e o lugar da observacao que TINHA duracao e
+                    venceu: ela sai do painel sozinha, mas nao e apagada.
+                    Sem esta porta, o unico jeito de chegar la era abrir o
+                    pop-up por outro motivo e reparar na aba.
+
+                    O botao fica no lugar mesmo com o historico vazio —
+                    cabecalho que muda de forma e cabecalho que ninguem
+                    aprende. Vazio, ele abre a aba que explica em uma linha
+                    o que entra ali.
+
+                    So existe para as observacoes do QUADRO: as de dentro
+                    de uma obra nao tem duracao, entao nunca vencem e nao
+                    tem historico para abrir. */}
+                <button
+                  type="button"
+                  className={`quadroobs__historico ${
+                    historicoObservacoes.length > 0 ? 'is-contando' : ''
+                  }`.trim()}
+                  onClick={() => setModalObs('historico')}
+                  title="Histórico de observações"
+                  aria-label={
+                    historicoObservacoes.length === 0
+                      ? 'Histórico de observações'
+                      : historicoObservacoes.length === 1
+                        ? 'Histórico: 1 observação vencida'
+                        : `Histórico: ${historicoObservacoes.length} observações vencidas`
+                  }
+                >
+                  <Historico />
+                  {historicoObservacoes.length > 0 && <em>{historicoObservacoes.length}</em>}
+                </button>
+                <button
+                  type="button"
+                  className="quadroobs__mais"
+                  onClick={() => setModalObs('atuais')}
+                  title="Nova observação"
+                  aria-label="Nova observação"
+                >
+                  <Mais />
+                </button>
+              </header>
+
+              {observacoesQuadro.length === 0 ? (
+                <p className="quadroobs__vazio">
+                  Nada registrado ainda. Use o + para escrever a primeira.
+                </p>
+              ) : (
+                <ul className="quadroobs__lista">
+                  {observacoesQuadro.slice(0, 6).map((o) => (
+                    <li key={o.id} className="quadroobs__item">
+                      <Avatar nome={o.autorNome} foto={pessoaPorId(o.autorId)?.foto} tamanho={28} />
+                      <div>
+                        <p className="quadroobs__quem">
+                          <strong>{o.autorNome}</strong>
+                          <span>{dataHora(o.enviadaEm)}</span>
+                        </p>
+                        <p className="quadroobs__texto">{o.texto}</p>
+                      </div>
+                    </li>
+                  ))}
+                  {observacoesQuadro.length > 6 && (
+                    <li>
+                      <button
+                        type="button"
+                        className="quadroobs__ver"
+                        onClick={() => setModalObs('atuais')}
+                      >
+                        Ver as {observacoesQuadro.length} observações
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </aside>
           </div>
-
-          {/* ---------------- observacoes do quadro ----------------
-              Valem para o quadro inteiro, nao para uma obra: e o
-              bloco de recados da equipe sobre as obras em geral.
-              Ficam embaixo do quadro, que agora ocupa a largura toda. */}
-          <aside className="quadroobs">
-            <header className="quadroobs__topo">
-              <h2 className="quadroobs__titulo">Observações</h2>
-              <span className="quadroobs__contagem">{observacoesQuadro.length}</span>
-              {/* O historico e o lugar da observacao que TINHA duracao e
-                  venceu: ela sai do painel sozinha, mas nao e apagada.
-                  Sem esta porta, o unico jeito de chegar la era abrir o
-                  pop-up por outro motivo e reparar na aba.
-
-                  O botao fica no lugar mesmo com o historico vazio —
-                  cabecalho que muda de forma e cabecalho que ninguem
-                  aprende. Vazio, ele abre a aba que explica em uma linha
-                  o que entra ali.
-
-                  So existe para as observacoes do QUADRO: as de dentro
-                  de uma obra nao tem duracao, entao nunca vencem e nao
-                  tem historico para abrir. */}
-              <button
-                type="button"
-                className={`quadroobs__historico ${
-                  historicoObservacoes.length > 0 ? 'is-contando' : ''
-                }`.trim()}
-                onClick={() => setModalObs('historico')}
-                title="Histórico de observações"
-                aria-label={
-                  historicoObservacoes.length === 0
-                    ? 'Histórico de observações'
-                    : historicoObservacoes.length === 1
-                      ? 'Histórico: 1 observação vencida'
-                      : `Histórico: ${historicoObservacoes.length} observações vencidas`
-                }
-              >
-                <Historico />
-                {historicoObservacoes.length > 0 && <em>{historicoObservacoes.length}</em>}
-              </button>
-              <button
-                type="button"
-                className="quadroobs__mais"
-                onClick={() => setModalObs('atuais')}
-                title="Nova observação"
-                aria-label="Nova observação"
-              >
-                <Mais />
-              </button>
-            </header>
-
-            {observacoesQuadro.length === 0 ? (
-              <p className="quadroobs__vazio">
-                Nada registrado ainda. Use o + para escrever a primeira.
-              </p>
-            ) : (
-              <ul className="quadroobs__lista">
-                {observacoesQuadro.slice(0, 6).map((o) => (
-                  <li key={o.id} className="quadroobs__item">
-                    <Avatar nome={o.autorNome} foto={pessoaPorId(o.autorId)?.foto} tamanho={28} />
-                    <div>
-                      <p className="quadroobs__quem">
-                        <strong>{o.autorNome}</strong>
-                        <span>{dataHora(o.enviadaEm)}</span>
-                      </p>
-                      <p className="quadroobs__texto">{o.texto}</p>
-                    </div>
-                  </li>
-                ))}
-                {observacoesQuadro.length > 6 && (
-                  <li>
-                    <button
-                      type="button"
-                      className="quadroobs__ver"
-                      onClick={() => setModalObs('atuais')}
-                    >
-                      Ver as {observacoesQuadro.length} observações
-                    </button>
-                  </li>
-                )}
-              </ul>
-            )}
-          </aside>
         </div>
       </section>
 
