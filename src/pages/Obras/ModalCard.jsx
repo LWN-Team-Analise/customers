@@ -2,24 +2,22 @@ import { useEffect, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import EtiquetasCard from './EtiquetasCard'
-import { SeletorMulti } from '@/components/Seletor/Seletor'
+import Seletor from '@/components/Seletor/Seletor'
 import { CampoArea, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
-import { coresDoCard } from '@/domain/obras'
+import { corDoSetorDoCard } from '@/domain/obras'
 import './ModalRoteiro.css'
 
 /**
  * Card de setor dentro de uma etapa: cria e edita.
  *
- * O card fica com contorno e nome na cor (suave) do setor, sem fundo
- * chapado. Com mais de um setor, um fio no alto leva as cores de todos —
- * a previa embaixo mostra como vai ficar antes de salvar.
+ * O card e de UM setor e fica com contorno e nome na cor (suave) dele,
+ * sem fundo chapado. A previa embaixo mostra como vai ficar.
  *
- * Duas coisas dizem como o card se COMPORTA:
- *   - "Pede resposta Sim ou Não?" — com Sim, marcar um check dele abre
- *     a pergunta. Os dois contam como feito; o "não" aparece com um X
- *     e a palavra "Não" do lado (ex.: Hospedagem — Não);
- *   - "Informações do card" — o texto que aparece ao passar o mouse.
+ * O comportamento de cada check (pedir Sim ou Nao, quem marca, o prazo)
+ * mora no CHECK, e nao aqui: no mesmo card um check pode pedir resposta
+ * e o do lado nao. O card so guarda o setor, o titulo, as etiquetas e
+ * as "Informacoes do card" — o texto que aparece ao passar o mouse.
  *
  * O card vale DESTA obra em diante. Criar aqui coloca o card nesta
  * obra e nas proximas; excluir tira desta e das proximas. As obras
@@ -29,9 +27,8 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
   const { cargos, corSuaveDoCargo, adicionarCard, atualizarCard, removerCard, rotuloEtapa, pode } =
     useDados()
 
-  const [escolhidos, setEscolhidos] = useState([])
+  const [setor, setSetor] = useState('')
   const [titulo, setTitulo] = useState('')
-  const [simNao, setSimNao] = useState(false)
   const [informacoes, setInformacoes] = useState('')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -46,9 +43,8 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
 
   useEffect(() => {
     if (!aberto) return
-    setEscolhidos(card?.cargos ?? [])
+    setSetor(card?.cargos?.[0] ?? '')
     setTitulo(card?.titulo ?? '')
-    setSimNao(Boolean(card?.simNao))
     setInformacoes(card?.informacoes ?? '')
     setErro('')
     setConfirmando(false)
@@ -56,8 +52,8 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
 
   const salvar = async (evento) => {
     evento.preventDefault()
-    if (escolhidos.length === 0) {
-      setErro('Escolha ao menos um setor.')
+    if (!setor) {
+      setErro('Escolha o setor do card.')
       return
     }
 
@@ -65,13 +61,12 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
     try {
       /* na edicao, os setores so vao quando mudaram: a API trata o
          envio deles como troca, e troca pede a permissao propria */
-      const mudouSetores = (card?.cargos ?? []).join('|') !== escolhidos.join('|')
+      const mudouSetores = (card?.cargos ?? []).join('|') !== setor
       const campos = {
         titulo: titulo.trim(),
-        simNao,
         informacoes: informacoes.trim(),
         obraId,
-        ...(!editando || mudouSetores ? { cargos: escolhidos } : {}),
+        ...(!editando || mudouSetores ? { cargos: [setor] } : {}),
       }
       if (editando) await atualizarCard(card.id, campos)
       else await adicionarCard(etapa.id, campos)
@@ -96,7 +91,7 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
     }
   }
 
-  const coresPrevia = coresDoCard({ cargos: escolhidos }, corSuaveDoCargo)
+  const corPrevia = corDoSetorDoCard({ cargos: setor ? [setor] : [] }, corSuaveDoCargo)
 
   return (
     <Modal
@@ -109,63 +104,30 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
       largura={520}
     >
       <form className="formrot" onSubmit={salvar} noValidate>
-        <label className="formrot__rotulo">Setores responsáveis</label>
-        <SeletorMulti
+        <label className="formrot__rotulo">Setor responsável</label>
+        <Seletor
           largo
-          valores={escolhidos}
-          aoMudar={setEscolhidos}
-          vazio="Escolha um ou mais setores..."
-          aria-label="Setores responsáveis pelo card"
+          valor={setor}
+          aoMudar={setSetor}
+          vazio="Escolha o setor..."
+          aria-label="Setor responsável pelo card"
           desabilitado={setoresTravados}
           opcoes={cargos.map((c) => ({ valor: c.chave, rotulo: c.nome, cor: c.cor }))}
         />
-        <p className="formrot__dica">
-          {setoresTravados
-            ? 'Seu setor não tem a permissão "Adicionar / alterar setores no card": os setores deste card ficam como estão.'
-            : 'Com mais de um cargo, o card fica com um gradiente das cores deles — e qualquer um dos cargos pode marcar os checks.'}
-        </p>
+        {setoresTravados && (
+          <p className="formrot__dica">
+            Seu setor não tem a permissão "Adicionar / alterar setores no card": o setor deste
+            card fica como está.
+          </p>
+        )}
 
         <CampoTexto
           rotulo="Título (opcional)"
           largo
-          placeholder="Em branco, usa o nome do(s) setor(es)"
+          placeholder="Em branco, usa o nome do setor"
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
         />
-
-        {/* Como o card se comporta ao marcar um check. "Sim" vira
-            pergunta: a pessoa responde, e o "não" também fecha o check —
-            com um X e a palavra "Não" do lado. */}
-        <div className="formrot__escolha">
-          <span className="formrot__rotulo formrot__rotulo--solto">
-            Obrigatório responder Sim ou Não?
-          </span>
-          <div className="formrot__opcoes" role="radiogroup" aria-label="O card pede resposta Sim ou Não">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={!simNao}
-              className={`formrot__opcao ${!simNao ? 'is-atual' : ''}`.trim()}
-              onClick={() => setSimNao(false)}
-            >
-              Não — check comum
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={simNao}
-              className={`formrot__opcao ${simNao ? 'is-atual' : ''}`.trim()}
-              onClick={() => setSimNao(true)}
-            >
-              Sim — pergunta
-            </button>
-          </div>
-          <p className="formrot__dica formrot__dica--colada">
-            {simNao
-              ? 'Ao marcar um check deste card, abre a pergunta: Sim marca com ✓; Não também marca, mas com um X e "Não" do lado (ex.: Hospedagem — Não).'
-              : 'Marcar o check é só marcar: feito ou não feito.'}
-          </p>
-        </div>
 
         <CampoArea
           rotulo="Informações do card (opcional)"
@@ -177,21 +139,13 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
           onChange={(e) => setInformacoes(e.target.value)}
         />
 
-        {escolhidos.length > 0 && (
+        {setor && (
           <div className="formrot__previa">
             <span className="formrot__previanome">Como vai ficar</span>
             {/* o mesmo desenho do card na obra: contorno e nome na cor
-                suave do setor, e o fio de cores quando ha mais de um */}
-            <span
-              className="formrot__amostra"
-              style={{
-                '--amostra-cor': coresPrevia[0],
-                '--amostra-fio':
-                  coresPrevia.length > 1 ? `linear-gradient(90deg, ${coresPrevia.join(', ')})` : 'none',
-              }}
-            >
-              {titulo.trim() ||
-                escolhidos.map((c) => cargos.find((x) => x.chave === c)?.nome ?? c).join(' + ')}
+                suave do setor, sem fundo */}
+            <span className="formrot__amostra" style={{ '--amostra-cor': corPrevia }}>
+              {titulo.trim() || cargos.find((x) => x.chave === setor)?.nome || setor}
             </span>
           </div>
         )}

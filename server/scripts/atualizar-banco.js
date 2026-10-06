@@ -34,6 +34,7 @@ const ARQUIVOS = [
   'db/atualizacao-11.sql.txt',
   'db/atualizacao-12.sql.txt',
   'db/atualizacao-13.sql.txt',
+  'db/atualizacao-14.sql.txt',
 ]
 
 /**
@@ -84,12 +85,24 @@ const CONFERENCIA = [
   ['ver_dashboard no acesso total', permissaoNoAcessoTotal('ver_dashboard')],
   ['excluir_despesas no acesso total', permissaoNoAcessoTotal('excluir_despesas')],
   ['usuario.cpf aceita NULL', nulavel('usuario', 'cpf')],
-  ['etapa_card.sim_nao', col('etapa_card', 'sim_nao')],
+  ['etapa_check.sim_nao', col('etapa_check', 'sim_nao')],
+  ['etapa_check.informacoes', col('etapa_check', 'informacoes')],
   ['etapa_card.informacoes', col('etapa_card', 'informacoes')],
   ['obra_check.resposta', col('obra_check', 'resposta')],
   ['obra_prazo_etapa', "SELECT to_regclass('public.obra_prazo_etapa') IS NOT NULL AS ok"],
   ['obra_prazo_check', "SELECT to_regclass('public.obra_prazo_check') IS NOT NULL AS ok"],
   ['definir_prazos no acesso total', permissaoNoAcessoTotal('definir_prazos')],
+  ['etapa.fixa', col('etapa', 'fixa')],
+  ['etapa.papel', col('etapa', 'papel')],
+  ['etapa de execucao', "SELECT EXISTS (SELECT 1 FROM etapa WHERE papel = 'execucao') AS ok"],
+  ['etapa_check.tipo', col('etapa_check', 'tipo')],
+  ['check Planejamento de ensaios', "SELECT EXISTS (SELECT 1 FROM etapa_check WHERE tipo = 'planejamento_ensaios') AS ok"],
+  ['check Execucao dos ensaios', "SELECT EXISTS (SELECT 1 FROM etapa_check WHERE tipo = 'execucao_ensaios') AS ok"],
+  ['ensaio', "SELECT to_regclass('public.ensaio') IS NOT NULL AS ok"],
+  ['obra_ensaio', "SELECT to_regclass('public.obra_ensaio') IS NOT NULL AS ok"],
+  ['obra_ensaio_progresso', "SELECT to_regclass('public.obra_ensaio_progresso') IS NOT NULL AS ok"],
+  ['obra.execucao_inicio', col('obra', 'execucao_inicio')],
+  ['gerenciar_ensaios no acesso total', permissaoNoAcessoTotal('gerenciar_ensaios')],
 ]
 
 function col(tabela, coluna) {

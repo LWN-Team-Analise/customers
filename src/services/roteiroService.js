@@ -41,15 +41,13 @@ export const apagarEtapa = (id, obraId) => del(comObra(`/roteiro/etapas/${id}`, 
 /* ---------------- Cards ---------------- */
 
 /**
- * cargos: lista de chaves. Mais de uma = card com fio de varias cores.
- * simNao: o card pede resposta Sim/Nao ao marcar um check.
+ * cargos: [chave] — o setor dono do card (um so).
  * informacoes: a dica que aparece ao passar o mouse.
  */
-export async function criarCard(etapaId, { cargos, titulo, simNao, informacoes, obraId }) {
+export async function criarCard(etapaId, { cargos, titulo, informacoes, obraId }) {
   const { id } = await post(`/roteiro/etapas/${etapaId}/cards`, {
     cargos,
     titulo,
-    simNao,
     informacoes,
     obraId,
   })
@@ -62,10 +60,11 @@ export const apagarCard = (id, obraId) => del(comObra(`/roteiro/cards/${id}`, ob
 /* ---------------- Checks ---------------- */
 
 /**
- * campos: { titulo, cargos?, obraId? }
+ * campos: { titulo, cargos?, simNao?, informacoes?, obraId? }
  *
- * `cargos` vazio = o check segue o cargo do card. Com nomes, aquela
- * lista passa a mandar so naquele check.
+ * `cargos` vazio = o check segue o setor do card. Com nomes, aquela
+ * lista passa a mandar so naquele check. `simNao` = marcar o check
+ * pede resposta Sim ou Nao.
  */
 export async function criarCheck(cardId, campos) {
   const { check } = await post(`/roteiro/cards/${cardId}/checks`, campos)

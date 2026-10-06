@@ -68,9 +68,12 @@ export const ALTERACAO = [
   { chave: 'editar_cards', rotulo: 'Adicionar / alterar cards', dependeDe: 'ver_obras' },
   { chave: 'editar_cargos_card', rotulo: 'Adicionar / alterar setores no card', dependeDe: 'ver_obras' },
   { chave: 'editar_checks', rotulo: 'Adicionar / alterar checks', dependeDe: 'ver_obras' },
-  /* a data limite de uma etapa ou de um check, dentro de cada obra. E
-     ela que pinta o card do quadro de amarelo quando vence */
-  { chave: 'definir_prazos', rotulo: 'Definir prazos (etapa e check)', dependeDe: 'ver_obras' },
+  /* a data limite de um check (ou de uma etapa inteira) dentro de cada
+     obra, e o prazo final da execucao. E ela que muda a cor do card do
+     quadro quando o prazo aperta ou vence */
+  { chave: 'definir_prazos', rotulo: 'Pode definir prazo para checks', dependeDe: 'ver_obras' },
+  /* o catalogo de ensaios de onde o Planejamento de ensaios escolhe */
+  { chave: 'gerenciar_ensaios', rotulo: 'Adicionar / editar ensaios', dependeDe: 'ver_obras' },
   { chave: 'enviar_avisos', rotulo: 'Enviar avisos', dependeDe: 'ver_avisos' },
   /* Despesas: ver a aba (e os proprios envios) e `ver_despesas`;
      ENVIAR despesa, refeicao ou bonus e `alterar_despesas`; abrir os

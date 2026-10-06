@@ -263,9 +263,10 @@
   --btn-emergencia: linear-gradient(120deg, #ff0000 0%, #ff741f 72%);
 
   /* O card da obra no QUADRO: tinta suave e transparente, com o texto
-     na cor normal do tema. Verde = prazo ok, azul = emergencia, amarelo
-     = atraso (ou prazo perto e longe de terminar). O -acento pinta o
-     fio da esquerda e o selo do motivo. */
+     na cor normal do tema. Verde = prazo ok, azul = emergencia, e a
+     escala do prazo: amarelo (atraso de check/etapa, ou prazo chegando),
+     laranja (muito perto), vermelho (amanha/hoje ou vencido). O -acento
+     pinta o fio da esquerda e o selo do motivo. */
   --quadro-ok-bg: rgba(46, 160, 92, 0.15);
   --quadro-ok-borda: rgba(46, 160, 92, 0.42);
   --quadro-ok-acento: #2a8a52;
@@ -275,6 +276,12 @@
   --quadro-atraso-bg: rgba(236, 182, 10, 0.2);
   --quadro-atraso-borda: rgba(204, 152, 0, 0.55);
   --quadro-atraso-acento: #9a6f00;
+  --quadro-laranja-bg: rgba(240, 128, 40, 0.17);
+  --quadro-laranja-borda: rgba(222, 110, 20, 0.5);
+  --quadro-laranja-acento: #b45512;
+  --quadro-vermelho-bg: rgba(222, 52, 46, 0.14);
+  --quadro-vermelho-borda: rgba(204, 40, 36, 0.5);
+  --quadro-vermelho-acento: #b3261e;
 
   /* prazos dentro da obra e a resposta 'Nao' de um check de pergunta */
   --prazo-vencido: #b3261e;
@@ -333,6 +340,12 @@
   --quadro-atraso-bg: rgba(250, 204, 21, 0.14);
   --quadro-atraso-borda: rgba(250, 204, 21, 0.45);
   --quadro-atraso-acento: #f5d04a;
+  --quadro-laranja-bg: rgba(255, 150, 70, 0.15);
+  --quadro-laranja-borda: rgba(255, 150, 70, 0.45);
+  --quadro-laranja-acento: #ffaa6e;
+  --quadro-vermelho-bg: rgba(255, 99, 99, 0.15);
+  --quadro-vermelho-borda: rgba(255, 110, 110, 0.48);
+  --quadro-vermelho-acento: #ff8a80;
 
   --prazo-vencido: #ff8a80;
   --prazo-perto: #f5c542;

@@ -1334,3 +1334,111 @@
     margin-left: 0;
   }
 }
+
+/* ============================================================
+   Atraso e adiantamento: o resumo do topo do Dashboard
+
+   Dois grupos lado a lado — as obras em andamento hoje e as
+   concluidas no mes — cada um com tres contadores: adiantadas
+   (verde), no prazo (azul) e atrasadas (vermelho). Embaixo dos
+   de hoje, as atrasadas pelo nome.
+   ============================================================ */
+
+.situacoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 14px 22px;
+  margin-top: 14px;
+}
+
+.situacoes__grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.situacoes__nome {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.situacoes__linha {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.situacao {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sit-cor) 38%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sit-cor) 12%, transparent);
+  --sit-cor: var(--text-muted);
+}
+
+.situacao strong {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--sit-cor);
+  font-variant-numeric: tabular-nums;
+}
+
+.situacao span {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-base);
+}
+
+.situacao[data-tom='bom'] { --sit-cor: var(--gr-bom); }
+.situacao[data-tom='ok'] { --sit-cor: var(--quadro-emerg-acento); }
+.situacao[data-tom='ruim'] { --sit-cor: var(--gr-ruim); }
+
+.situacoes__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.situacoes__lista li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--text-base);
+}
+
+.situacoes__lista li:last-child {
+  border-bottom: 0;
+}
+
+.situacoes__lista li > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.situacoes__lista em {
+  flex-shrink: 0;
+  font-style: normal;
+  font-weight: 700;
+  color: var(--gr-ruim);
+}
+
+.situacoes__mais {
+  color: var(--text-faint);
+}

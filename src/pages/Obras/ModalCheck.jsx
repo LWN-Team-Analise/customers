@@ -2,18 +2,33 @@ import { useEffect, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import { SeletorMulti } from '@/components/Seletor/Seletor'
-import { CampoTexto } from '@/components/Campo/Campo'
+import { CampoArea, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
+import { checkDoSistema } from '@/domain/obras'
 import './ModalRoteiro.css'
 
 /**
- * Um check do card: cria, renomeia, escolhe o dono e apaga.
+ * Um check do card: cria, edita e apaga.
  *
- * O "dono" e a parte importante. Normalmente o check e de quem e o card.
- * Aqui da para dizer que UM check especifico responde a outro(s)
- * setor(es) — sem criar card novo e sem mudar o dono dos outros checks.
- * E o caso de "Envio revisao externa": mora no card do GQ, mas quem
- * marca sao GQ e Excelencia.
+ * TUDO o que diz como o check se comporta mora nele — e nao no card.
+ * No mesmo card um check pode pedir Sim ou Nao e o do lado nao:
+ *
+ *   [ ] Obrigatorio responder Sim ou Nao?
+ *       Marcada, marcar o check abre a pergunta: Sim fecha com ✓; Nao
+ *       tambem fecha, mas com um X e "Nao" do lado (Hospedagem — Nao).
+ *   Prazo
+ *       A data limite deste check NESTA obra. So aparece para quem tem
+ *       "Pode definir prazo para checks" (definir_prazos).
+ *   Quem marca este check
+ *       Vazio, segue o setor do card. Com setores, a lista e deste
+ *       check so — e o caso de "Envio revisao externa": mora no card
+ *       do GQ, mas quem marca sao GQ e Excelencia.
+ *   Informacoes
+ *       O que o check pede. Aparece ao passar o mouse sobre ele.
+ *
+ * Os dois checks do SISTEMA (Planejamento e Execucao dos ensaios) nao
+ * mudam de nome, nao viram pergunta e nao se excluem: sao eles que
+ * sustentam o fluxo dos ensaios.
  *
  * Como o card, o check vale DESTA obra em diante: criar aqui o coloca
  * nesta obra e nas proximas, excluir o tira desta e das proximas. As
@@ -25,26 +40,45 @@ export default function ModalCheck({
   nomeCard,
   check = null,
   obraId = null,
+  /* o prazo que este check ja tem nesta obra ('AAAA-MM-DD' ou null) */
+  prazoAtual = null,
   aoFechar,
 }) {
-  const { cargos, adicionarCheck, atualizarCheck, removerCheck, nomeDoCargo } = useDados()
+  const {
+    cargos,
+    adicionarCheck,
+    atualizarCheck,
+    removerCheck,
+    definirPrazo,
+    nomeDoCargo,
+    pode,
+  } = useDados()
 
   const [titulo, setTitulo] = useState('')
   const [donos, setDonos] = useState([])
+  const [simNao, setSimNao] = useState(false)
+  const [informacoes, setInformacoes] = useState('')
+  const [prazo, setPrazo] = useState('')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
 
   const editando = Boolean(check)
+  const doSistema = checkDoSistema(check)
   const doCard = (card?.cargos ?? []).map(nomeDoCargo).join(' e ')
+  /* o prazo e por obra: fora de uma obra nao ha onde gravar */
+  const podePrazo = Boolean(obraId) && pode('definir_prazos')
 
   useEffect(() => {
     if (!aberto) return
     setTitulo(check?.titulo ?? '')
     setDonos(check?.cargos ?? [])
+    setSimNao(Boolean(check?.simNao))
+    setInformacoes(check?.informacoes ?? '')
+    setPrazo(prazoAtual ?? '')
     setErro('')
     setConfirmando(false)
-  }, [aberto, check])
+  }, [aberto, check, prazoAtual])
 
   const salvar = async (evento) => {
     evento.preventDefault()
@@ -55,9 +89,22 @@ export default function ModalCheck({
 
     setSalvando(true)
     try {
-      const campos = { titulo: titulo.trim(), cargos: donos, obraId }
-      if (editando) await atualizarCheck(check.id, campos)
-      else await adicionarCheck(card.id, campos)
+      const campos = {
+        titulo: titulo.trim(),
+        cargos: donos,
+        simNao: doSistema ? false : simNao,
+        informacoes: informacoes.trim(),
+        obraId,
+      }
+      const salvo = editando
+        ? (await atualizarCheck(check.id, campos), check)
+        : await adicionarCheck(card.id, campos)
+
+      /* o prazo vai depois, numa chamada propria: ele e da obra, e o
+         check (do roteiro) precisa existir antes para recebe-lo */
+      if (podePrazo && salvo?.id && (prazo || '') !== (prazoAtual || '')) {
+        await definirPrazo(obraId, { checkId: salvo.id, prazo })
+      }
       aoFechar()
     } catch (e) {
       setErro(e.message)
@@ -85,17 +132,58 @@ export default function ModalCheck({
       aoFechar={aoFechar}
       titulo={editando ? 'Editar check' : 'Novo check'}
       subtitulo={`Card ${nomeCard ?? ''}. Vale desta obra em diante.`}
-      largura={480}
+      largura={500}
     >
       <form className="formrot" onSubmit={salvar} noValidate>
+        {doSistema && (
+          <p className="formrot__sistema" role="note">
+            Check do sistema: ele abre o fluxo dos ensaios. O nome fica, e ele não pode ser
+            excluído nem virar pergunta.
+          </p>
+        )}
+
         <CampoTexto
-          rotulo="O que precisa ser feito"
+          rotulo="Nome do check"
           largo
-          autoFocus
-          placeholder="Ex.: Envio revisão externa"
+          autoFocus={!doSistema}
+          placeholder="Ex.: Hospedagem"
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
+          disabled={doSistema}
         />
+
+        {/* A caixa que decide o comportamento DESTE check. É caixa de
+            marcar, e não escolha de duas opções: a pergunta é de sim ou
+            não, e cada check responde a sua. */}
+        {!doSistema && (
+          <div className="formrot__escolha">
+            <label className="formrot__marca">
+              <input
+                type="checkbox"
+                checked={simNao}
+                onChange={(e) => setSimNao(e.target.checked)}
+              />
+              <span>Obrigatório responder Sim ou Não?</span>
+            </label>
+            {simNao && (
+              <p className="formrot__dica formrot__dica--colada">
+                Ao marcar este check abre a pergunta. Sim marca com ✓; Não também marca, mas
+                com um X e "Não" do lado (ex.: Hospedagem — Não).
+              </p>
+            )}
+          </div>
+        )}
+
+        {podePrazo && (
+          <CampoTexto
+            rotulo="Prazo nesta obra (opcional)"
+            type="date"
+            largo
+            value={prazo}
+            onChange={(e) => setPrazo(e.target.value)}
+            dica="Vencido sem o check feito, o card da obra fica amarelo no quadro."
+          />
+        )}
 
         <div>
           <label className="formrot__rotulo">Quem marca este check</label>
@@ -109,6 +197,16 @@ export default function ModalCheck({
           />
         </div>
 
+        <CampoArea
+          rotulo="Informações do check (opcional)"
+          largo
+          linhas={2}
+          maxLength={600}
+          placeholder="O que este check pede? Aparece ao passar o mouse sobre ele."
+          value={informacoes}
+          onChange={(e) => setInformacoes(e.target.value)}
+        />
+
         {erro && (
           <p className="formrot__erro" role="alert">
             {erro}
@@ -117,6 +215,7 @@ export default function ModalCheck({
 
         <footer className="formobra__acoes">
           {editando &&
+            !doSistema &&
             (confirmando ? (
               <button
                 type="button"

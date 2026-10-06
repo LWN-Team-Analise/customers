@@ -50,6 +50,12 @@ const ROTULOS = {
   termo_etapas: 'Etapas (plural)',
   resposta: 'Resposta',
   prazo: 'Prazo',
+  prazo_final: 'Prazo final',
+  inicio: 'Início',
+  dia: 'Dia',
+  ensaio: 'Ensaio',
+  ensaios: 'Ensaios',
+  motivo: 'Motivo',
 }
 
 function horaDe(iso) {

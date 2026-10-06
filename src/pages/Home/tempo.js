@@ -169,7 +169,13 @@ const achatar = (texto) =>
     .toLowerCase()
 
 export function etapaDeCampo(roteiro) {
-  return (roteiro ?? []).find((e) => /execu|\bcampo\b/.test(achatar(`${e.nome} ${e.descricao ?? ''}`))) ?? null
+  /* a etapa fixa de execucao (etapa.papel, atualizacao 14) e a certa;
+     sem ela, vale o nome */
+  return (
+    (roteiro ?? []).find((e) => e.papel === 'execucao') ??
+    (roteiro ?? []).find((e) => /execu|\bcampo\b/.test(achatar(`${e.nome} ${e.descricao ?? ''}`))) ??
+    null
+  )
 }
 
 /** { dias, fechou } da etapa de campo desta obra, ou null se nao ha o que medir. */

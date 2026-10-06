@@ -1,60 +1,105 @@
 /* ============================================================
-   Card da obra. A cor inteira do card sai de --tom-*, definido
-   pelo data-tom (padrao / emergencia / aviso), entao o mesmo
-   markup serve as tres colunas.
+   Card da obra no QUADRO.
+
+   Tinta suave e transparente, com o texto na cor normal do tema
+   (nada de branco sobre cor chapada). A cor inteira sai de --tom-*,
+   escolhida pelo data-tom — que vem de situacaoDaObra:
+
+     ok          verde    obra padrao com os prazos em dia
+     emergencia  azul     obra de emergencia com os prazos em dia
+     atraso      amarelo  check/etapa vencido, ou prazo final chegando
+     laranja     laranja  prazo final muito perto
+     vermelho    vermelho prazo final amanha ou hoje
+     vencido     vermelho o prazo final ja passou (fio mais grosso e
+                          o selo "Atrasada")
+
+   O -acento pinta o fio da esquerda, a linha do motivo e a barra da
+   execucao. Os valores de cada tema estao em src/styles/tokens.css.
    ============================================================ */
 
 .obracard {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 12px 13px 11px;
+  padding: 11px 12px 10px 15px;
+  overflow: hidden;
   border: 1px solid var(--tom-borda);
   border-radius: var(--radius-md);
   background: var(--tom-bg);
-  color: var(--tom-fg);
+  color: var(--text-base);
   text-align: left;
   font: inherit;
-  box-shadow: 0 10px 22px -16px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  box-shadow: none;
   /* o avatar usa isso para o anel combinar com o card */
-  --avatar-anel: var(--tom-anel);
+  --avatar-anel: var(--surface);
+  --tom-bg: var(--quadro-ok-bg);
+  --tom-borda: var(--quadro-ok-borda);
+  --tom-acento: var(--quadro-ok-acento);
+  --fio: 3px;
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
-.obracard[data-tom='padrao'] {
-  --tom-bg: var(--obra-padrao);
-  --tom-fg: var(--obra-padrao-fg);
-  --tom-borda: var(--obra-padrao-borda);
-  --tom-anel: var(--obra-padrao);
+/* o fio da esquerda, na cor de acento do tom */
+.obracard::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: var(--fio);
+  background: var(--tom-acento);
+}
+
+.obracard:hover {
+  transform: translateY(-2px);
+  border-color: var(--tom-acento);
+  box-shadow: 0 14px 26px -20px rgba(0, 0, 0, 0.6);
+}
+
+.obracard:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.obracard:focus-visible {
+  outline: 2px solid var(--tom-acento);
+  outline-offset: 2px;
 }
 
 .obracard[data-tom='emergencia'] {
-  --tom-bg: var(--obra-emerg);
-  --tom-fg: var(--obra-emerg-fg);
-  --tom-borda: var(--obra-emerg-borda);
-  --tom-anel: var(--obra-emerg);
+  --tom-bg: var(--quadro-emerg-bg);
+  --tom-borda: var(--quadro-emerg-borda);
+  --tom-acento: var(--quadro-emerg-acento);
 }
 
-.obracard[data-tom='aviso'] {
-  --tom-bg: var(--obra-aviso);
-  --tom-fg: var(--obra-aviso-fg);
-  --tom-borda: var(--obra-aviso-borda);
-  --tom-anel: var(--obra-aviso);
+.obracard[data-tom='atraso'] {
+  --tom-bg: var(--quadro-atraso-bg);
+  --tom-borda: var(--quadro-atraso-borda);
+  --tom-acento: var(--quadro-atraso-acento);
 }
 
-.obracard--clicavel {
-  cursor: pointer;
-  transition: transform var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+.obracard[data-tom='laranja'] {
+  --tom-bg: var(--quadro-laranja-bg);
+  --tom-borda: var(--quadro-laranja-borda);
+  --tom-acento: var(--quadro-laranja-acento);
 }
 
-.obracard--clicavel:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 28px -16px rgba(0, 0, 0, 0.75);
+.obracard[data-tom='vermelho'],
+.obracard[data-tom='vencido'] {
+  --tom-bg: var(--quadro-vermelho-bg);
+  --tom-borda: var(--quadro-vermelho-borda);
+  --tom-acento: var(--quadro-vermelho-acento);
 }
 
-.obracard--clicavel:active {
-  transform: translateY(0) scale(0.995);
+/* vencido: o mesmo vermelho, com o fio e o contorno mais marcados —
+   fica claro que nao e "esta perto", e "ja passou" */
+.obracard[data-tom='vencido'] {
+  --fio: 5px;
+  border-width: 1.5px;
 }
 
 /* ---- topo ---- */
@@ -77,6 +122,7 @@
   font-size: 0.83rem;
   font-weight: 700;
   line-height: 1.2;
+  color: var(--text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -84,276 +130,111 @@
 
 .obracard__etapa {
   font-size: 0.68rem;
-  opacity: 0.72;
   line-height: 1.2;
+  color: var(--text-muted);
 }
 
+/* os setores que ainda devem: contorno e texto na cor suave do setor */
 .obracard__setores {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 3px;
-  max-width: 84px;
+  max-width: 90px;
 }
 
 .obracard__setor {
-  padding: 2px 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--setor-cor);
   border-radius: var(--radius-pill);
-  background: var(--setor-cor);
-  color: var(--setor-fg);
+  background: transparent;
+  color: var(--setor-cor);
   font-size: 0.6rem;
   font-weight: 700;
   line-height: 1.5;
   text-transform: lowercase;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+/* ---- o motivo da cor ---- */
+
+.obracard__motivo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--tom-acento);
+}
+
+.obracard__motivo em {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--tom-acento) 16%, transparent);
+  font-style: normal;
+  font-size: 0.62rem;
+}
+
+.obracard__atrasada {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--tom-acento);
+  color: var(--surface);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ---- corpo ---- */
 
 .obracard__desc {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.32;
+  color: var(--text-strong);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-/* ---- base ---- */
-
-.obracard__base {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: auto;
-}
-
-/* canto inferior DIREITO: os avatares e, embaixo deles, o carimbo de
-   "acabou". Os dois empilhados à direita para o carimbo não competir
-   com a prioridade, que fica na coluna da esquerda. */
-.obracard__fim {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-/* Verde, e não a cor do card: é a única linha do card que diz que ali
-   não falta mais nada, e ela precisa se distinguir do resto à
-   primeira vista — é o que faz alguém lembrar de fechar a obra. */
-.obracard__pronta {
-  font-size: 0.68rem;
-  font-weight: 600;
-  line-height: 1.3;
-  color: rgba(255, 255, 255, 0.72);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.obracard__pronta strong {
-  font-weight: 800;
-  color: #7ef0b0;
-}
-
-.obracard__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
+/* a execucao dos ensaios: rotulo, barra e percentual */
+.obracard__exec {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 7px;
   font-size: 0.66rem;
   font-weight: 700;
+  color: var(--text-muted);
 }
 
-/* as duas datas na mesma linha enquanto couberem; em card estreito a
-   segunda desce, e nao encolhe a letra */
-.obracard__datas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
+.obracard__exec strong {
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
 }
 
-.obracard__data {
-  font-weight: 600;
-  opacity: 0.72;
-}
-
-/* o rotulo ("início:") e mais fraco que o numero: quem procura a data
-   procura o dia, nao a palavra */
-.obracard__data strong {
-  font-weight: 800;
-  opacity: 1;
-}
-
-/* ---- Prioridade: um ponto colorido, sem pastilha ----
-
-   A pastilha branca saiu. Ela resolvia o contraste, mas de um jeito
-   caro: um retângulo claro no meio do card colorido puxava o olho para
-   a informação MENOS importante do rodapé, e cada card do quadro
-   ganhava uma mancha branca.
-
-   No lugar dela, o ponto. A cor continua sendo o que identifica a
-   prioridade — vermelho alta, amarelo média, verde baixa, as mesmas do
-   filtro e da tela da obra —, só que concentrada num disco de 7px, que
-   se lê em cima do azul do card padrão, do laranja da emergência e do
-   amarelo do aviso. O anel claro em volta é o que garante isso quando o
-   fundo chega perto da cor do ponto: é ele que separa os dois.
-
-   O texto volta a correr na cor do próprio card (`inherit`), que é
-   branco nos três — legível de novo, e sem nenhuma caixa em volta. */
-.obracard__pri {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: inherit;
-}
-
-.obracard__pri::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--pri-cor, currentColor);
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.55);
-}
-
-.obracard__pri strong {
-  font-weight: 800;
-  letter-spacing: 0.02em;
-}
-
-/* tons vivos de propósito: eles correm sobre o card colorido, e não
-   sobre o branco de antes */
-.obracard__pri[data-pri='alta'] {
-  --pri-cor: #ff5b4d;
-}
-
-/* "Urgente": a prioridade da emergência, no laranja dela */
-.obracard__pri[data-pri='urgente'] {
-  --pri-cor: #ffb08a;
-}
-
-.obracard__pri[data-pri='media'] {
-  --pri-cor: #ffc233;
-}
-
-.obracard__pri[data-pri='baixa'] {
-  --pri-cor: #5ddb96;
-}
-
-/* ============================================================
-   O card do quadro NAO leva efeito: cor chapada, sem reflexo e
-   sem brilho. So a coluna de aviso tem gradiente, e de proposito.
-   ============================================================ */
-
-.obracard {
+.obracard__barra {
   position: relative;
+  display: block;
+  height: 6px;
   overflow: hidden;
-  isolation: isolate;
-  box-shadow: none;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
 }
 
-.obracard--clicavel:hover {
-  box-shadow: 0 10px 20px -14px rgba(0, 0, 0, 0.5);
+.obracard__barra > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--etapa-ok);
 }
 
-/* ============================================================
-   Coluna "Enviar aviso"
-
-   Cor CHAPADA, a mesma da obra: azul se padrao, laranja se
-   emergencia. O degrade que ia da cor da obra ate o amarelo
-   saiu, e o veu que escurecia a ponta amarela junto com ele —
-   o card do aviso nao leva efeito nenhum.
-   ============================================================ */
-
-.obracard[data-tom='aviso-padrao'] {
-  --tom-bg: var(--obra-padrao);
-  --tom-fg: var(--obra-padrao-fg);
-  --tom-borda: var(--obra-padrao-borda);
-  --tom-anel: var(--obra-padrao);
-}
-
-.obracard[data-tom='aviso-emergencia'] {
-  --tom-bg: var(--obra-emerg);
-  --tom-fg: var(--obra-emerg-fg);
-  --tom-borda: var(--obra-emerg-borda);
-  --tom-anel: var(--obra-emerg);
-}
-
-/* ---- Moldura metalica amarela ----
-
-   O que faz metal parecer metal e a LUZ CORRENDO nele, nao a cor: um ouro
-   chapado le como plastico amarelo. Entao a borda e um gradiente com dois
-   pontos claros e dois escuros, como se houvesse uma luz em cima e outra
-   embaixo, e o brilho fino por dentro fecha o efeito.
-
-   Feita com `border-image`, e nao com uma borda pintada: assim ela e a
-   propria borda do card e nao empurra nada do conteudo. Como border-image
-   ignora border-radius, o brilho arredondado vai por dentro, num inset.
-
-   So a coluna de aviso leva isso — e o convite para clicar. */
-
-/* ---- Moldura metálica dourada ----
-
-   O que faz metal parecer metal e a LUZ CORRENDO nele, nao a cor: um ouro
-   chapado le como plastico amarelo. Entao a borda e um gradiente com dois
-   pontos claros e dois escuros, como se houvesse uma luz em cima e outra
-   embaixo.
-
-   Pintada com DOIS background-clip empilhados, e nao com border-image: o
-   border-image ignora o border-radius e a moldura saia quadrada em volta de
-   um card arredondado. Aqui o gradiente preenche a area da borda (padding-box
-   para dentro fica a cor do card) e acompanha a curva do raio.
-
-   So a coluna de aviso leva isso — e o convite para clicar. */
-
-.obracard[data-tom^='aviso-'] {
-  --moldura: linear-gradient(
-    145deg,
-    #f7e08a 0%,
-    #c9971f 18%,
-    #fff4c2 34%,
-    #a97d12 52%,
-    #ffe9a3 68%,
-    #c9971f 84%,
-    #8a6510 100%
-  );
-
-  /* 3px: mais encorpada que a borda comum, sem virar quadro de foto */
-  border: 3px solid transparent;
-  background:
-    linear-gradient(var(--tom-bg), var(--tom-bg)) padding-box,
-    var(--moldura) border-box;
-  box-shadow:
-    /* fio claro por dentro: a quina do metal pegando luz */
-    inset 0 0 0 1px rgba(255, 240, 190, 0.3),
-    0 10px 24px -14px rgba(0, 0, 0, 0.8),
-    0 4px 18px -10px rgba(201, 151, 31, 0.45);
-}
-
-/* no hover a luz sobe: a mesma moldura, so que mais acesa */
-.obracard[data-tom^='aviso-'].obracard--clicavel:hover {
-  --moldura: linear-gradient(
-    145deg,
-    #fff6cf 0%,
-    #e0ae2b 18%,
-    #fffdf2 34%,
-    #c2911a 52%,
-    #fff3c9 68%,
-    #e0ae2b 84%,
-    #a2790f 100%
-  );
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 245, 210, 0.45),
-    0 16px 30px -16px rgba(0, 0, 0, 0.8),
-    0 6px 24px -10px rgba(224, 174, 43, 0.6);
-}
-
-/* ---- etiquetas da obra, logo abaixo da descricao ---- */
+/* ---- etiquetas da obra ---- */
 
 .obracard__etiquetas {
   display: flex;
@@ -367,269 +248,135 @@
   font-size: 0.62rem;
   font-weight: 700;
   line-height: 1.6;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 1px var(--line);
 }
 
-/* ============================================================
-   Os checks da etapa, no pe do card
+/* ---- base ---- */
 
-   Todos os setores da etapa em que a obra parou, um bloco por setor.
-   Os do seu cargo sao marcaveis dali; os dos outros ficam travados,
-   com cadeado — o card diz quem esta segurando a etapa sem ninguem
-   precisar abrir a obra.
-
-   Cada bloco corre na cor do seu setor (--check-cor): o ponto, o nome
-   e o contorno das caixinhas. Marcado, porem, o quadradinho fica
-   VERDE — verde e "feito" no sistema inteiro (o trilho da obra, a
-   coluna de concluidas, o carimbo do card), e usar a cor do setor
-   tambem para "feito" faria a cor dizer duas coisas ao mesmo tempo.
-
-   O fundo e um veu ESCURO com um toque da cor, e nao a cor lavada: no
-   pior caso — um check do Tecnico (laranja) num card de emergencia
-   (laranja) — a faixa lavada sumia dentro do card.
-   ============================================================ */
-
-.obracard__meus {
+.obracard__base {
   display: flex;
-  flex-direction: column;
-  margin: 3px -13px -11px;
-  border-radius: 0 0 calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px);
-  overflow: hidden;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
 }
 
-.obracard__setorgrupo {
+/* canto inferior DIREITO: os avatares e, embaixo deles, o carimbo de
+   "acabou" */
+.obracard__fim {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 4px;
-  padding: 7px 12px 8px;
-  border-top: 1px solid color-mix(in srgb, var(--check-cor) 55%, transparent);
-  background: color-mix(in srgb, var(--check-cor) 12%, rgba(0, 0, 0, 0.44));
+  flex-shrink: 0;
 }
 
-/* setor de outra pessoa: o bloco recua um passo. Ele esta ali para
-   informar, e nao para ser usado — com o mesmo peso do seu, o card
-   inteiro vira uma parede de checks iguais. */
-.obracard__setorgrupo:not([data-meu='sim']) {
-  background: color-mix(in srgb, var(--check-cor) 7%, rgba(0, 0, 0, 0.5));
+/* verde de "feito": e a linha que faz alguem lembrar de fechar a obra */
+.obracard__pronta {
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
 }
 
-.obracard__meustopo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 0.62rem;
+.obracard__pronta strong {
   font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  color: var(--etapa-ok);
 }
 
-.obracard__meucargo {
+.obracard__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-base);
+}
+
+/* as duas datas na mesma linha enquanto couberem; em card estreito a
+   segunda desce, e nao encolhe a letra */
+.obracard__datas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+
+.obracard__data {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.obracard__data strong {
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+/* ---- Prioridade: um ponto colorido, sem pastilha ---- */
+
+.obracard__pri {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--check-cor);
+  gap: 5px;
 }
 
-.obracard__meucargo svg {
-  flex-shrink: 0;
-  opacity: 0.85;
-}
-
-/* o ponto da cor do setor. No bloco travado ele da lugar ao cadeado,
-   que ja esta na frente do nome */
-.obracard__setorgrupo[data-meu='sim'] .obracard__meucargo::before {
+.obracard__pri::before {
   content: '';
   width: 7px;
   height: 7px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--check-cor);
+  background: var(--pri-cor, currentColor);
+  box-shadow: 0 0 0 1.5px var(--surface);
 }
 
-.obracard__meustopo em {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-style: normal;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.7;
+.obracard__pri strong {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-strong);
 }
 
-.obracard__checks {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.obracard__pri[data-pri='alta'] {
+  --pri-cor: var(--pri-alta);
 }
 
-.obracard__check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 0.755rem;
-  font-weight: 600;
-  line-height: 1.3;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
+/* "Urgente": a prioridade da emergencia */
+.obracard__pri[data-pri='urgente'] {
+  --pri-cor: var(--pri-alta);
 }
 
-.obracard__check:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--check-cor) 26%, transparent);
+.obracard__pri[data-pri='media'] {
+  --pri-cor: var(--pri-media);
 }
 
-/* ---- Check travado: BLOQUEADO, e que se veja que esta ----
-
-   O mesmo tratamento que o check de outro setor ja tinha DENTRO da
-   obra, trazido para ca. O botao vinha `disabled`, mas visualmente
-   continuava um check comum: o ponteiro virava setinha, o hover nao
-   respondia, e a pessoa clicava, nao acontecia nada, e clicava de
-   novo. Agora o cursor avisa ANTES do clique e a caixinha fica
-   riscada em diagonal — a leitura e "aqui nao e comigo", e nao
-   "nao funcionou".
-
-   O texto continua legivel de proposito: e ele que diz o que a etapa
-   esta esperando, e apagar demais tiraria a unica informacao que o
-   bloco travado tem para dar. */
-.obracard__check:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
+.obracard__pri[data-pri='baixa'] {
+  --pri-cor: var(--pri-baixa);
 }
 
-/* o realce do hover nao vale para o travado: acender no ponteiro e
-   uma promessa de clique que este botao nao cumpre */
-.obracard__check:disabled:hover {
-  background: transparent;
-}
+/* ---- "prazo final: sem data" com o (!) ----
 
-.obracard__check:disabled .obracard__caixa {
-  border-style: dashed;
-  border-color: rgba(255, 255, 255, 0.5);
-  background-image: linear-gradient(
-    135deg,
-    transparent 45%,
-    rgba(255, 255, 255, 0.55) 45%,
-    rgba(255, 255, 255, 0.55) 55%,
-    transparent 55%
-  );
-}
-
-/* ...menos quando ele JA esta marcado: ali a caixa e o registro de
-   que o outro setor fez a parte dele, e riscar por cima do verde
-   diria que nao foi feito */
-.obracard__check:disabled[data-feito='sim'] .obracard__caixa {
-  border-style: solid;
-  background-image: none;
-}
-
-/* A caixinha. Vazia, e o contorno na cor do setor; marcada, ela fica
-   VERDE com o tique branco. O anel claro em volta e o que separa a
-   caixa do card quando as duas cores chegam perto — o mesmo recurso
-   da etiqueta de setor la em cima. */
-.obracard__caixa {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  border: 1.6px solid var(--check-cor);
-  border-radius: 5px;
-  color: transparent;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
-  transition: background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-
-.obracard__check[data-feito='sim'] .obracard__caixa {
-  border-color: var(--check-ok);
-  background: var(--check-ok);
-  color: #fff;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.34);
-}
-
-/* o verde do "feito", firme o bastante para se ler sobre o azul do
-   card padrao e sobre o laranja da emergencia */
-.obracard__meus {
-  --check-ok: #2fbf6a;
-}
-
-/* feito: o texto sai da frente do que ainda falta, mas continua
-   legivel — e ele que diz o que ja foi dado por resolvido */
-.obracard__check[data-feito='sim'] {
-  opacity: 0.66;
-  text-decoration: line-through;
-  text-decoration-color: rgba(255, 255, 255, 0.4);
-}
-
-/* ---- o nome da obra como botao ----
-
-   Com os checks dentro, o card deixa de ser um <button> e o nome
-   assume o caminho de teclado. Visualmente ele nao muda nada. */
-.obracard__abrir {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 0.83rem;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-
-.obracard__abrir:hover {
-  text-decoration: underline;
-}
-
-/* ---- "sem data" e o (!) ----
-
-   A conclusão aparece mesmo em branco, e o sinal vermelho é o mesmo
-   `.pendencia` da tela da obra — mesma classe, mesma piscada, para a
-   falta ser a mesma coisa nos dois lugares.
-
-   `position: relative` aqui é o que ancora o (!): ele se posiciona
-   sozinho no canto de cima à direita de quem o segura. O respiro à
-   direita é o lugar dele — sem ele o sinal cairia por cima da data. */
+   O sinal vermelho e o mesmo `.pendencia` da tela da obra — mesma
+   classe, mesma piscada. `position: relative` ancora o (!) no canto. */
 .obracard__semprazo {
   position: relative;
   padding-right: 15px;
 }
 
-/* "sem data" não é um valor: fica em itálico e mais apagado que uma
-   data de verdade, para não se ler como se alguém tivesse preenchido */
+/* "sem data" nao e um valor: italico e mais apagado */
 .obracard__semprazo strong {
   font-weight: 700;
   font-style: italic;
-  opacity: 0.85;
+  color: var(--text-muted);
 }
 
-/* o card é colorido e pequeno: o sinal encolhe um pouco e ganha um
-   anel claro, o mesmo recurso que a etiqueta de setor usa para se
-   separar do azul-marinho do card.
-
-   O anel é `outline`, e não `box-shadow`: a piscada anima justamente o
-   box-shadow (é dela que sai a ondinha em volta do sinal), e um anel
-   posto ali seria reescrito a cada quadro da animação — apareceria
-   parado e sumiria assim que ela começasse. */
+/* o anel e `outline`, e nao `box-shadow`: a piscada anima o box-shadow */
 .obracard__semprazo .pendencia {
   top: -6px;
   right: -3px;
   width: 15px;
   height: 15px;
   font-size: 0.62rem;
-  outline: 1.5px solid rgba(255, 255, 255, 0.55);
+  outline: 1.5px solid var(--surface);
 }

@@ -181,6 +181,9 @@ async function lerTudo(usuarioId) {
     termos,
     prazosEtapa,
     prazosCheck,
+    ensaios,
+    obraEnsaios,
+    progressos,
   ] = await Promise.all([
     query('SELECT * FROM cliente ORDER BY lower(nome)'),
     /* os setores vem junto: sao poucos e a tela de Clientes precisa
@@ -223,6 +226,15 @@ async function lerTudo(usuarioId) {
        de etapa ou de check — e o quadro continua de pe */
     query('SELECT obra_id, etapa_id, prazo FROM obra_prazo_etapa').catch(semTabelaVazia),
     query('SELECT obra_id, check_id, prazo FROM obra_prazo_check').catch(semTabelaVazia),
+    /* os ensaios (atualizacao 14): o catalogo, os planejados de cada
+       obra e a execucao dia a dia. Sem as tabelas, nenhuma obra tem
+       ensaio — e o resto do quadro continua de pe */
+    query('SELECT * FROM ensaio ORDER BY ordem, lower(nome), id').catch(semTabelaVazia),
+    query('SELECT obra_id, ensaio_id, ordem FROM obra_ensaio ORDER BY ordem, ensaio_id').catch(
+      semTabelaVazia,
+    ),
+    query(`SELECT p.obra_id, p.ensaio_id, p.dia, p.percentual, p.registrado_por, p.registrado_em
+             FROM obra_ensaio_progresso p ORDER BY p.dia`).catch(semTabelaVazia),
   ])
 
   const junta = (linhas, chave, monta) => {
@@ -256,6 +268,23 @@ async function lerTudo(usuarioId) {
   })
   prazosCheck.rows.forEach((l) => {
     prazoDe(l.obra_id).checks[String(l.check_id)] = soData(l.prazo)
+  })
+
+  /* os ensaios planejados de cada obra, na ordem em que foram postos,
+     e a execucao: ensaio -> [{ dia, percentual }] do dia mais antigo ao
+     mais novo. O percentual de um dia e quanto o ensaio estava feito
+     NAQUELE dia — o mais recente e o andamento de agora */
+  const ensaiosDaObra = junta(obraEnsaios.rows, 'obra_id', (l) => String(l.ensaio_id))
+  const execucaoDaObra = {}
+  progressos.rows.forEach((l) => {
+    const daObra = (execucaoDaObra[l.obra_id] ??= {})
+    const lista = (daObra[String(l.ensaio_id)] ??= [])
+    lista.push({
+      dia: soData(l.dia),
+      percentual: Number(l.percentual),
+      registradoPor: l.registrado_por === null ? null : String(l.registrado_por),
+      registradoEm: l.registrado_em,
+    })
   })
 
   const membrosDaObra = junta(membros.rows, 'obra_id', (l) => String(l.usuario_id))
@@ -315,6 +344,15 @@ async function lerTudo(usuarioId) {
     termos,
     clientes: clientes.rows.map(paraCliente),
     setores: setores.rows.map(paraSetor),
+    /* o catalogo inteiro, inclusive o que saiu (ativo = false): a obra
+       que ja planejou um ensaio retirado continua mostrando o nome dele */
+    ensaios: ensaios.rows.map((l) => ({
+      id: String(l.id),
+      nome: l.nome,
+      descricao: l.descricao ?? '',
+      ordem: l.ordem,
+      ativo: l.ativo,
+    })),
     etiquetas: etiquetas.rows.map((l) => ({
       id: String(l.id),
       nome: l.nome,
@@ -330,7 +368,11 @@ async function lerTudo(usuarioId) {
       tipo: o.tipo,
       prioridade: o.prioridade,
       dataInicio: o.data_inicio,
+      /* o prazo final: a entrega da documentacao */
       dataConclusao: o.data_conclusao,
+      /* a entrada em campo — o periodo de execucao vai daqui ate o
+         prazo final. null = ainda nao definida (vale o inicio da obra) */
+      execucaoInicio: soData(o.execucao_inicio ?? null),
       criadoEm: o.criado_em,
       criadoPor: o.criado_por === null ? null : String(o.criado_por),
       criadoPorNome: o.criado_por_nome ?? null,
@@ -347,6 +389,8 @@ async function lerTudo(usuarioId) {
       conclusaoObs: o.conclusao_obs ?? '',
       checks: checksDaObra[o.id] ?? {},
       prazos: prazosDaObra[o.id] ?? { etapas: {}, checks: {} },
+      ensaios: ensaiosDaObra[o.id] ?? [],
+      execucao: execucaoDaObra[o.id] ?? {},
       membros: membrosDaObra[o.id] ?? [],
       observacoes: obsDaObra[o.id] ?? [],
       avisos: avisosDaObra[o.id] ?? [],
@@ -920,13 +964,95 @@ router.delete('/chat/:id', exigeSessao, async (req, res) => {
 
 const PRIORIDADES = ['baixa', 'media', 'alta']
 
+/* ------------------------------------------------------------
+   EMERGENCIA = execucao em menos de 3 dias
+
+   O periodo de execucao vai da entrada em campo (execucao_inicio;
+   sem ela, o inicio da obra) ate o prazo final (data_conclusao, a
+   entrega da documentacao). Quando ele e menor que DIAS_EMERGENCIA,
+   a obra e uma Obra Emergencial — ao nascer, e tambem depois, se
+   alguem mexer nas datas e a obra padrao passar a caber em menos de
+   3 dias (fica no historico).
+
+   O caminho de volta NAO e automatico: uma emergencia aberta de
+   proposito nao deixa de ser so porque uma data mudou.
+
+   A tela faz a mesma conta (src/domain/obras.js) para avisar antes
+   de salvar; aqui e o que vale.
+   ------------------------------------------------------------ */
+
+const DIAS_EMERGENCIA = 3
+
+/** Dias de 'de' ate 'ate' ('AAAA-MM-DD'); negativo quando 'ate' vem antes. */
+function diasEntreDatas(de, ate) {
+  const emDias = (iso) => {
+    const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number)
+    return Date.UTC(a, m - 1, d) / 86400000
+  }
+  return Math.round(emDias(ate) - emDias(de))
+}
+
+/** A execucao cabe em menos de 3 dias? */
+function execucaoCurta(inicio, fim) {
+  if (!inicio || !fim) return false
+  return diasEntreDatas(inicio, fim) < DIAS_EMERGENCIA
+}
+
+/** Hoje no calendario do Brasil: o servidor pode estar rodando em UTC. */
+function hojeNoBrasil() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+}
+
+/** As datas da obra; banco sem execucao_inicio (sem a atualizacao 14) vem sem ela. */
+async function datasDaObra(obraId) {
+  const { rows } = await query(
+    'SELECT tipo, data_inicio, data_conclusao, execucao_inicio FROM obra WHERE id = $1',
+    [obraId],
+  ).catch((erro) => {
+    if (erro.code !== '42703') throw erro
+    return query('SELECT tipo, data_inicio, data_conclusao FROM obra WHERE id = $1', [obraId])
+  })
+  const o = rows[0]
+  if (!o) return null
+  return {
+    tipo: o.tipo,
+    inicio: soData(o.data_inicio),
+    prazoFinal: soData(o.data_conclusao),
+    execucaoInicio: soData(o.execucao_inicio ?? null),
+  }
+}
+
+/**
+ * Depois de mexer nas datas: a obra PADRAO cuja execucao ficou com
+ * menos de 3 dias vira emergencia. Devolve true quando virou.
+ */
+async function aplicarRegraDeEmergencia(req, obraId) {
+  const datas = await datasDaObra(obraId)
+  if (!datas || datas.tipo !== 'padrao') return false
+  if (!execucaoCurta(datas.execucaoInicio ?? datas.inicio, datas.prazoFinal)) return false
+
+  await query(
+    `UPDATE obra SET tipo = 'emergencia', prioridade = 'alta', atualizado_por = $1 WHERE id = $2`,
+    [req.dono.sub, obraId],
+  )
+  await registrarAtividade(req, {
+    acao: 'obra.emergencia',
+    categoria: 'obra',
+    entidade: ['obra', obraId],
+    descricao: 'Obra passou a ser emergencial (execução em menos de 3 dias)',
+    detalhes: await descreverObra(obraId),
+  })
+  return true
+}
+
 /* o nome de cada coluna da obra como o historico escreve "o que mudou" */
 const ROTULO_CAMPO_OBRA = {
   descricao: 'descrição',
   proposta: 'n° da proposta',
   cliente_id: 'cliente',
   data_inicio: 'início',
-  data_conclusao: 'conclusão',
+  data_conclusao: 'prazo final',
+  execucao_inicio: 'início da execução',
   tipo: 'tipo',
   prioridade: 'prioridade',
 }
@@ -938,9 +1064,26 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
      proposta + cliente, e obrigar um texto livre so fazia aparecer
      "obra" e "-" no lugar dela */
   const descricao = texto(req.body?.descricao)
-  const tipo = req.body?.tipo === 'emergencia' ? 'emergencia' : 'padrao'
+  const dataInicio = texto(req.body?.dataInicio) || hojeNoBrasil()
+  const dataConclusao = texto(req.body?.dataConclusao) || null
+  const execucaoInicio = texto(req.body?.execucaoInicio) || null
+
+  /* execucao em menos de 3 dias e emergencia, mesmo aberta pelo botao
+     de obra padrao: e a regra, nao uma escolha da tela */
+  const curta = execucaoCurta(execucaoInicio ?? dataInicio, dataConclusao)
+  const tipo = req.body?.tipo === 'emergencia' || curta ? 'emergencia' : 'padrao'
   // emergencia e sempre alta; o gatilho do banco garante, aqui so evita ida a toa
   const prioridade = tipo === 'emergencia' ? 'alta' : (req.body?.prioridade ?? 'media')
+
+  for (const data of [dataInicio, dataConclusao, execucaoInicio]) {
+    if (data && !dataValida(data)) return res.status(400).json({ erro: 'Data inválida.' })
+  }
+  if (dataConclusao && dataConclusao < dataInicio) {
+    return res.status(400).json({ erro: 'O prazo final não pode ser antes do início.' })
+  }
+  if (execucaoInicio && dataConclusao && execucaoInicio > dataConclusao) {
+    return res.status(400).json({ erro: 'O início da execução não pode ser depois do prazo final.' })
+  }
 
   if (!clienteId) return res.status(400).json({ erro: 'Escolha a empresa.' })
   if (!proposta) return res.status(400).json({ erro: 'Informe o n° da proposta.' })
@@ -955,35 +1098,51 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
 
      A tela ja barra isso, mas ela e so a primeira porta: quem chama a
      API direto passaria por cima dela. */
-  if (tipo === 'emergencia' && !texto(req.body?.dataConclusao)) {
+  if (tipo === 'emergencia' && !dataConclusao) {
     return res.status(400).json({ erro: 'Obra de emergência precisa de uma data de conclusão.' })
   }
 
   try {
-    const { rows } = await query(
-      `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
-                         data_inicio, data_conclusao, criado_por, atualizado_por)
-       VALUES ($1, $2, $3, $4, $5, coalesce($6::date, CURRENT_DATE), $7, $8, $8)
-       RETURNING id`,
-      [
-        clienteId,
-        proposta,
-        descricao,
-        tipo,
-        prioridade,
-        req.body?.dataInicio || null,
-        req.body?.dataConclusao || null,
-        req.dono.sub,
-      ],
-    )
+    const valores = [
+      clienteId,
+      proposta,
+      descricao,
+      tipo,
+      prioridade,
+      dataInicio,
+      dataConclusao,
+      req.dono.sub,
+    ]
+    /* a entrada em campo so vai quando foi informada: banco sem a
+       atualizacao 14 continua criando obra normalmente */
+    const { rows } = execucaoInicio
+      ? await query(
+          `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
+                             data_inicio, data_conclusao, criado_por, atualizado_por, execucao_inicio)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+           RETURNING id`,
+          [...valores, execucaoInicio],
+        )
+      : await query(
+          `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
+                             data_inicio, data_conclusao, criado_por, atualizado_por)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+           RETURNING id`,
+          valores,
+        )
     await registrarAtividade(req, {
       acao: 'obra.criada',
       categoria: 'obra',
       entidade: ['obra', rows[0].id],
-      descricao: tipo === 'emergencia' ? 'Nova obra de emergência criada' : 'Nova obra criada',
+      descricao:
+        tipo !== 'emergencia'
+          ? 'Nova obra criada'
+          : curta && req.body?.tipo !== 'emergencia'
+            ? 'Nova obra de emergência criada (execução em menos de 3 dias)'
+            : 'Nova obra de emergência criada',
       detalhes: await descreverObra(rows[0].id),
     })
-    return res.status(201).json({ id: String(rows[0].id) })
+    return res.status(201).json({ id: String(rows[0].id), tipo })
   } catch (e) {
     if (e.code === '23503') return res.status(400).json({ erro: 'Cliente não encontrado.' })
     return tratar(e, res, 'dados/obra-criar')
@@ -1007,6 +1166,11 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
   if (req.body?.clienteId !== undefined) por('cliente_id', req.body.clienteId)
   if (req.body?.dataInicio !== undefined) por('data_inicio', req.body.dataInicio || null)
   if (req.body?.dataConclusao !== undefined) por('data_conclusao', req.body.dataConclusao || null)
+  if (req.body?.execucaoInicio !== undefined) por('execucao_inicio', req.body.execucaoInicio || null)
+  for (const campo of ['dataInicio', 'dataConclusao', 'execucaoInicio']) {
+    const valor = texto(req.body?.[campo])
+    if (valor && !dataValida(valor)) return res.status(400).json({ erro: 'Data inválida.' })
+  }
   if (req.body?.tipo !== undefined) {
     if (!['padrao', 'emergencia'].includes(req.body.tipo)) {
       return res.status(400).json({ erro: 'Tipo de obra inválido.' })
@@ -1058,6 +1222,11 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
       valores,
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Obra não encontrada.' })
+
+    /* as datas podem ter mudado: a regra da emergencia olha para elas */
+    const datas = await datasDaObra(req.params.id)
+    const virouEmergencia = await aplicarRegraDeEmergencia(req, req.params.id)
+
     await registrarAtividade(req, {
       acao: 'obra.editada',
       categoria: 'obra',
@@ -1071,9 +1240,12 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
           .join(', '),
       },
     })
-    return res.json({ ok: true })
+    return res.json({ ok: true, tipo: virouEmergencia ? 'emergencia' : datas?.tipo })
   } catch (e) {
     if (e.code === '23503') return res.status(400).json({ erro: 'Cliente não encontrado.' })
+    if (e.code === '42703') {
+      return res.status(501).json({ erro: 'Início da execução ainda não existe no banco (atualização 14).' })
+    }
     return tratar(e, res, 'dados/obra-editar')
   }
 })
@@ -1283,24 +1455,126 @@ async function podeMarcar(usuarioId, checkId, obraId) {
 }
 
 /**
- * O check e de um card de PERGUNTA (Sim/Nao)?
+ * O que o check exige para ser marcado:
  *
- * null quando o banco ainda nao tem a atualizacao 13 — ai nao existe
- * pergunta nem coluna de resposta, e a marcacao segue como sempre foi.
+ *   simNao  o check pede resposta Sim ou Nao. null quando o banco
+ *           ainda nao tem a atualizacao 13 — ai nao existe pergunta
+ *           nem coluna de resposta, e a marcacao segue como sempre;
+ *   tipo    'comum', 'planejamento_ensaios' ou 'execucao_ensaios';
+ *   papel   o papel da etapa dele. Na de 'execucao' nada se marca
+ *           sem o prazo final da obra.
  */
-async function checkEPergunta(checkId) {
+async function regraDoCheck(checkId) {
+  const sem14 = { tipo: 'comum', papel: null }
   try {
     const { rows } = await query(
-      `SELECT kd.sim_nao FROM etapa_check ck JOIN etapa_card kd ON kd.id = ck.card_id
+      `SELECT ck.sim_nao, ck.tipo, et.papel
+         FROM etapa_check ck
+         JOIN etapa_card kd ON kd.id = ck.card_id
+         JOIN etapa et      ON et.id = kd.etapa_id
         WHERE ck.id = $1`,
       [checkId],
     )
-    return rows[0]?.sim_nao === true
+    if (!rows[0]) return { simNao: false, ...sem14 }
+    return { simNao: rows[0].sim_nao === true, tipo: rows[0].tipo, papel: rows[0].papel }
   } catch (erro) {
-    if (erro.code === '42703') return null
-    throw erro
+    if (erro.code !== '42703') throw erro
+  }
+  /* sem a atualizacao 14: so a pergunta (13), ou nem ela */
+  try {
+    const { rows } = await query('SELECT sim_nao FROM etapa_check WHERE id = $1', [checkId])
+    return { simNao: rows[0]?.sim_nao === true, ...sem14 }
+  } catch (erro) {
+    if (erro.code !== '42703') throw erro
+    return { simNao: null, ...sem14 }
   }
 }
+
+/* ------------------------------------------------------------
+   Os ENSAIOS da obra (atualizacao 14)
+
+   O Planejamento de ensaios (1a etapa) escolhe quais ensaios a obra
+   vai fazer; a Execucao dos ensaios (3a etapa) registra quanto cada
+   um estava feito em cada dia. O andamento de AGORA de um ensaio e o
+   percentual do dia mais recente — um dia nao apaga o outro.
+   ------------------------------------------------------------ */
+
+/** Os ensaios planejados da obra, cada um com o percentual de agora. */
+async function andamentoDosEnsaios(obraId) {
+  const { rows } = await query(
+    `SELECT oe.ensaio_id, e.nome,
+            (SELECT p.percentual FROM obra_ensaio_progresso p
+              WHERE p.obra_id = oe.obra_id AND p.ensaio_id = oe.ensaio_id
+              ORDER BY p.dia DESC LIMIT 1) AS percentual
+       FROM obra_ensaio oe JOIN ensaio e ON e.id = oe.ensaio_id
+      WHERE oe.obra_id = $1
+      ORDER BY oe.ordem, oe.ensaio_id`,
+    [obraId],
+  ).catch(semTabelaVazia)
+  return rows.map((l) => ({
+    id: String(l.ensaio_id),
+    nome: l.nome,
+    percentual: Number(l.percentual ?? 0),
+  }))
+}
+
+/** O check do sistema de um tipo, o que vale hoje (ou null). */
+async function checkDoSistema(tipo) {
+  const { rows } = await query(
+    'SELECT id FROM etapa_check WHERE tipo = $1 AND vigente_ate IS NULL ORDER BY id LIMIT 1',
+    [tipo],
+  ).catch((erro) => (erro.code === '42703' ? { rows: [] } : Promise.reject(erro)))
+  return rows[0] ? String(rows[0].id) : null
+}
+
+/**
+ * Mantem as duas regras dos ensaios de pe DEPOIS de qualquer mudanca:
+ *
+ *   - "Planejamento de ensaios" marcado sem nenhum ensaio planejado
+ *     volta a ficar em aberto;
+ *   - "Execucao dos ensaios" marcado com algum ensaio abaixo de 100%
+ *     (um dia corrigido para menos, um ensaio novo no planejamento)
+ *     volta a ficar em aberto.
+ *
+ * O que for desmarcado assim entra no historico com o motivo.
+ */
+async function conferirEnsaios(req, obraId) {
+  const ensaios = await andamentoDosEnsaios(obraId)
+  const regras = [
+    ['planejamento_ensaios', ensaios.length > 0, 'nenhum ensaio planejado'],
+    [
+      'execucao_ensaios',
+      ensaios.length > 0 && ensaios.every((e) => e.percentual >= 100),
+      'nem todos os ensaios estão em 100%',
+    ],
+  ]
+  for (const [tipo, valendo, motivo] of regras) {
+    if (valendo) continue
+    const { rows } = await query(
+      `DELETE FROM obra_check
+        WHERE obra_id = $1
+          AND check_id IN (SELECT id FROM etapa_check WHERE tipo = $2)
+       RETURNING check_id`,
+      [obraId, tipo],
+    ).catch((erro) => (erro.code === '42703' ? { rows: [] } : Promise.reject(erro)))
+    for (const l of rows) {
+      await registrarAtividade(req, {
+        acao: 'check.desmarcado',
+        categoria: 'check',
+        entidade: ['obra', obraId],
+        descricao: 'Check reaberto pelo sistema',
+        detalhes: {
+          ...(await descreverObra(obraId)),
+          ...(await descreverCheck(l.check_id)),
+          motivo,
+        },
+      })
+    }
+  }
+}
+
+/** 'AAAA-MM-DD' -> 'dd/mm/aaaa', como o historico mostra. */
+const dataLida = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : null)
 
 const rotuloResposta = (resposta) => (resposta === true ? 'Sim' : resposta === false ? 'Não' : null)
 
@@ -1319,10 +1593,44 @@ router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, re
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
     }
 
-    const pergunta = await checkEPergunta(req.params.checkId)
+    const regra = await regraDoCheck(req.params.checkId)
+    const pergunta = regra.simNao
     const resposta = req.body?.resposta
     if (pergunta && typeof resposta !== 'boolean') {
       return res.status(400).json({ erro: 'Este check pede uma resposta: Sim ou Não.' })
+    }
+
+    /* A etapa de EXECUCAO nao anda sem o prazo final da obra: e ele
+       que diz ate quando a obra (e a documentacao) tem de ficar pronta,
+       e e dele que sai a urgencia do card no quadro. */
+    if (regra.papel === 'execucao') {
+      const datas = await datasDaObra(req.params.id)
+      if (!datas?.prazoFinal) {
+        return res.status(409).json({
+          erro: 'A etapa de execução exige o prazo final da obra. Defina o prazo final antes de marcar os checks dela.',
+        })
+      }
+    }
+
+    /* os dois checks dos ensaios so fecham com o que eles pedem */
+    if (regra.tipo === 'planejamento_ensaios' || regra.tipo === 'execucao_ensaios') {
+      const ensaios = await andamentoDosEnsaios(req.params.id)
+      if (ensaios.length === 0) {
+        return res.status(409).json({
+          erro:
+            regra.tipo === 'planejamento_ensaios'
+              ? 'Escolha ao menos um ensaio no Planejamento de ensaios antes de marcar este check.'
+              : 'Nenhum ensaio foi planejado para esta obra. Faça o Planejamento de ensaios primeiro.',
+        })
+      }
+      const faltam = ensaios.filter((e) => e.percentual < 100)
+      if (regra.tipo === 'execucao_ensaios' && faltam.length > 0) {
+        return res.status(409).json({
+          erro: `A execução só fecha com todos os ensaios em 100%. Faltam: ${faltam
+            .map((e) => `${e.nome} (${e.percentual}%)`)
+            .join(', ')}.`,
+        })
+      }
     }
 
     /* `inserido` separa "marcou agora" de "trocou a resposta": e o
@@ -1471,6 +1779,379 @@ router.put('/obras/:id/prazos', exigeSessao, exige('definir_prazos'), obraAberta
       return res.status(501).json({ erro: 'Prazos ainda não foram habilitados no banco (atualização 13).' })
     }
     return tratar(e, res, 'dados/prazo')
+  }
+})
+
+/* ------------------------------------------------------------
+   Periodo de EXECUCAO: entrada em campo -> prazo final
+
+   O prazo final (data_conclusao) e a entrega da documentacao, e a
+   etapa de execucao nao anda sem ele. Quem define e quem tem
+   `definir_prazos` — a mesma permissao dos prazos de check e de
+   etapa. Periodo menor que 3 dias transforma a obra padrao em
+   emergencia (aplicarRegraDeEmergencia).
+   ------------------------------------------------------------ */
+
+router.put('/obras/:id/execucao', exigeSessao, exige('definir_prazos'), obraAberta, async (req, res) => {
+  const inicio = texto(req.body?.inicio) || null
+  const prazoFinal = texto(req.body?.prazoFinal)
+
+  if (!prazoFinal) return res.status(400).json({ erro: 'Informe o prazo final da obra.' })
+  for (const data of [inicio, prazoFinal]) {
+    if (data && !dataValida(data)) return res.status(400).json({ erro: 'Data inválida.' })
+  }
+  if (inicio && inicio > prazoFinal) {
+    return res.status(400).json({ erro: 'O início da execução não pode ser depois do prazo final.' })
+  }
+
+  try {
+    const antes = await datasDaObra(req.params.id)
+    if (!antes) return res.status(404).json({ erro: 'Obra não encontrada.' })
+    if (antes.inicio && prazoFinal < antes.inicio) {
+      return res.status(400).json({ erro: 'O prazo final não pode ser antes do início da obra.' })
+    }
+
+    await query(
+      `UPDATE obra
+          SET execucao_inicio = $1, data_conclusao = $2, atualizado_por = $3
+        WHERE id = $4`,
+      [inicio, prazoFinal, req.dono.sub, req.params.id],
+    )
+    await registrarAtividade(req, {
+      acao: 'prazo.execucao',
+      categoria: 'obra',
+      entidade: ['obra', req.params.id],
+      descricao: 'Período de execução definido',
+      detalhes: {
+        ...(await descreverObra(req.params.id)),
+        inicio: dataLida(inicio),
+        prazo_final: dataLida(prazoFinal),
+      },
+    })
+    const virouEmergencia = await aplicarRegraDeEmergencia(req, req.params.id)
+    return res.json({ ok: true, tipo: virouEmergencia ? 'emergencia' : antes.tipo })
+  } catch (e) {
+    if (e.code === '42703') {
+      return res.status(501).json({ erro: 'Período de execução ainda não existe no banco (atualização 14).' })
+    }
+    return tratar(e, res, 'dados/execucao-periodo')
+  }
+})
+
+/* ------------------------------------------------------------
+   Planejamento de ensaios (1a etapa)
+
+   Troca a lista de ensaios da obra pela que veio, na ordem em que
+   veio. Quem pode e quem marca o check "Planejamento de ensaios"
+   (o setor dele, acesso total, check em todas as etapas ou obra de
+   emergencia — a mesma regra de marcar check). Com `concluir`, o
+   check ja fica marcado junto.
+
+   Tirar um ensaio do planejamento NAO apaga a execucao dele: os
+   dias registrados ficam guardados e voltam se ele for posto de novo.
+   ------------------------------------------------------------ */
+
+router.put('/obras/:id/ensaios', exigeSessao, obraAberta, async (req, res) => {
+  const lista = Array.isArray(req.body?.ensaioIds) ? req.body.ensaioIds.map(String) : null
+  if (!lista || lista.some((id) => !/^\d+$/.test(id))) {
+    return res.status(400).json({ erro: 'Lista de ensaios inválida.' })
+  }
+  const ids = [...new Set(lista)]
+  const concluir = req.body?.concluir === true
+
+  try {
+    const checkId = await checkDoSistema('planejamento_ensaios')
+    if (!checkId) {
+      return res.status(501).json({ erro: 'O roteiro não tem o check "Planejamento de ensaios" (atualização 14).' })
+    }
+    if (!(await podeMarcar(req.dono.sub, checkId, req.params.id))) {
+      return res.status(403).json({ erro: 'O Planejamento de ensaios é de outro setor.' })
+    }
+    if (concluir && ids.length === 0) {
+      return res.status(400).json({ erro: 'Escolha ao menos um ensaio para concluir o planejamento.' })
+    }
+
+    /* so entra ensaio que existe e esta no catalogo — ou que ja estava
+       nesta obra (um ensaio retirado do catalogo nao some da obra) */
+    if (ids.length > 0) {
+      const { rows } = await query(
+        `SELECT e.id FROM ensaio e
+          WHERE e.id = ANY($1::bigint[])
+            AND (e.ativo OR EXISTS (SELECT 1 FROM obra_ensaio oe
+                                     WHERE oe.obra_id = $2 AND oe.ensaio_id = e.id))`,
+        [ids, req.params.id],
+      )
+      if (rows.length !== ids.length) return res.status(400).json({ erro: 'Ensaio não encontrado.' })
+    }
+
+    await query('DELETE FROM obra_ensaio WHERE obra_id = $1 AND NOT (ensaio_id = ANY($2::bigint[]))', [
+      req.params.id,
+      ids,
+    ])
+    for (const [i, ensaioId] of ids.entries()) {
+      await query(
+        `INSERT INTO obra_ensaio (obra_id, ensaio_id, ordem, definido_por)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (obra_id, ensaio_id) DO UPDATE SET ordem = EXCLUDED.ordem`,
+        [req.params.id, ensaioId, i, req.dono.sub],
+      )
+    }
+
+    const nomes = ids.length
+      ? (
+          await query(
+            'SELECT nome FROM obra_ensaio oe JOIN ensaio e ON e.id = oe.ensaio_id WHERE oe.obra_id = $1 ORDER BY oe.ordem',
+            [req.params.id],
+          )
+        ).rows.map((l) => l.nome)
+      : []
+    await registrarAtividade(req, {
+      acao: 'ensaios.planejados',
+      categoria: 'check',
+      entidade: ['obra', req.params.id],
+      descricao: 'Planejamento de ensaios atualizado',
+      detalhes: { ...(await descreverObra(req.params.id)), ensaios: nomes.join(', ') || 'nenhum' },
+    })
+
+    if (concluir) {
+      const marcado = await query(
+        `INSERT INTO obra_check (obra_id, check_id, feito_por) VALUES ($1, $2, $3)
+         ON CONFLICT (obra_id, check_id) DO NOTHING RETURNING check_id`,
+        [req.params.id, checkId, req.dono.sub],
+      )
+      if (marcado.rowCount > 0) {
+        await registrarAtividade(req, {
+          acao: 'check.marcado',
+          categoria: 'check',
+          entidade: ['obra', req.params.id],
+          descricao: 'Check concluído',
+          detalhes: { ...(await descreverObra(req.params.id)), ...(await descreverCheck(checkId)) },
+        })
+      }
+    }
+
+    await conferirEnsaios(req, req.params.id)
+    return res.json({ ok: true })
+  } catch (e) {
+    if (e.code === '42P01') {
+      return res.status(501).json({ erro: 'Ensaios ainda não existem no banco (atualização 14).' })
+    }
+    if (e.code === '23503') return res.status(404).json({ erro: 'Obra ou ensaio não encontrado.' })
+    return tratar(e, res, 'dados/ensaios-planejar')
+  }
+})
+
+/* ------------------------------------------------------------
+   Execucao dos ensaios (3a etapa): um DIA de cada vez
+
+   Corpo: { dia: 'AAAA-MM-DD', valores: [{ ensaioId, percentual }] }.
+   O percentual e quanto o ensaio estava feito NAQUELE dia (0-100);
+   null tira o registro daquele dia. Cada dia e uma linha propria:
+   registrar o dia 07 nao mexe no dia 06.
+
+   O dia precisa estar no periodo de execucao — da entrada em campo
+   (ou do inicio da obra) ate hoje — e o prazo final tem de existir.
+   Quem registra e quem marca o check "Execucao dos ensaios".
+   ------------------------------------------------------------ */
+
+router.put('/obras/:id/execucao/dia', exigeSessao, obraAberta, async (req, res) => {
+  const dia = texto(req.body?.dia)
+  const valores = Array.isArray(req.body?.valores) ? req.body.valores : null
+
+  if (!dataValida(dia)) return res.status(400).json({ erro: 'Escolha o dia da execução.' })
+  if (!valores || valores.length === 0) {
+    return res.status(400).json({ erro: 'Informe o percentual de ao menos um ensaio.' })
+  }
+  for (const v of valores) {
+    if (!/^\d+$/.test(String(v?.ensaioId ?? ''))) return res.status(400).json({ erro: 'Ensaio inválido.' })
+    const p = v.percentual
+    if (p !== null && p !== '' && !(Number.isInteger(Number(p)) && Number(p) >= 0 && Number(p) <= 100)) {
+      return res.status(400).json({ erro: 'O percentual vai de 0 a 100, sem casas decimais.' })
+    }
+  }
+
+  try {
+    const checkId = await checkDoSistema('execucao_ensaios')
+    if (!checkId) {
+      return res.status(501).json({ erro: 'O roteiro não tem o check "Execução dos ensaios" (atualização 14).' })
+    }
+    if (!(await podeMarcar(req.dono.sub, checkId, req.params.id))) {
+      return res.status(403).json({ erro: 'A Execução dos ensaios é de outro setor.' })
+    }
+
+    const datas = await datasDaObra(req.params.id)
+    if (!datas?.prazoFinal) {
+      return res.status(409).json({
+        erro: 'Defina o prazo final da obra antes de registrar a execução: é ele que fecha o período.',
+      })
+    }
+    const comeco = datas.execucaoInicio ?? datas.inicio
+    if (comeco && dia < comeco) {
+      return res.status(400).json({ erro: `O período de execução começa em ${dataLida(comeco)}.` })
+    }
+    if (dia > hojeNoBrasil()) {
+      return res.status(400).json({ erro: 'Não dá para registrar a execução de um dia que ainda não chegou.' })
+    }
+
+    const planejados = new Set((await andamentoDosEnsaios(req.params.id)).map((e) => e.id))
+    if (valores.some((v) => !planejados.has(String(v.ensaioId)))) {
+      return res.status(400).json({ erro: 'Só os ensaios do Planejamento de ensaios entram na execução.' })
+    }
+
+    for (const v of valores) {
+      if (v.percentual === null || v.percentual === '') {
+        await query('DELETE FROM obra_ensaio_progresso WHERE obra_id = $1 AND ensaio_id = $2 AND dia = $3', [
+          req.params.id,
+          v.ensaioId,
+          dia,
+        ])
+      } else {
+        await query(
+          `INSERT INTO obra_ensaio_progresso (obra_id, ensaio_id, dia, percentual, registrado_por)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (obra_id, ensaio_id, dia)
+             DO UPDATE SET percentual = EXCLUDED.percentual,
+                           registrado_por = EXCLUDED.registrado_por,
+                           registrado_em = now()`,
+          [req.params.id, v.ensaioId, dia, Number(v.percentual), req.dono.sub],
+        )
+      }
+    }
+
+    const nomes = Object.fromEntries((await andamentoDosEnsaios(req.params.id)).map((e) => [e.id, e.nome]))
+    await registrarAtividade(req, {
+      acao: 'ensaios.execucao',
+      categoria: 'check',
+      entidade: ['obra', req.params.id],
+      descricao: 'Execução dos ensaios registrada',
+      detalhes: {
+        ...(await descreverObra(req.params.id)),
+        dia: dataLida(dia),
+        ensaios: valores
+          .map((v) => `${nomes[String(v.ensaioId)] ?? v.ensaioId}: ${
+            v.percentual === null || v.percentual === '' ? 'apagado' : `${Number(v.percentual)}%`
+          }`)
+          .join(', '),
+      },
+    })
+
+    await conferirEnsaios(req, req.params.id)
+    return res.json({ ok: true })
+  } catch (e) {
+    if (e.code === '42P01' || e.code === '42703') {
+      return res.status(501).json({ erro: 'Execução dos ensaios ainda não existe no banco (atualização 14).' })
+    }
+    if (e.code === '23503') return res.status(404).json({ erro: 'Obra ou ensaio não encontrado.' })
+    return tratar(e, res, 'dados/execucao-dia')
+  }
+})
+
+/* ------------------------------------------------------------
+   Catalogo de ENSAIOS
+
+   Separado das obras: e a lista de onde o Planejamento de ensaios
+   escolhe. Quem mexe e quem tem `gerenciar_ensaios`.
+
+   Excluir um ensaio que alguma obra ja planejou NAO o apaga: ele sai
+   do catalogo (ativo = false) e continua nas obras que o tinham, com
+   a execucao registrada. Sem uso nenhum, sai de vez.
+   ------------------------------------------------------------ */
+
+const paraEnsaio = (l) => ({
+  id: String(l.id),
+  nome: l.nome,
+  descricao: l.descricao ?? '',
+  ordem: l.ordem,
+  ativo: l.ativo,
+})
+
+const SEM_ENSAIO = 'Ensaios ainda não existem no banco (atualização 14).'
+
+router.post('/ensaios', exigeSessao, exige('gerenciar_ensaios'), async (req, res) => {
+  const nome = texto(req.body?.nome)
+  const descricao = texto(req.body?.descricao).slice(0, 600) || null
+  if (!nome) return res.status(400).json({ erro: 'Escreva o nome do ensaio.' })
+
+  try {
+    const { rows } = await query(
+      `INSERT INTO ensaio (nome, descricao, ordem, criado_por)
+       VALUES ($1, $2, coalesce((SELECT max(ordem) FROM ensaio), 0) + 1, $3)
+       RETURNING *`,
+      [nome, descricao, req.dono.sub],
+    )
+    await registrarAtividade(req, {
+      acao: 'ensaio.criado',
+      categoria: 'roteiro',
+      entidade: ['ensaio', rows[0].id],
+      descricao: 'Ensaio criado no catálogo',
+      detalhes: { ensaio: nome },
+    })
+    return res.status(201).json({ ensaio: paraEnsaio(rows[0]) })
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ erro: 'Já existe um ensaio com esse nome.' })
+    if (e.code === '42P01') return res.status(501).json({ erro: SEM_ENSAIO })
+    return tratar(e, res, 'dados/ensaio-criar')
+  }
+})
+
+router.patch('/ensaios/:id', exigeSessao, exige('gerenciar_ensaios'), async (req, res) => {
+  const campos = []
+  const valores = []
+  if (req.body?.nome !== undefined) {
+    const nome = texto(req.body.nome)
+    if (!nome) return res.status(400).json({ erro: 'Escreva o nome do ensaio.' })
+    valores.push(nome)
+    campos.push(`nome = ${valores.length}`)
+  }
+  if (req.body?.descricao !== undefined) {
+    valores.push(texto(req.body.descricao).slice(0, 600) || null)
+    campos.push(`descricao = ${valores.length}`)
+  }
+  if (campos.length === 0) return res.status(400).json({ erro: 'Nada para alterar.' })
+  valores.push(req.params.id)
+
+  try {
+    const { rows } = await query(
+      `UPDATE ensaio SET ${campos.join(', ')} WHERE id = ${valores.length} AND ativo RETURNING *`,
+      valores,
+    )
+    if (!rows[0]) return res.status(404).json({ erro: 'Ensaio não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'ensaio.editado',
+      categoria: 'roteiro',
+      entidade: ['ensaio', rows[0].id],
+      descricao: 'Ensaio editado no catálogo',
+      detalhes: { ensaio: rows[0].nome },
+    })
+    return res.json({ ensaio: paraEnsaio(rows[0]) })
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ erro: 'Já existe um ensaio com esse nome.' })
+    if (e.code === '42P01') return res.status(501).json({ erro: SEM_ENSAIO })
+    return tratar(e, res, 'dados/ensaio-editar')
+  }
+})
+
+router.delete('/ensaios/:id', exigeSessao, exige('gerenciar_ensaios'), async (req, res) => {
+  try {
+    const usado = await query('SELECT 1 FROM obra_ensaio WHERE ensaio_id = $1 LIMIT 1', [req.params.id])
+    const { rows } =
+      usado.rows.length > 0
+        ? await query('UPDATE ensaio SET ativo = false WHERE id = $1 AND ativo RETURNING nome', [
+            req.params.id,
+          ])
+        : await query('DELETE FROM ensaio WHERE id = $1 RETURNING nome', [req.params.id])
+    if (!rows[0]) return res.status(404).json({ erro: 'Ensaio não encontrado.' })
+    await registrarAtividade(req, {
+      acao: 'ensaio.excluido',
+      categoria: 'roteiro',
+      entidade: ['ensaio', req.params.id],
+      descricao: 'Ensaio excluído do catálogo',
+      detalhes: { ensaio: rows[0].nome },
+    })
+    return res.status(204).end()
+  } catch (e) {
+    if (e.code === '42P01') return res.status(501).json({ erro: SEM_ENSAIO })
+    return tratar(e, res, 'dados/ensaio-apagar')
   }
 })
 

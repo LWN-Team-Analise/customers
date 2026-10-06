@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useDados } from '@/context/DadosContext'
-import { chaveDoCargo } from '@/domain/obras'
+import { chaveDoCargo, diasAte, progressoDaObra, situacaoDaObra } from '@/domain/obras'
+import { hojeISO } from '@/utils/formato'
 import { Colunas, Linha, Rosca } from './graficos'
 import PainelDespesas from './PainelDespesas'
 import Tile from './Tile'
@@ -361,7 +362,54 @@ export default function Painel({ mes, passo = 'mes' }) {
   }
 
   const noPrazo = desvios.filter((d) => d.valor <= 0)
+  const noDia = desvios.filter((d) => d.valor === 0)
   const desvioMedio = media(desvios.map((d) => d.valor))
+
+  /* ---------------------------------------------------------
+     3b. As obras EM ANDAMENTO: adiantadas, no prazo ou atrasadas
+
+     A foto de agora (como "Obras em andamento", ignora as setas):
+
+       atrasada   algum prazo ja venceu — o prazo final, o de uma
+                  etapa ou o de um check (os mesmos de situacaoDaObra,
+                  que pinta o card do quadro);
+       adiantada  o que ja foi feito (checks marcados) esta pelo menos
+                  ADIANTE_PP pontos a frente do tempo que ja passou
+                  entre o inicio e o prazo final;
+       no prazo   o resto que tem prazo final;
+       sem prazo  obra sem prazo final — nao da para dizer.
+     --------------------------------------------------------- */
+  const andamento = useMemo(() => {
+    const ADIANTE_PP = 10
+    const hoje = hojeISO()
+    const grupos = { adiantadas: [], noPrazo: [], atrasadas: [], semPrazo: [] }
+    abertas.forEach((obra) => {
+      const roteiroObra = roteiroDaObra(obra)
+      const situacao = situacaoDaObra(roteiroObra, obra, hoje)
+      const item = {
+        obra,
+        nome: [obra.proposta, clientePorId(obra.clienteId)?.nome].filter(Boolean).join(' — ') || 'Obra',
+      }
+      const vencido = situacao.motivos.find((m) => m.venceu)
+      if (vencido) {
+        grupos.atrasadas.push({ ...item, dias: -vencido.dias })
+        return
+      }
+      if (!obra.dataConclusao) {
+        grupos.semPrazo.push(item)
+        return
+      }
+      const inicio = obra.dataInicio ?? String(obra.criadoEm ?? '').slice(0, 10)
+      const total = diasAte(obra.dataConclusao, inicio)
+      const passou = diasAte(hoje, inicio)
+      const tempo = total > 0 ? Math.min(100, Math.max(0, (passou / total) * 100)) : 100
+      const feito = progressoDaObra(roteiroObra, obra.checks)
+      if (feito >= tempo + ADIANTE_PP) grupos.adiantadas.push(item)
+      else grupos.noPrazo.push(item)
+    })
+    grupos.atrasadas.sort((a, b) => b.dias - a.dias)
+    return grupos
+  }, [abertas, roteiroDaObra, clientePorId])
 
   /* quantos checks a empresa tem em aberto agora — o contexto dos
      numeros de cima, para uma media de 3 obras nao parecer um censo */
@@ -390,6 +438,8 @@ export default function Painel({ mes, passo = 'mes' }) {
       adiantoLinha={serieDeDesvio(adiantadas, 'var(--gr-bom)', 'Adiantamento')}
       desvios={desvios}
       noPrazo={noPrazo}
+      noDia={noDia}
+      andamento={andamento}
       atrasadas={atrasadas}
       adiantadas={adiantadas}
       duracaoMedia={duracaoMedia}
@@ -422,6 +472,8 @@ export function PainelVista({
   adiantoLinha,
   desvios,
   noPrazo,
+  noDia,
+  andamento,
   atrasadas,
   adiantadas,
   duracaoMedia,
@@ -504,14 +556,129 @@ export function PainelVista({
 
       {/* ---------------- os graficos, no mosaico ----------------
 
-          Os dois de comparacao dividem a primeira linha — o de barras
-          com sete das doze colunas, a rosca com cinco — e os dois que
-          tem um item por obra atravessam a largura inteira embaixo.
+          A ordem e a de leitura, e começa pelo que mais se pergunta:
 
-          Quem iguala a altura dos vizinhos de linha e o CSS; aqui a
-          ordem e so a de leitura: primeiro quanto cada setor demora,
-          depois se a obra chegou no prazo, e por fim obra a obra. */}
+            1. ATRASO E ADIANTAMENTO — as obras estao adiantadas, no
+               prazo ou atrasadas? O resumo e os dois cartoes;
+            2. TEMPO DE RESPOSTA — quanto cada setor demora;
+            3. ENTREGAS NO PRAZO — a rosca;
+            4. o tempo em campo, obra a obra.
+
+          Quem iguala a altura dos vizinhos de linha e o CSS. */}
       <div className="dash__grade">
+        <section className="cartao vidro">
+          <header className="cartao__topo">
+            <div>
+              <h2 className="cartao__titulo">Atraso e adiantamento</h2>
+              <p className="cartao__sub">
+                As obras em andamento hoje e as concluídas no mês:
+                adiantadas, no prazo ou atrasadas.
+              </p>
+            </div>
+          </header>
+
+          <div className="situacoes">
+            <div className="situacoes__grupo">
+              <span className="situacoes__nome">Em andamento · hoje</span>
+              <div className="situacoes__linha">
+                <Situacao tom="bom" rotulo="Adiantadas" valor={andamento.adiantadas.length} />
+                <Situacao tom="ok" rotulo="No prazo" valor={andamento.noPrazo.length} />
+                <Situacao tom="ruim" rotulo="Atrasadas" valor={andamento.atrasadas.length} />
+                {andamento.semPrazo.length > 0 && (
+                  <Situacao tom="nada" rotulo="Sem prazo final" valor={andamento.semPrazo.length} />
+                )}
+              </div>
+              {andamento.atrasadas.length > 0 && (
+                <ul className="situacoes__lista">
+                  {andamento.atrasadas.slice(0, 5).map((a) => (
+                    <li key={a.obra.id}>
+                      <span>{a.nome}</span>
+                      <em>
+                        {a.dias <= 0 ? 'vence hoje' : `há ${emTempo(a.dias)}`}
+                      </em>
+                    </li>
+                  ))}
+                  {andamento.atrasadas.length > 5 && (
+                    <li className="situacoes__mais">
+                      e mais {andamento.atrasadas.length - 5}
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+
+            <div className="situacoes__grupo">
+              <span className="situacoes__nome">
+                Concluídas no mês · com prazo combinado
+              </span>
+              <div className="situacoes__linha">
+                <Situacao tom="bom" rotulo="Adiantadas" valor={adiantadas.length} />
+                <Situacao tom="ok" rotulo="No dia" valor={noDia.length} />
+                <Situacao tom="ruim" rotulo="Atrasadas" valor={atrasadas.length} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ---- Atraso e adiantamento, em DOIS cartoes ----
+
+            Eram um so, com o zero no meio e as barras saindo para os
+            dois lados. Um grafico divergente responde "de que lado a
+            empresa esta" — mas nao responde "quais obras atrasaram",
+            que e a pergunta que se faz olhando esta tela: as
+            atrasadas ficavam misturadas com as adiantadas, separadas
+            so pela cor e pelo lado.
+
+            Separados, cada cartao e uma lista ordenada da pior para a
+            melhor, e o titulo ja diz do que ela trata. */}
+        <section className="cartao cartao--metade vidro">
+          <header className="cartao__topo">
+            <div>
+              <h2 className="cartao__titulo">Atraso</h2>
+            </div>
+            <span className="cartao__selo" data-tom="ruim">
+              {atrasadas.length}
+            </span>
+          </header>
+
+          <div className="cartao__corpo">
+            {atrasadas.length === 0 ? (
+              <p className="cartao__vazio">Nenhuma obra passou do prazo combinado.</p>
+            ) : (
+              <Linha
+                series={atrasoLinha.series}
+                eixoX={atrasoLinha.eixoX}
+                unidade="dias"
+                alturaTotal={220}
+              />
+            )}
+          </div>
+        </section>
+
+        <section className="cartao cartao--metade vidro">
+          <header className="cartao__topo">
+            <div>
+              <h2 className="cartao__titulo">Adiantamento</h2>
+            </div>
+            <span className="cartao__selo" data-tom="bom">
+              {adiantadas.length}
+            </span>
+          </header>
+
+          <div className="cartao__corpo">
+            {adiantadas.length === 0 ? (
+              <p className="cartao__vazio">Nenhuma obra chegou antes do prazo combinado.</p>
+            ) : (
+              <Linha
+                series={adiantoLinha.series}
+                eixoX={adiantoLinha.eixoX}
+                unidade="dias"
+                alturaTotal={220}
+              />
+            )}
+          </div>
+        </section>
+
         <section className="cartao cartao--largo vidro">
           <header className="cartao__topo">
             <div>
@@ -617,67 +784,19 @@ export function PainelVista({
           </div>
         </section>
 
-        {/* ---- Atraso e adiantamento, em DOIS cartoes ----
-
-            Eram um so, com o zero no meio e as barras saindo para os
-            dois lados. Um grafico divergente responde "de que lado a
-            empresa esta" — mas nao responde "quais obras atrasaram",
-            que e a pergunta que se faz olhando esta tela: as
-            atrasadas ficavam misturadas com as adiantadas, separadas
-            so pela cor e pelo lado.
-
-            Separados, cada cartao e uma lista ordenada da pior para a
-            melhor, e o titulo ja diz do que ela trata. */}
-        <section className="cartao cartao--metade vidro">
-          <header className="cartao__topo">
-            <div>
-              <h2 className="cartao__titulo">Atraso</h2>
-            </div>
-            <span className="cartao__selo" data-tom="ruim">
-              {atrasadas.length}
-            </span>
-          </header>
-
-          <div className="cartao__corpo">
-            {atrasadas.length === 0 ? (
-              <p className="cartao__vazio">Nenhuma obra passou do prazo combinado.</p>
-            ) : (
-              <Linha
-                series={atrasoLinha.series}
-                eixoX={atrasoLinha.eixoX}
-                unidade="dias"
-                alturaTotal={220}
-              />
-            )}
-          </div>
-        </section>
-
-        <section className="cartao cartao--metade vidro">
-          <header className="cartao__topo">
-            <div>
-              <h2 className="cartao__titulo">Adiantamento</h2>
-            </div>
-            <span className="cartao__selo" data-tom="bom">
-              {adiantadas.length}
-            </span>
-          </header>
-
-          <div className="cartao__corpo">
-            {adiantadas.length === 0 ? (
-              <p className="cartao__vazio">Nenhuma obra chegou antes do prazo combinado.</p>
-            ) : (
-              <Linha
-                series={adiantoLinha.series}
-                eixoX={adiantoLinha.eixoX}
-                unidade="dias"
-                alturaTotal={220}
-              />
-            )}
-          </div>
-        </section>
       </div>
 
       <PainelDespesas fatias={fatias} passo={passo} rotuloDaFatia={rotuloDaFatia} />
     </div>
+  )
+}
+
+/** Um contador do resumo de atraso e adiantamento. */
+function Situacao({ tom, rotulo, valor }) {
+  return (
+    <span className="situacao" data-tom={tom}>
+      <strong>{valor}</strong>
+      <span>{rotulo}</span>
+    </span>
   )
 }

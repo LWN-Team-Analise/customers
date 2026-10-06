@@ -236,6 +236,43 @@
   gap: 10px;
 }
 
+/* Os dois de criar obra, nas cores dos cards que eles criam: verde
+   claro para a obra padrao, azul (marinho no tema claro, celeste no
+   escuro) para a emergencia. Tinta suave e um pouco transparente,
+   contorno fino e o texto na cor de acento — sem vidro e sem gradiente.
+   So aqui: o .acao--padrao das outras telas continua como era. */
+.acao--obra-padrao,
+.acao--obra-emergencia {
+  border: 1px solid var(--acao-borda);
+  background: var(--acao-bg);
+  color: var(--acao-fg);
+  font-weight: 700;
+  box-shadow: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.acao--obra-padrao {
+  --acao-bg: color-mix(in srgb, var(--quadro-ok-acento) 17%, transparent);
+  --acao-borda: color-mix(in srgb, var(--quadro-ok-acento) 42%, transparent);
+  --acao-fg: var(--quadro-ok-acento);
+}
+
+.acao--obra-emergencia {
+  --acao-bg: color-mix(in srgb, var(--quadro-emerg-acento) 16%, transparent);
+  --acao-borda: color-mix(in srgb, var(--quadro-emerg-acento) 42%, transparent);
+  --acao-fg: var(--quadro-emerg-acento);
+}
+
+.acao--obra-padrao:hover,
+.acao--obra-emergencia:hover {
+  filter: none;
+  background: color-mix(in srgb, var(--acao-fg) 26%, transparent);
+  border-color: var(--acao-fg);
+}
+
 .barra__direita {
   display: flex;
   align-items: center;
@@ -255,11 +292,19 @@
 
 /* ---------------- Quadro ---------------- */
 
+/* As etapas LADO A LADO, ocupando a largura. Cada coluna divide o
+   espaco por igual; quando nao cabem (muitas etapas, tela estreita), o
+   quadro desliza para o lado em vez de quebrar linha. */
 .quadro {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
-  gap: 14px;
-  align-items: start;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(208px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  min-width: 0;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .coluna {
@@ -276,7 +321,19 @@
 .coluna__topo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+/* o nome (ou o papel) da etapa, ao lado do rotulo: "1ª Etapa  Planejamento" */
+.coluna__subtitulo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .coluna__titulo {
@@ -288,19 +345,17 @@
   font-weight: 700;
 }
 
-.coluna__titulo[data-tom='padrao'] {
-  --tom-bg: var(--accent);
-  --tom-fg: #fff;
+/* as etapas: pastilha neutra — quem tem cor sao os cards dentro */
+.coluna__titulo[data-tom='etapa'] {
+  --tom-bg: var(--control-bg-hover);
+  --tom-fg: var(--text-strong);
 }
 
+/* a emergencia no azul suave dela, o mesmo dos cards */
 .coluna__titulo[data-tom='emergencia'] {
-  --tom-bg: var(--obra-emerg);
-  --tom-fg: var(--obra-emerg-fg);
-}
-
-.coluna__titulo[data-tom='aviso'] {
-  --tom-bg: var(--obra-aviso);
-  --tom-fg: var(--obra-aviso-fg);
+  --tom-bg: var(--quadro-emerg-bg);
+  --tom-fg: var(--quadro-emerg-acento);
+  box-shadow: inset 0 0 0 1px var(--quadro-emerg-borda);
 }
 
 .coluna__contador {
@@ -316,7 +371,12 @@
   font-weight: 700;
 }
 
+.coluna__contador {
+  flex-shrink: 0;
+}
+
 .coluna__mais {
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   width: 28px;
@@ -342,73 +402,6 @@
   min-height: 128px;
 }
 
-/* ---- Os degraus da coluna: um por etapa ----
-
-   As obras da coluna vem separadas pela etapa em que estao, e cada
-   grupo leva um titulo. E o titulo que faz a coluna responder "o que
-   esta parado no Comercial?" sem ninguem abrir card nenhum. */
-
-.etapagrupo {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* o risco em cima e o que separa um grupo do outro. Sem ele os
-   titulos flutuam no meio dos cards e a coluna vira uma lista com
-   palavras soltas no meio */
-.etapagrupo__topo {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  padding: 7px 2px 0;
-  border-top: 1px solid var(--coluna-borda);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-/* o primeiro grupo encosta no cabecalho da coluna, que ja e uma
-   divisao — dois riscos seguidos ali viram sujeira */
-.etapagrupo:first-child .etapagrupo__topo {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.etapagrupo__numero {
-  padding: 2px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
-  white-space: nowrap;
-}
-
-/* o nome da etapa ("Comercial") vem depois do numero e cede primeiro:
-   e ele que some com reticencias quando a coluna aperta */
-.etapagrupo__nome {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.etapagrupo__conta {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.etapagrupo__pilha {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-
 .coluna__vazio {
   margin: auto 0;
   padding: 16px 6px;
@@ -416,45 +409,6 @@
   font-size: 0.79rem;
   line-height: 1.5;
   color: var(--text-faint);
-}
-
-/* ---- coluna de aviso: o card inteiro e o botao ---- */
-
-.coluna__todos {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  padding: 5px 14px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--obra-aviso);
-  color: var(--obra-aviso-fg);
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-
-.coluna__todos:hover {
-  filter: brightness(1.08);
-}
-
-.coluna__todos:active {
-  transform: scale(0.97);
-}
-
-/* linha de instrucao no pe do card amarelo */
-.avisar__dica {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px solid var(--obra-aviso-borda);
-  font-size: 0.7rem;
-  font-weight: 600;
-  opacity: 0.78;
 }
 
 /* ---------------- Responsivo ---------------- */
@@ -572,23 +526,28 @@
 }
 
 /* ============================================================
-   Quadro + observacoes, lado a lado
+   Quadro + a lateral
 
-   As tres colunas ficam a esquerda e as observacoes a direita —
-   o mesmo desenho da tela de dentro da obra. O painel acompanha
-   a rolagem, entao o recado da equipe fica sempre a vista.
+   As etapas lado a lado ocupam a largura; na ponta direita, a
+   coluna das obras emergenciais e, EMBAIXO dela, as observacoes
+   do quadro.
    ============================================================ */
 
 .areaquadro {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 288px;
-  gap: 14px;
+  gap: 12px;
   align-items: start;
 }
 
+.lateral {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
 .quadroobs {
-  position: sticky;
-  top: 84px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -754,14 +713,14 @@
   color: var(--text-strong);
 }
 
-/* em tela estreita as observacoes voltam para baixo do quadro */
+/* em tela estreita a lateral desce para baixo do quadro, na mesma
+   ordem: emergencias, depois observacoes */
 @media (max-width: 1180px) {
   .areaquadro {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .quadroobs {
-    position: static;
     max-height: none;
   }
 }

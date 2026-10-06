@@ -87,9 +87,13 @@ export async function carregarImagemDoCliente(id) {
 
 /* ---------------- Obras ---------------- */
 
+/**
+ * Devolve { id, tipo }. O tipo pode voltar 'emergencia' mesmo pedindo
+ * obra padrao: execucao em menos de 3 dias e emergencia por regra.
+ */
 export async function criarObra(campos) {
-  const { id } = await post('/dados/obras', campos)
-  return id
+  const { id, tipo } = await post('/dados/obras', campos)
+  return { id, tipo }
 }
 
 export const editarObra = (id, campos) => patch(`/dados/obras/${id}`, campos)
@@ -106,7 +110,7 @@ export const concluirObra = (id, observacao) =>
 
 /* ---------------- Checks ---------------- */
 
-/* `resposta` so vai no card de pergunta: true = sim, false = nao */
+/* `resposta` so vai no check de pergunta: true = sim, false = nao */
 export const marcarCheck = (obraId, checkId, resposta) =>
   put(
     `/dados/obras/${obraId}/checks/${checkId}`,
@@ -118,6 +122,25 @@ export const desmarcarCheck = (obraId, checkId) => del(`/dados/obras/${obraId}/c
    { etapaId } ou { checkId }, e o prazo 'AAAA-MM-DD' — vazio tira. */
 
 export const definirPrazo = (obraId, campos) => put(`/dados/obras/${obraId}/prazos`, campos)
+
+/* ---------------- Execucao ----------------
+   O periodo: { inicio (entrada em campo, opcional), prazoFinal }. */
+
+export const definirExecucao = (obraId, campos) => put(`/dados/obras/${obraId}/execucao`, campos)
+
+/* ---------------- Ensaios ---------------- */
+
+/** Os ensaios planejados da obra, na ordem; `concluir` ja marca o check. */
+export const planejarEnsaios = (obraId, ensaioIds, concluir = false) =>
+  put(`/dados/obras/${obraId}/ensaios`, { ensaioIds, concluir })
+
+/** Um dia da execucao: valores = [{ ensaioId, percentual (0-100 ou null) }]. */
+export const registrarExecucaoDia = (obraId, dia, valores) =>
+  put(`/dados/obras/${obraId}/execucao/dia`, { dia, valores })
+
+export const criarEnsaio = (campos) => post('/dados/ensaios', campos)
+export const editarEnsaio = (id, campos) => patch(`/dados/ensaios/${id}`, campos)
+export const apagarEnsaio = (id) => del(`/dados/ensaios/${id}`)
 
 /* ---------------- Observacoes ---------------- */
 
