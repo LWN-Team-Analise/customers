@@ -140,8 +140,8 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-3.sql.txt`, `db/atualizacao-4.sql.txt`,
 > `db/atualizacao-5.sql.txt`, `db/atualizacao-6.sql.txt`,
 > `db/atualizacao-7.sql.txt`, `db/atualizacao-8.sql.txt`,
-> `db/atualizacao-9.sql.txt`, `db/atualizacao-10.sql.txt` e, por ultimo,
-> `db/atualizacao-11.sql.txt`.
+> `db/atualizacao-9.sql.txt`, `db/atualizacao-10.sql.txt`,
+> `db/atualizacao-11.sql.txt` e, por ultimo, `db/atualizacao-12.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -194,6 +194,7 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-9.sql.txt` | historico de atividades (pagina inicial > Historico)             |
 | `db/atualizacao-10.sql.txt` | cliente no envio (obra opcional) e as permissoes da aba Despesas |
 | `db/atualizacao-11.sql.txt` | permissoes "Ver dashboard" e "Excluir lancamento de despesa"    |
+| `db/atualizacao-12.sql.txt` | CPF opcional: cadastro de colaborador so pelo e-mail             |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
@@ -409,8 +410,8 @@ Senha padrao do sistema: `123456`.
 | `POST /api/auth/outlook/entrar` | entra com a conta Microsoft ja vinculada     |
 | `POST /api/auth/outlook/vincular` | vincula a conta Microsoft ao usuario logado |
 | `GET /api/equipe/usuarios`      | equipe com cargo, cor e media das avaliacoes |
-| `POST /api/equipe/usuarios`     | cadastra colaborador com a senha padrao 123456 |
-| `PATCH /api/equipe/usuarios/:id` | edita o cadastro (CPF so pela diretoria)    |
+| `POST /api/equipe/usuarios`     | cadastra colaborador (basta e-mail + setor) com senha temporaria |
+| `PATCH /api/equipe/usuarios/:id` | edita o cadastro (CPF dos outros so pela diretoria; o proprio, cada um) |
 | `DELETE /api/equipe/usuarios/:id` | desativa o acesso (o historico fica)       |
 | `GET /api/dados`                | clientes, obras, checks, observacoes, avisos |
 | `GET /api/dados/vitrine`        | so as logos dos clientes — **sem sessao**, para a esfera do login |
@@ -1661,16 +1662,19 @@ uma obra entregue.
 
 ### Usuarios e setores
 
-**Adicionar colaborador** pede foto, nome, nascimento, CPF, e-mail, telefone,
-**setor** e **cargo**. Passando o mouse pelo card aparecem os botoes de editar
-e excluir.
+**Adicionar colaborador** abre curto: **e-mail, setor e cargo**. Basta o
+e-mail e o setor — nome, nascimento e CPF a propria pessoa completa em
+Configuracoes > Sua conta, que mostra o aviso "Complete o seu cadastro"
+enquanto falta o CPF. Ate la o nome e o provisorio tirado do e-mail
+("joao.silva@" vira "Joao Silva") e o card em Usuarios leva o selo
+**Cadastro incompleto**. Passando o mouse pelo card aparecem os botoes de
+editar e excluir.
 
-**Obrigatorios: nome, nascimento, CPF e setor.** E-mail, telefone, cargo e foto
-sao opcionais. E-mail e telefone eram obrigatorios e travavam o cadastro de
-quem trabalha em campo e nao tem e-mail corporativo — quem nao tem e-mail
-**entra pelo CPF**, que o login ja aceita no mesmo campo. Preenchidos, os dois
-continuam sendo validados: o que a validacao deve pegar e o dedo trocado, nao a
-ausencia.
+"Preencher os dados da pessoa agora" abre o resto (foto, nome, nascimento,
+CPF, telefone). Quem trabalha em campo e nao tem e-mail corporativo **entra
+pelo CPF**, que o login ja aceita no mesmo campo: sem e-mail, nome e CPF
+passam a ser obrigatorios. Preenchidos, os campos continuam sendo validados: o
+que a validacao deve pegar e o dedo trocado, nao a ausencia.
 
 Colaborador novo entra com a **senha padrao 123456** e com `senha_temporaria`
 ligado. A coluna continua sendo gravada, mas **nenhuma tela cobra mais a
@@ -1684,9 +1688,10 @@ historico das obras nao perder quem marcou o que.
 A lista filtra por **nome** (campo de busca, que tambem acha por e-mail) e por
 **setor** — e da para marcar mais de um setor ao mesmo tempo.
 
-O **CPF nao muda depois de cadastrado**: na edicao o campo fica travado e a rota
-`PATCH /api/equipe/usuarios/:id` recusa o campo. Para trocar, apaga-se o
-cadastro e faz-se um novo — do jeito que a coluna UNIQUE do banco espera.
+O **proprio CPF** cada um preenche e corrige em Configuracoes. O CPF **dos
+outros** so a diretoria muda, pela tela de Usuarios — e trava de setor, nao
+permissao configuravel, e a rota `PATCH /api/equipe/usuarios/:id` recusa do
+mesmo jeito. CPF ja preenchido nao volta a ficar vazio.
 
 **Setores** abre a lista em uma linha so de etiquetas coloridas — ADM | GQ |
 EXCELENCIA — que quebra quando chega no fim do pop-up. Clicar em uma delas ja

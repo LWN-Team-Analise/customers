@@ -274,6 +274,18 @@
   color: var(--text-muted);
 }
 
+/* quem entrou so pelo e-mail e ainda nao completou o cadastro */
+.pessoa__pendente {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 1px 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 /* ============================================================
    O CELULAR
 

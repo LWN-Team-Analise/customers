@@ -48,6 +48,8 @@ const ROTULOS = {
   imagem: 'Imagem',
   termo_etapa: 'Etapa (singular)',
   termo_etapas: 'Etapas (plural)',
+  resposta: 'Resposta',
+  prazo: 'Prazo',
 }
 
 function horaDe(iso) {

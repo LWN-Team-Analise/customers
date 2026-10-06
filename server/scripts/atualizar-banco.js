@@ -32,6 +32,8 @@ const ARQUIVOS = [
   'db/atualizacao-9.sql.txt',
   'db/atualizacao-10.sql.txt',
   'db/atualizacao-11.sql.txt',
+  'db/atualizacao-12.sql.txt',
+  'db/atualizacao-13.sql.txt',
 ]
 
 /**
@@ -81,6 +83,13 @@ const CONFERENCIA = [
   ['despesa_envio.cliente_id', col('despesa_envio', 'cliente_id')],
   ['ver_dashboard no acesso total', permissaoNoAcessoTotal('ver_dashboard')],
   ['excluir_despesas no acesso total', permissaoNoAcessoTotal('excluir_despesas')],
+  ['usuario.cpf aceita NULL', nulavel('usuario', 'cpf')],
+  ['etapa_card.sim_nao', col('etapa_card', 'sim_nao')],
+  ['etapa_card.informacoes', col('etapa_card', 'informacoes')],
+  ['obra_check.resposta', col('obra_check', 'resposta')],
+  ['obra_prazo_etapa', "SELECT to_regclass('public.obra_prazo_etapa') IS NOT NULL AS ok"],
+  ['obra_prazo_check', "SELECT to_regclass('public.obra_prazo_check') IS NOT NULL AS ok"],
+  ['definir_prazos no acesso total', permissaoNoAcessoTotal('definir_prazos')],
 ]
 
 function col(tabela, coluna) {

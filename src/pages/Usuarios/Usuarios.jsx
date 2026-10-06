@@ -148,8 +148,14 @@ export default function Usuarios() {
       return
     }
     const resultado = await adicionarPessoa(campos)
+    /* cadastro so pelo e-mail: o nome ainda e o provisorio, entao o
+       recado fala do e-mail, que e por onde a pessoa vai entrar */
+    const quem = campos.nome || campos.email
+    const entra = campos.email ? `Ela entra com o e-mail ${campos.email}` : 'Ela entra com o CPF'
     setRecado(
-      `${campos.nome} foi cadastrado. A senha para o primeiro acesso é ${resultado.senhaPadrao} — o sistema pede a troca ao entrar.`,
+      `${quem} foi cadastrado. ${entra} e a senha ${resultado.senhaPadrao} — o sistema pede a troca ao entrar${
+        campos.nome && campos.cpf ? '' : ', e ela completa nome, nascimento e CPF na conta dela'
+      }.`,
     )
   }
 
@@ -309,6 +315,14 @@ export default function Usuarios() {
                       </span>
                       {pessoa.cargoTitulo && (
                         <span className="pessoa__titulo">{pessoa.cargoTitulo}</span>
+                      )}
+                      {/* cadastrado so pelo e-mail: o nome ainda e o
+                          provisorio e faltam nascimento e CPF. Some
+                          sozinho quando a pessoa completa em Configuracoes. */}
+                      {podeUsuarios && pessoa.cadastroPendente && (
+                        <span className="pessoa__pendente" title="A pessoa ainda não preencheu nome, nascimento e CPF">
+                          Cadastro incompleto
+                        </span>
                       )}
                     </div>
 

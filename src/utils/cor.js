@@ -100,6 +100,56 @@ export function corAdaptada(cor, escuro) {
   return paraCss(ajustada)
 }
 
+/* ---- HSL: so para a cor suave ---- */
+
+function paraHsl({ r, g, b }) {
+  const [rn, gn, bn] = [r / 255, g / 255, b / 255]
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const l = (max + min) / 2
+  if (max === min) return { h: 0, s: 0, l }
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  const h =
+    max === rn ? (gn - bn) / d + (gn < bn ? 6 : 0) : max === gn ? (bn - rn) / d + 2 : (rn - gn) / d + 4
+  return { h: h / 6, s, l }
+}
+
+function deHsl({ h, s, l }) {
+  if (s === 0) return { r: l * 255, g: l * 255, b: l * 255 }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+  const p = 2 * l - q
+  const canal = (t) => {
+    let x = t
+    if (x < 0) x += 1
+    if (x > 1) x -= 1
+    if (x < 1 / 6) return p + (q - p) * 6 * x
+    if (x < 1 / 2) return q
+    if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6
+    return p
+  }
+  return { r: canal(h + 1 / 3) * 255, g: canal(h) * 255, b: canal(h - 1 / 3) * 255 }
+}
+
+/**
+ * A cor do setor em versao SUAVE — para contorno e texto sobre fundo
+ * transparente (os cards de check da obra, as etiquetas de setor).
+ *
+ * As cores cadastradas sao vivas (laranja, ciano, roxo), e chapadas
+ * como fundo de card ficavam gritando. Aqui a saturacao cai e a
+ * claridade e presa numa faixa de cada tema: escura o bastante para
+ * ler no branco, clara o bastante para ler no preto. O matiz nao muda —
+ * o laranja do Tecnico continua laranja, so que mais calmo.
+ */
+export function corSuave(cor, escuro) {
+  const c = separarCor(cor)
+  if (!c) return cor ?? '#6b7280'
+  const hsl = paraHsl(c)
+  const s = hsl.s * 0.68
+  const l = escuro ? limitar(hsl.l, 0.66, 0.76) : limitar(hsl.l, 0.38, 0.48)
+  return montarCor({ ...deHsl({ h: hsl.h, s, l }), a: 1 })
+}
+
 /**
  * Preto ou branco por cima da cor — o que der para ler.
  * Usa a cor JA adaptada, senao o texto erra no tema oposto.

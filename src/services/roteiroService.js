@@ -40,9 +40,19 @@ export const apagarEtapa = (id, obraId) => del(comObra(`/roteiro/etapas/${id}`, 
 
 /* ---------------- Cards ---------------- */
 
-/** cargos: lista de chaves. Mais de uma = card com gradiente. */
-export async function criarCard(etapaId, { cargos, titulo, obraId }) {
-  const { id } = await post(`/roteiro/etapas/${etapaId}/cards`, { cargos, titulo, obraId })
+/**
+ * cargos: lista de chaves. Mais de uma = card com fio de varias cores.
+ * simNao: o card pede resposta Sim/Nao ao marcar um check.
+ * informacoes: a dica que aparece ao passar o mouse.
+ */
+export async function criarCard(etapaId, { cargos, titulo, simNao, informacoes, obraId }) {
+  const { id } = await post(`/roteiro/etapas/${etapaId}/cards`, {
+    cargos,
+    titulo,
+    simNao,
+    informacoes,
+    obraId,
+  })
   return id
 }
 

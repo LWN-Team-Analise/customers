@@ -48,15 +48,18 @@ const VAZIO = {
  *           coisas. ATRIBUIR um cargo, porem, pede permissao propria
  *           (`editar_cargo_titulo`): sem ela o campo fica travado.
  *
- * OBRIGATORIOS: CPF, nome e setor — os tres marcados com asterisco.
- * TODO O RESTO E OPCIONAL e salva vazio: nascimento, e-mail, telefone,
- * cargo e foto. Eles travavam o cadastro de quem trabalha em campo e
- * nao tem e-mail corporativo nem documento a mao — quem nao tem e-mail
- * entra pelo CPF.
+ * CADASTRO NOVO: basta o e-mail e o setor. O formulario abre curto, so
+ * com esses dois (e o cargo); nome, nascimento e CPF a propria pessoa
+ * completa em Configuracoes. Quem quiser preencher na hora abre o resto
+ * em "Preencher os dados da pessoa agora".
  *
- * O CPF e travado para todo mundo, com UMA excecao: a diretoria. E trava
- * de setor, nao permissao configuravel — a API recusa do mesmo jeito, e
- * por isso nao adianta so liberar o campo aqui.
+ * Quem nao tem e-mail corporativo entra pelo CPF: sem e-mail, nome e CPF
+ * voltam a ser obrigatorios.
+ *
+ * Na EDICAO, o CPF dos outros e travado para todo mundo, com UMA
+ * excecao: a diretoria. E trava de setor, nao permissao configuravel —
+ * a API recusa do mesmo jeito, e por isso nao adianta so liberar o
+ * campo aqui. (O proprio CPF cada um preenche em Configuracoes.)
  *
  * `usuarioLogado` e quem esta mexendo — e dele que sai a permissao.
  */
@@ -83,6 +86,9 @@ export default function ModalColaborador({
   const editando = Boolean(colaborador)
   const cpfLiberado = podeEditarCpf(usuarioLogado)
   const podeCargo = pode('editar_cargo_titulo')
+  /* cadastro novo abre so com e-mail, setor e cargo; o resto e opcional */
+  const [maisDados, setMaisDados] = useState(false)
+  const curto = !editando && !maisDados
 
   useEffect(() => {
     if (!aberto) return
@@ -101,6 +107,7 @@ export default function ModalColaborador({
     setErros({})
     setAjustando(null)
     setFotoMexida(false)
+    setMaisDados(false)
   }, [aberto, colaborador])
 
   const mudar = (campo) => (evento) => {
@@ -152,17 +159,33 @@ export default function ModalColaborador({
   const enviar = (evento) => {
     evento.preventDefault()
 
-    /* so os tres marcados com asterisco travam o cadastro */
     const novos = {}
-    if (!form.nome.trim()) novos.nome = 'Informe o nome completo.'
-    if (!form.cargo) novos.cargo = 'Escolha o setor.'
-    // no cadastro o CPF e obrigatorio; na edicao, so quem pode mexer valida
-    if ((!editando || cpfLiberado) && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
+    const temEmail = Boolean(form.email.trim())
+    const cpf = soDigitos(form.cpf)
+    /* o CPF so conta aqui quando pode mudar: no cadastro, sempre; na
+       edicao, so para a diretoria (o campo dos outros fica travado) */
+    const mexeCpf = !editando || cpfLiberado
 
-    /* E-mail e telefone sao OPCIONAIS: so entram na conferência quando a
-       pessoa escreveu alguma coisa. Vazio passa; errado, nao — o que a
-       validacao deve pegar e o dedo trocado, nao a ausencia. */
-    if (form.email.trim() && !validateEmail(form.email)) novos.email = 'E-mail inválido.'
+    if (!form.cargo) novos.cargo = 'Escolha o setor.'
+
+    if (!editando) {
+      /* cadastro novo: o e-mail basta. Sem ele a pessoa so entra pelo
+         CPF — ai nome e CPF passam a ser obrigatorios. */
+      if (!temEmail && curto) novos.email = 'Informe o e-mail.'
+      if (!temEmail && !curto) {
+        if (!form.nome.trim()) novos.nome = 'Sem e-mail, informe o nome completo.'
+        if (!cpf) novos.cpf = 'Sem e-mail, informe o CPF — é por ele que a pessoa entra.'
+      }
+    } else {
+      if (!form.nome.trim()) novos.nome = 'Informe o nome completo.'
+      // quem ja tinha CPF nao fica sem: a API recusa CPF vazio
+      if (mexeCpf && !cpf && colaborador?.cpf) novos.cpf = 'Informe o CPF.'
+    }
+    if (mexeCpf && cpf && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
+
+    /* E-mail e telefone, quando preenchidos, precisam ser validos: o
+       que a validacao deve pegar e o dedo trocado, nao a ausencia. */
+    if (temEmail && !validateEmail(form.email)) novos.email = 'E-mail inválido.'
     if (form.telefone.trim() && soDigitos(form.telefone).length < 10) {
       novos.telefone = 'Informe o DDD e o número.'
     }
@@ -189,11 +212,10 @@ export default function ModalColaborador({
     /* o cargo so viaja para quem pode defini-lo: mandar o campo sem a
        permissao faria a API recusar a gravacao inteira */
     if (podeCargo) campos.cargoTituloId = form.cargoTituloId || ''
-    /* o CPF so viaja quando pode mudar: na edicao por quem nao e da
-       diretoria, mandar o campo faria a API recusar a gravacao inteira */
-    if (!editando || (cpfLiberado && soDigitos(form.cpf) !== soDigitos(colaborador?.cpf))) {
-      campos.cpf = soDigitos(form.cpf)
-    }
+    /* o CPF so viaja quando foi preenchido e pode mudar: na edicao por
+       quem nao e da diretoria, mandar o campo faria a API recusar a
+       gravacao inteira. Vazio no cadastro = a pessoa preenche depois. */
+    if (cpf && mexeCpf && cpf !== soDigitos(colaborador?.cpf)) campos.cpf = cpf
 
     setConferindo(campos)
   }
@@ -220,90 +242,110 @@ export default function ModalColaborador({
       largura={580}
     >
       <form className="formcolab" onSubmit={enviar} noValidate>
-        {/* foto a esquerda, nome a direita */}
-        <div className="formcolab__cabeca">
-          <button
-            type="button"
-            className="formcolab__foto"
-            onClick={() => entradaFoto.current?.click()}
-            title="Escolher foto de perfil"
-          >
-            <Avatar nome={form.nome || '?'} foto={form.foto} tamanho={74} />
-            <span className="formcolab__trocar">{form.foto ? 'Trocar' : 'Foto'}</span>
-          </button>
-          <input
-            ref={entradaFoto}
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            onChange={escolherFoto}
-            tabIndex={-1}
-          />
+        {!editando && (
+          <p className="formcolab__dica">
+            {curto
+              ? 'Basta o e-mail e o setor. Nome, data de nascimento e CPF a própria pessoa completa na conta dela, no primeiro acesso.'
+              : 'Tudo aqui é opcional, menos o setor. Sem e-mail, nome e CPF passam a ser obrigatórios — é pelo CPF que a pessoa entra.'}
+          </p>
+        )}
 
-          <div className="formcolab__nome">
-            <CampoTexto
-              rotulo="Nome completo *"
-              placeholder="Nome e sobrenome"
-              value={form.nome}
-              onChange={mudar('nome')}
-              erro={erros.nome}
+        {/* foto a esquerda, nome a direita — no cadastro curto, nada disso */}
+        {!curto && (
+          <div className="formcolab__cabeca">
+            <button
+              type="button"
+              className="formcolab__foto"
+              onClick={() => entradaFoto.current?.click()}
+              title="Escolher foto de perfil"
+            >
+              <Avatar nome={form.nome || '?'} foto={form.foto} tamanho={74} />
+              <span className="formcolab__trocar">{form.foto ? 'Trocar' : 'Foto'}</span>
+            </button>
+            <input
+              ref={entradaFoto}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={escolherFoto}
+              tabIndex={-1}
             />
-            {form.foto && (
-              <span className="formcolab__fotoacoes">
-                <button type="button" className="formcolab__semfoto" onClick={reenquadrar}>
-                  Ajustar enquadramento
-                </button>
-                <button
-                  type="button"
-                  className="formcolab__semfoto"
-                  onClick={() => {
-                    setForm((a) => ({ ...a, foto: null, fotoOriginal: null, recorteFoto: null }))
-                    setFotoMexida(true)
-                  }}
-                >
-                  Remover foto
-                </button>
-              </span>
-            )}
+
+            <div className="formcolab__nome">
+              <CampoTexto
+                rotulo={editando ? 'Nome completo *' : 'Nome completo'}
+                placeholder="Nome e sobrenome"
+                value={form.nome}
+                onChange={mudar('nome')}
+                erro={erros.nome}
+              />
+              {form.foto && (
+                <span className="formcolab__fotoacoes">
+                  <button type="button" className="formcolab__semfoto" onClick={reenquadrar}>
+                    Ajustar enquadramento
+                  </button>
+                  <button
+                    type="button"
+                    className="formcolab__semfoto"
+                    onClick={() => {
+                      setForm((a) => ({ ...a, foto: null, fotoOriginal: null, recorteFoto: null }))
+                      setFotoMexida(true)
+                    }}
+                  >
+                    Remover foto
+                  </button>
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="formcolab__grade">
-          <CampoTexto
-            rotulo="Data de nascimento"
-            type="date"
-            value={form.nascimento}
-            onChange={mudar('nascimento')}
-            erro={erros.nascimento}
-          />
+          {!curto && (
+            <CampoTexto
+              rotulo="Data de nascimento"
+              type="date"
+              value={form.nascimento}
+              onChange={mudar('nascimento')}
+              erro={erros.nascimento}
+            />
+          )}
 
-          <CampoTexto
-            rotulo="CPF *"
-            inputMode="numeric"
-            placeholder="000.000.000-00"
-            value={form.cpf}
-            onChange={mudar('cpf')}
-            erro={erros.cpf}
-            disabled={editando && !cpfLiberado}
-          />
+          {!curto && (
+            <CampoTexto
+              rotulo="CPF"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              value={form.cpf}
+              onChange={mudar('cpf')}
+              erro={erros.cpf}
+              disabled={editando && !cpfLiberado}
+            />
+          )}
 
+          {/* no cadastro curto o e-mail ocupa a linha toda: e o campo
+              que importa ali */}
           <CampoTexto
-            rotulo="E-mail"
+            rotulo={curto ? 'E-mail *' : 'E-mail'}
             type="email"
             placeholder="pessoa@empresa.com.br"
             value={form.email}
             onChange={mudar('email')}
             erro={erros.email}
+            largo={curto}
+            autoFocus={curto}
           />
 
-          <CampoTexto
-            rotulo="Telefone"
-            inputMode="numeric"
-            placeholder="(11) 90000-0000"
-            value={form.telefone}
-            onChange={mudar('telefone')}
-            erro={erros.telefone}
-          />
+          {!curto && (
+            <CampoTexto
+              rotulo="Telefone"
+              inputMode="numeric"
+              placeholder="(11) 90000-0000"
+              value={form.telefone}
+              onChange={mudar('telefone')}
+              erro={erros.telefone}
+            />
+          )}
 
           {/* Setor e Cargo lado a lado, nesta ordem: o setor diz de que
               grupo a pessoa é (e é o que decide o que ela pode fazer);
@@ -342,6 +384,12 @@ export default function ModalColaborador({
           />
         </div>
 
+        {curto && (
+          <button type="button" className="formcolab__mais" onClick={() => setMaisDados(true)}>
+            Preencher os dados da pessoa agora
+          </button>
+        )}
+
         {erros.geral && (
           <p className="formcolab__erro" role="alert">
             {erros.geral}
@@ -372,7 +420,7 @@ export default function ModalColaborador({
         mensagem={
           editando
             ? 'Os dados abaixo passam a valer para esta pessoa.'
-            : 'A pessoa entra com uma senha temporária gerada automaticamente e troca no primeiro acesso.'
+            : 'A pessoa entra com uma senha temporária gerada automaticamente e troca no primeiro acesso. O que ficar em branco ela completa na conta dela.'
         }
         detalhes={<ResumoDoCargo campos={conferindo} cargos={cargos} titulos={titulos} />}
         rotuloConfirmar={editando ? 'Salvar' : 'Cadastrar'}
@@ -419,7 +467,7 @@ function ResumoDoCargo({ campos, cargos, titulos = [] }) {
   return (
     <dl>
       <dt>Nome</dt>
-      <dd>{campos.nome}</dd>
+      <dd>{campos.nome || <em>a pessoa preenche no primeiro acesso</em>}</dd>
 
       <dt>E-mail</dt>
       <dd>{campos.email || <em>sem e-mail — entra pelo CPF</em>}</dd>

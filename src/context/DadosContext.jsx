@@ -4,7 +4,7 @@ import * as equipeApi from '@/services/equipeService'
 import * as roteiroApi from '@/services/roteiroService'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
-import { corAdaptada, textoSobre } from '@/utils/cor'
+import { corAdaptada, corSuave, textoSobre } from '@/utils/cor'
 import { hojeISO } from '@/utils/formato'
 import { podeFazer } from '@/domain/permissoes'
 import {
@@ -159,6 +159,16 @@ export function DadosProvider({ children }) {
    */
   const corDoCargo = useCallback(
     (chave) => corAdaptada(cargoPorChave(chave)?.cor ?? '#6b7280', isDark),
+    [cargoPorChave, isDark],
+  )
+
+  /**
+   * A cor do setor em versao SUAVE (menos saturada, claridade presa ao
+   * tema). E a que pinta contorno e texto dos cards de check e as
+   * etiquetas de setor do quadro — nada de fundo chapado ali.
+   */
+  const corSuaveDoCargo = useCallback(
+    (chave) => corSuave(cargoPorChave(chave)?.cor ?? '#6b7280', isDark),
     [cargoPorChave, isDark],
   )
 
@@ -332,6 +342,59 @@ export function DadosProvider({ children }) {
       }
     },
     [estado.obras, estado.roteiro, user, recarregar],
+  )
+
+  /**
+   * Marca o check de um card de PERGUNTA com a resposta (true = sim,
+   * false = nao) — ou troca a resposta de um ja marcado. Desmarcar
+   * continua sendo `alternarCheck`.
+   *
+   * Mesma ida otimista do alternarCheck: a tela muda na hora e o
+   * recarregar corrige se o servidor recusar.
+   */
+  const responderCheck = useCallback(
+    async (obraId, checkId, resposta) => {
+      const obra = estado.obras.find((o) => o.id === obraId)
+      if (!obra) return
+      if (obraFechada(obra)) {
+        setErro('Esta obra foi concluída. O conteúdo dela fica só para consulta.')
+        return
+      }
+
+      setEstado((atual) => ({
+        ...atual,
+        obras: atual.obras.map((o) => {
+          if (o.id !== obraId) return o
+          const antes = o.checks[checkId]
+          return {
+            ...o,
+            checks: {
+              ...o.checks,
+              [checkId]: {
+                feitoPor: antes?.feitoPor ?? String(user?.id ?? ''),
+                feitoEm: antes?.feitoEm ?? new Date().toISOString(),
+                resposta,
+              },
+            },
+          }
+        }),
+      }))
+
+      try {
+        await dados.marcarCheck(obraId, checkId, resposta)
+        await recarregar()
+      } catch (e) {
+        setErro(e.message)
+        await recarregar()
+      }
+    },
+    [estado.obras, user, recarregar],
+  )
+
+  /** Prazo de uma etapa ({ etapaId }) ou de um check ({ checkId }); prazo vazio tira. */
+  const definirPrazo = useCallback(
+    (obraId, campos) => gravar(() => dados.definirPrazo(obraId, campos)),
+    [gravar],
   )
 
   /* ---------------- Observacoes da obra ---------------- */
@@ -906,6 +969,7 @@ export function DadosProvider({ children }) {
       removerCargo,
       cargoPorChave,
       corDoCargo,
+      corSuaveDoCargo,
       corDoTextoNoCargo,
       nomeDoCargo,
 
@@ -932,6 +996,8 @@ export function DadosProvider({ children }) {
       removerObra,
       concluirObra,
       alternarCheck,
+      responderCheck,
+      definirPrazo,
 
       adicionarObservacao,
       editarObservacao,
@@ -1017,6 +1083,7 @@ export function DadosProvider({ children }) {
       removerCargo,
       cargoPorChave,
       corDoCargo,
+      corSuaveDoCargo,
       corDoTextoNoCargo,
       nomeDoCargo,
       adicionarTitulo,
@@ -1038,6 +1105,8 @@ export function DadosProvider({ children }) {
       removerObra,
       concluirObra,
       alternarCheck,
+      responderCheck,
+      definirPrazo,
       adicionarObservacao,
       editarObservacao,
       removerObservacao,

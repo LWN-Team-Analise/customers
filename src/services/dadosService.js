@@ -106,8 +106,18 @@ export const concluirObra = (id, observacao) =>
 
 /* ---------------- Checks ---------------- */
 
-export const marcarCheck = (obraId, checkId) => put(`/dados/obras/${obraId}/checks/${checkId}`)
+/* `resposta` so vai no card de pergunta: true = sim, false = nao */
+export const marcarCheck = (obraId, checkId, resposta) =>
+  put(
+    `/dados/obras/${obraId}/checks/${checkId}`,
+    typeof resposta === 'boolean' ? { resposta } : undefined,
+  )
 export const desmarcarCheck = (obraId, checkId) => del(`/dados/obras/${obraId}/checks/${checkId}`)
+
+/* ---------------- Prazos ----------------
+   { etapaId } ou { checkId }, e o prazo 'AAAA-MM-DD' — vazio tira. */
+
+export const definirPrazo = (obraId, campos) => put(`/dados/obras/${obraId}/prazos`, campos)
 
 /* ---------------- Observacoes ---------------- */
 
