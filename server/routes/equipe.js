@@ -42,6 +42,24 @@ export const SENHA_PADRAO = gerarSenhaForte()
 
 const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 const texto = (valor) => String(valor ?? '').trim()
+const EMAIL_VALIDO = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i
+
+/**
+ * Nome provisorio de quem foi cadastrado so pelo e-mail:
+ * "joao.silva@empresa.com.br" -> "Joao Silva".
+ *
+ * A coluna name e obrigatoria e aparece em toda tela (cards, mencoes,
+ * historico); vazia, quebraria as iniciais do avatar e a ordenacao.
+ * A pessoa troca pelo nome completo em Configuracoes.
+ */
+function nomeDoEmail(email) {
+  return email
+    .split('@')[0]
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1).toLowerCase())
+    .join(' ')
+}
 
 const paraCargo = (linha) => ({
   id: String(linha.id),
@@ -445,6 +463,10 @@ const paraUsuario = (l) => ({
   outlook: l.outlook ?? false,
   outlookEmail: l.outlook_email ?? null,
   senhaTemporaria: l.senha_temporaria ?? false,
+  /* cadastrado so pelo e-mail e ainda sem CPF: a tela de Usuarios
+     marca o card. Sai daqui, e nao do `cpf`, porque o CPF dos outros
+     e cortado para quem nao edita usuario (recortarPessoal). */
+  cadastroPendente: !l.cpf,
   // media vem das obras avaliadas; sem obra avaliada ainda, e null
   avaliacao: l.media === null || l.media === undefined ? null : Number(l.media),
   obrasAvaliadas: l.obras_avaliadas ?? 0,
@@ -512,9 +534,19 @@ router.get('/usuarios/:id/foto', exigeSessao, async (req, res) => {
 /**
  * POST /api/equipe/usuarios — cadastra o colaborador.
  *
- * Entra com a senha padrao 123456 e senha_temporaria = true: no
- * primeiro acesso a tela obriga a trocar. Quem cadastra precisa de
- * cargo com acesso total.
+ * Entra com uma senha temporaria gerada aqui e senha_temporaria = true:
+ * no primeiro acesso a tela cobra a troca. Quem cadastra precisa da
+ * permissao `editar_usuario`.
+ *
+ * Dois jeitos de cadastrar, e o SETOR e obrigatorio nos dois (e ele
+ * que decide o que a pessoa pode fazer):
+ *
+ *   PELO E-MAIL  basta o e-mail. Nome, nascimento e CPF a propria
+ *                pessoa completa em Configuracoes; ate la o nome e o
+ *                provisorio tirado do e-mail e o CPF fica NULL
+ *                (db/atualizacao-12.sql.txt).
+ *   PELO CPF     para quem nao tem e-mail corporativo: nome e CPF.
+ *                E pelo CPF que essa pessoa entra.
  */
 router.post('/usuarios', exigeSessao, async (req, res) => {
   try {
@@ -523,25 +555,30 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
       return res.status(403).json({ erro: 'Seu setor não pode cadastrar colaboradores.' })
     }
 
-    const nome = texto(req.body?.nome)
     const email = texto(req.body?.email)
+    const nome = texto(req.body?.nome) || (email ? nomeDoEmail(email) : '')
     const cpf = soDigitos(req.body?.cpf)
     const nascimento = req.body?.nascimento || null
     const telefone = soDigitos(req.body?.telefone)
     const chaveCargo = texto(req.body?.cargo)
 
-    /* OBRIGATORIOS: CPF, nome e SETOR — so esses tres. Todo o resto
-       (nascimento, e-mail, telefone, cargo, foto) pode ficar vazio: o
-       cadastro nao pode parar por causa de um dado que ninguem tem na
-       mao na hora. Vindo preenchido, continua tendo de ser valido. */
-    if (!nome) return res.status(400).json({ erro: 'Informe o nome completo.' })
-    if (email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+    /* Vindo preenchido, todo campo continua tendo de ser valido; o que
+       muda e o que pode ficar vazio. Sem e-mail, a pessoa so tem o CPF
+       para entrar — ai nome e CPF voltam a ser obrigatorios. */
+    if (email && !EMAIL_VALIDO.test(email)) {
       return res.status(400).json({ erro: 'E-mail inválido.' })
+    }
+    if (!email && (!nome || !cpf)) {
+      return res.status(400).json({
+        erro: 'Informe o e-mail. Sem e-mail, o nome e o CPF são obrigatórios — é pelo CPF que a pessoa entra.',
+      })
     }
     if (telefone && telefone.length < 10) {
       return res.status(400).json({ erro: 'Telefone incompleto: informe o DDD e o número.' })
     }
-    if (cpf.length !== 11) return res.status(400).json({ erro: 'O CPF precisa ter 11 dígitos.' })
+    if (cpf && cpf.length !== 11) {
+      return res.status(400).json({ erro: 'O CPF precisa ter 11 dígitos.' })
+    }
 
     const cargo = await query('SELECT id, nome, acesso_total FROM cargo WHERE chave = $1', [chaveCargo])
     if (!cargo.rows[0]) return res.status(400).json({ erro: 'Escolha o setor.' })
@@ -568,7 +605,8 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
         nome,
         // '' seria um e-mail repetido em todo mundo sem e-mail: guarda NULL
         email || null,
-        cpf,
+        // o mesmo vale para o CPF de quem foi cadastrado so pelo e-mail
+        cpf || null,
         nascimento,
         telefone || null,
         cargo.rows[0].nome,
@@ -605,9 +643,11 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
 /**
  * PATCH /api/equipe/usuarios/:id — edita o cadastro.
  *
- * Cada um edita o proprio; cargo com acesso total edita qualquer um.
- * O CPF e a excecao: so o cargo "diretor" mexe nele. Nao passa por
- * permissao configuravel de proposito — e trava de cargo mesmo.
+ * Cada um edita o proprio; quem tem `editar_usuario` edita qualquer um.
+ * O CPF dos OUTROS so a diretoria mexe — trava de cargo, nao permissao
+ * configuravel. O proprio CPF cada um preenche e corrige em
+ * Configuracoes: e assim que quem foi cadastrado so pelo e-mail
+ * completa o cadastro.
  */
 router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
   const alvo = String(req.params.id)
@@ -640,7 +680,7 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
         })
       }
       const email = texto(req.body.email)
-      if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+      if (!EMAIL_VALIDO.test(email)) {
         return res.status(400).json({ erro: 'E-mail inválido.' })
       }
       por('email', email)
@@ -701,8 +741,8 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
     }
 
     if (req.body?.cpf !== undefined) {
-      if (meu.chave !== 'diretor') {
-        return res.status(403).json({ erro: 'Somente a diretoria pode alterar o CPF.' })
+      if (!souEu && meu.chave !== 'diretor') {
+        return res.status(403).json({ erro: 'Somente a diretoria pode alterar o CPF de outra pessoa.' })
       }
       const cpf = soDigitos(req.body.cpf)
       if (cpf.length !== 11) return res.status(400).json({ erro: 'O CPF precisa ter 11 dígitos.' })

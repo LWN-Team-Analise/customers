@@ -86,6 +86,32 @@
   gap: 15px;
 }
 
+/* a linha de explicacao do cadastro novo: o que e preciso agora e o
+   que a pessoa completa depois */
+.formcolab__dica {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* abre o resto do formulario no cadastro novo — fica com cara de link,
+   e nao de botao, porque e o caminho opcional */
+.formcolab__mais {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.formcolab__mais:hover {
+  color: var(--accent);
+}
+
 @media (max-width: 560px) {
   .formcolab__grade {
     grid-template-columns: 1fr;

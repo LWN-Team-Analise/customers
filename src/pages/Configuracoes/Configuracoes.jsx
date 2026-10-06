@@ -9,7 +9,6 @@ import { useAuth } from '@/context/AuthContext'
 import { useDados } from '@/context/DadosContext'
 import { useTheme } from '@/context/ThemeContext'
 import useOutlook from '@/hooks/useOutlook'
-import { podeEditarCpf } from '@/domain/obras'
 import { carregarFotoOriginal, editarUsuario, trocarSenha } from '@/services/equipeService'
 import { validateCPF, vincularOutlook } from '@/services/authService'
 import { tokenAtual } from '@/services/api'
@@ -39,16 +38,16 @@ const Lua = () => (
 )
 
 /**
- * Conta do usuario logado: foto, nome, telefone, nascimento e cargo.
+ * Conta do usuario logado: foto, nome, telefone, nascimento, CPF e cargo.
  * Tudo grava no banco na hora do Salvar.
  *
- * Dois campos NAO se alteram por aqui:
+ * E aqui que quem foi cadastrado so pelo e-mail completa o cadastro:
+ * troca o nome provisorio pelo completo e preenche nascimento e CPF.
+ * Enquanto falta o CPF, o bloco abre com o aviso (user.cadastroPendente).
  *
- *   E-MAIL — e a porta de entrada e o vinculo com o Outlook. Trocar
- *            ele sozinho quebraria os dois; quem muda e a diretoria,
- *            pela tela de Usuarios.
- *   CPF    — trava de cargo, nao permissao: so a diretoria mexe. A API
- *            recusa igual.
+ * O E-MAIL nao se altera por aqui: e a porta de entrada e o vinculo com
+ * o Outlook. Trocar ele sozinho quebraria os dois; quem muda e a
+ * diretoria, pela tela de Usuarios.
  *
  * O tema tambem mora aqui, e agora na propria linha do nome, sem card
  * separado.
@@ -70,7 +69,6 @@ export default function Configuracoes() {
   const [recado, setRecado] = useState('')
   const [salvando, setSalvando] = useState(false)
 
-  const cpfLiberado = podeEditarCpf(user)
   /* atribuir cargo tem permissao propria — inclusive para o proprio
      cadastro. Sem ela ninguem se promove sozinho por esta tela. */
   const podeCargo = pode('editar_cargo_titulo')
@@ -167,7 +165,10 @@ export default function Configuracoes() {
     if (form.telefone && soDigitos(form.telefone).length < 10) {
       novos.telefone = 'Informe o DDD e o número.'
     }
-    if (cpfLiberado && form.cpf && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
+    const cpf = soDigitos(form.cpf)
+    if (cpf && !validateCPF(form.cpf)) novos.cpf = 'CPF inválido.'
+    // quem ja tem CPF nao fica sem: e por ele que tambem se entra
+    if (!cpf && user.cpf) novos.cpf = 'Informe o CPF.'
     if (Object.keys(novos).length > 0) {
       setErros(novos)
       return
@@ -195,10 +196,8 @@ export default function Configuracoes() {
     /* o CARGO só viaja para quem pode defini-lo: mandá-lo sem a
        permissão faria a API recusar a gravação inteira */
     if (podeCargo) campos.cargoTituloId = form.cargoTituloId || ''
-    /* o CPF so vai quando pode mudar E mudou */
-    if (cpfLiberado && soDigitos(form.cpf) !== soDigitos(user.cpf)) {
-      campos.cpf = soDigitos(form.cpf)
-    }
+    /* o CPF so vai quando foi preenchido E mudou */
+    if (cpf && cpf !== soDigitos(user.cpf)) campos.cpf = cpf
 
     setSalvando(true)
     try {
@@ -210,6 +209,8 @@ export default function Configuracoes() {
         name: salvo?.nome ?? campos.nome,
         telefone: salvo?.telefone ?? campos.telefone,
         cpf: salvo?.cpf ?? user.cpf,
+        /* com o CPF gravado, o aviso de cadastro incompleto some na hora */
+        cadastroPendente: salvo ? salvo.cadastroPendente : user.cadastroPendente,
         dataNascimento: salvo?.nascimento ?? campos.nascimento,
         foto: salvo?.foto ?? user.foto,
         cargoChave: user.cargoChave,
@@ -239,6 +240,15 @@ export default function Configuracoes() {
 
         <form className="config__bloco config__bloco--conta vidro" onSubmit={salvar} noValidate>
           <h2 className="config__titulo">Sua conta</h2>
+
+          {/* cadastrado so pelo e-mail: o nome ainda e o tirado do
+              e-mail e faltam nascimento e CPF */}
+          {user?.cadastroPendente && (
+            <p className="config__alerta" role="alert">
+              Seu acesso foi criado só com o e-mail. <strong>Complete o seu cadastro</strong>:
+              confira o nome completo e preencha a data de nascimento e o CPF.
+            </p>
+          )}
 
           <div className="config__cabeca">
             <button
@@ -338,15 +348,15 @@ export default function Configuracoes() {
               onChange={mudar('nascimento')}
             />
 
-            {/* travado para todos, menos para a diretoria */}
+            {/* o proprio CPF cada um preenche e corrige; o dos outros so a
+                diretoria, pela tela de Usuarios */}
             <CampoTexto
               rotulo="CPF"
               inputMode="numeric"
+              placeholder="000.000.000-00"
               value={form.cpf}
               onChange={mudar('cpf')}
               erro={erros.cpf}
-              disabled={!cpfLiberado}
-              readOnly={!cpfLiberado}
             />
 
             {/* Travado aqui, e de propósito.

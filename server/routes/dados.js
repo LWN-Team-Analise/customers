@@ -90,6 +90,12 @@ const paraSetor = (l) => ({
  * oeste de Greenwich — que e o nosso caso. Por isso as tres partes saem
  * do proprio calendario local, sem passar por UTC.
  */
+/** Tabela que ainda nao existe (atualizacao nao rodada) vale como vazia. */
+function semTabelaVazia(erro) {
+  if (erro.code === '42P01') return { rows: [] }
+  throw erro
+}
+
 function soData(valor) {
   if (!valor) return null
   if (typeof valor === 'string') return valor.slice(0, 10)
@@ -173,6 +179,8 @@ async function lerTudo(usuarioId) {
     anexos,
     lidos,
     termos,
+    prazosEtapa,
+    prazosCheck,
   ] = await Promise.all([
     query('SELECT * FROM cliente ORDER BY lower(nome)'),
     /* os setores vem junto: sao poucos e a tela de Clientes precisa
@@ -190,7 +198,12 @@ async function lerTudo(usuarioId) {
              LEFT JOIN usuario editor   ON editor.id = o.atualizado_por
              LEFT JOIN usuario fim      ON fim.id    = o.concluida_por
             ORDER BY o.criado_em`),
-    query('SELECT obra_id, check_id, feito_por, feito_em FROM obra_check'),
+    /* a resposta Sim/Nao vem da atualizacao 13; sem ela, os checks vem
+       como sempre vieram (todos comuns) */
+    query('SELECT obra_id, check_id, feito_por, feito_em, resposta FROM obra_check').catch((erro) => {
+      if (erro.code !== '42703') throw erro
+      return query('SELECT obra_id, check_id, feito_por, feito_em FROM obra_check')
+    }),
     query('SELECT obra_id, usuario_id FROM obra_membro'),
     query('SELECT * FROM obra_observacao ORDER BY enviada_em DESC'),
     query(`SELECT a.*, u.name AS enviado_por_nome
@@ -206,6 +219,10 @@ async function lerTudo(usuarioId) {
              FROM obra_anexo ORDER BY enviado_em DESC`),
     query('SELECT aviso_id FROM aviso_leitura WHERE usuario_id = $1', [usuarioId]),
     lerTermos(),
+    /* os prazos (atualizacao 13). Sem as tabelas, nenhuma obra tem prazo
+       de etapa ou de check — e o quadro continua de pe */
+    query('SELECT obra_id, etapa_id, prazo FROM obra_prazo_etapa').catch(semTabelaVazia),
+    query('SELECT obra_id, check_id, prazo FROM obra_prazo_check').catch(semTabelaVazia),
   ])
 
   const junta = (linhas, chave, monta) => {
@@ -224,8 +241,21 @@ async function lerTudo(usuarioId) {
     mapa[String(l.check_id)] = {
       feitoPor: l.feito_por === null ? null : String(l.feito_por),
       feitoEm: l.feito_em,
+      /* so em card de pergunta: true = sim, false = nao */
+      resposta: l.resposta ?? null,
     }
     checksDaObra[l.obra_id] = mapa
+  })
+
+  /* prazo de cada etapa e de cada check, por obra, como 'AAAA-MM-DD' */
+  const prazosDaObra = {}
+  const prazoDe = (obraId) =>
+    (prazosDaObra[obraId] ??= { etapas: {}, checks: {} })
+  prazosEtapa.rows.forEach((l) => {
+    prazoDe(l.obra_id).etapas[String(l.etapa_id)] = soData(l.prazo)
+  })
+  prazosCheck.rows.forEach((l) => {
+    prazoDe(l.obra_id).checks[String(l.check_id)] = soData(l.prazo)
   })
 
   const membrosDaObra = junta(membros.rows, 'obra_id', (l) => String(l.usuario_id))
@@ -316,6 +346,7 @@ async function lerTudo(usuarioId) {
       concluidaPorNome: o.concluida_por_nome ?? null,
       conclusaoObs: o.conclusao_obs ?? '',
       checks: checksDaObra[o.id] ?? {},
+      prazos: prazosDaObra[o.id] ?? { etapas: {}, checks: {} },
       membros: membrosDaObra[o.id] ?? [],
       observacoes: obsDaObra[o.id] ?? [],
       avisos: avisosDaObra[o.id] ?? [],
@@ -1251,25 +1282,83 @@ async function podeMarcar(usuarioId, checkId, obraId) {
   return rows.some((l) => l.chave === meu.chave)
 }
 
+/**
+ * O check e de um card de PERGUNTA (Sim/Nao)?
+ *
+ * null quando o banco ainda nao tem a atualizacao 13 — ai nao existe
+ * pergunta nem coluna de resposta, e a marcacao segue como sempre foi.
+ */
+async function checkEPergunta(checkId) {
+  try {
+    const { rows } = await query(
+      `SELECT kd.sim_nao FROM etapa_check ck JOIN etapa_card kd ON kd.id = ck.card_id
+        WHERE ck.id = $1`,
+      [checkId],
+    )
+    return rows[0]?.sim_nao === true
+  } catch (erro) {
+    if (erro.code === '42703') return null
+    throw erro
+  }
+}
+
+const rotuloResposta = (resposta) => (resposta === true ? 'Sim' : resposta === false ? 'Não' : null)
+
+/**
+ * PUT marca o check.
+ *
+ * No card de PERGUNTA o corpo traz `resposta` (true = sim, false = nao)
+ * e ela e obrigatoria: o "nao" tambem fecha o check — e uma resposta,
+ * nao uma pendencia. Mandar de novo com a outra resposta TROCA a
+ * resposta e mantem quem marcou primeiro. Nos cards comuns a resposta
+ * e ignorada.
+ */
 router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, res) => {
   try {
     if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
     }
-    const marcado = await query(
-      `INSERT INTO obra_check (obra_id, check_id, feito_por)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (obra_id, check_id) DO NOTHING`,
-      [req.params.id, req.params.checkId, req.dono.sub],
-    )
-    /* ja estava marcado: nada aconteceu, nada entra no historico */
+
+    const pergunta = await checkEPergunta(req.params.checkId)
+    const resposta = req.body?.resposta
+    if (pergunta && typeof resposta !== 'boolean') {
+      return res.status(400).json({ erro: 'Este check pede uma resposta: Sim ou Não.' })
+    }
+
+    /* `inserido` separa "marcou agora" de "trocou a resposta": e o
+       xmax da linha, que so e zero quando o INSERT valeu */
+    const marcado =
+      pergunta === null
+        ? await query(
+            `INSERT INTO obra_check (obra_id, check_id, feito_por)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (obra_id, check_id) DO NOTHING
+             RETURNING true AS inserido`,
+            [req.params.id, req.params.checkId, req.dono.sub],
+          )
+        : await query(
+            `INSERT INTO obra_check (obra_id, check_id, feito_por, resposta)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (obra_id, check_id) DO UPDATE SET resposta = EXCLUDED.resposta
+               WHERE obra_check.resposta IS DISTINCT FROM EXCLUDED.resposta
+             RETURNING (xmax = 0) AS inserido`,
+            [req.params.id, req.params.checkId, req.dono.sub, pergunta ? resposta : null],
+          )
+
+    /* ja estava marcado (e com a mesma resposta): nada aconteceu, nada
+       entra no historico */
     if (marcado.rowCount > 0) {
+      const novo = marcado.rows[0]?.inserido !== false
       await registrarAtividade(req, {
-        acao: 'check.marcado',
+        acao: novo ? 'check.marcado' : 'check.resposta',
         categoria: 'check',
         entidade: ['obra', req.params.id],
-        descricao: 'Check concluído',
-        detalhes: { ...(await descreverObra(req.params.id)), ...(await descreverCheck(req.params.checkId)) },
+        descricao: novo ? 'Check concluído' : 'Resposta do check alterada',
+        detalhes: {
+          ...(await descreverObra(req.params.id)),
+          ...(await descreverCheck(req.params.checkId)),
+          ...(pergunta ? { resposta: rotuloResposta(resposta) } : {}),
+        },
       })
     }
     return res.json({ ok: true })
@@ -1300,6 +1389,88 @@ router.delete('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req,
     return res.status(204).end()
   } catch (e) {
     return tratar(e, res, 'dados/check-desmarcar')
+  }
+})
+
+/* ------------------------------------------------------------
+   Prazos da obra (atualizacao 13)
+
+   Uma data limite para uma ETAPA inteira ou para UM check, nesta
+   obra. Quem define e o setor com `definir_prazos`. Mandar prazo
+   vazio (null ou '') tira o prazo.
+
+   O prazo nao trava nada: ele so diz quando a coisa venceu. E a
+   tela que pinta o card do quadro de amarelo com ele.
+   ------------------------------------------------------------ */
+
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
+
+/** 'AAAA-MM-DD' que existe no calendario (nada de 30/02). */
+function dataValida(valor) {
+  if (!DATA_ISO.test(valor)) return false
+  const [a, m, d] = valor.split('-').map(Number)
+  const data = new Date(Date.UTC(a, m - 1, d))
+  return data.getUTCFullYear() === a && data.getUTCMonth() === m - 1 && data.getUTCDate() === d
+}
+
+router.put('/obras/:id/prazos', exigeSessao, exige('definir_prazos'), obraAberta, async (req, res) => {
+  const etapaId = texto(req.body?.etapaId)
+  const checkId = texto(req.body?.checkId)
+  const prazo = texto(req.body?.prazo)
+
+  if (Boolean(etapaId) === Boolean(checkId)) {
+    return res.status(400).json({ erro: 'Informe a etapa OU o check do prazo.' })
+  }
+  if (prazo && !dataValida(prazo)) {
+    return res.status(400).json({ erro: 'Data do prazo inválida.' })
+  }
+  if (!/^\d+$/.test(etapaId || checkId)) {
+    return res.status(400).json({ erro: 'Etapa ou check inválido.' })
+  }
+
+  const tabela = etapaId ? 'obra_prazo_etapa' : 'obra_prazo_check'
+  const coluna = etapaId ? 'etapa_id' : 'check_id'
+  const alvoId = etapaId || checkId
+
+  try {
+    if (prazo) {
+      await query(
+        `INSERT INTO ${tabela} (obra_id, ${coluna}, prazo, definido_por)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (obra_id, ${coluna})
+           DO UPDATE SET prazo = EXCLUDED.prazo, definido_por = EXCLUDED.definido_por,
+                         definido_em = now()`,
+        [req.params.id, alvoId, prazo, req.dono.sub],
+      )
+    } else {
+      await query(`DELETE FROM ${tabela} WHERE obra_id = $1 AND ${coluna} = $2`, [
+        req.params.id,
+        alvoId,
+      ])
+    }
+
+    const alvo = etapaId
+      ? { etapa: (await query('SELECT nome FROM etapa WHERE id = $1', [etapaId])).rows[0]?.nome ?? null }
+      : await descreverCheck(checkId)
+    await registrarAtividade(req, {
+      acao: prazo ? 'prazo.definido' : 'prazo.removido',
+      categoria: 'obra',
+      entidade: ['obra', req.params.id],
+      descricao: prazo ? 'Prazo definido' : 'Prazo removido',
+      /* a data vai como se le (dd/mm/aaaa): o historico mostra o texto cru */
+      detalhes: {
+        ...(await descreverObra(req.params.id)),
+        ...alvo,
+        prazo: prazo ? prazo.split('-').reverse().join('/') : null,
+      },
+    })
+    return res.json({ ok: true })
+  } catch (e) {
+    if (e.code === '23503') return res.status(404).json({ erro: 'Etapa ou check não encontrado.' })
+    if (e.code === '42P01') {
+      return res.status(501).json({ erro: 'Prazos ainda não foram habilitados no banco (atualização 13).' })
+    }
+    return tratar(e, res, 'dados/prazo')
   }
 })
 

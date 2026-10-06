@@ -77,8 +77,9 @@ export async function criarUsuario(campos) {
 }
 
 /**
- * Edita o cadastro. O CPF so passa se quem esta logado for da diretoria
- * — a API recusa para todo o resto.
+ * Edita o cadastro. O CPF de OUTRA pessoa so passa se quem esta logado
+ * for da diretoria — a API recusa para todo o resto. O proprio, cada um
+ * preenche e corrige.
  */
 export async function editarUsuario(id, campos) {
   const { usuario } = await patch(`/equipe/usuarios/${id}`, campos)

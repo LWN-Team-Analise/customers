@@ -87,8 +87,15 @@ export async function lerRoteiro() {
     query(
       'SELECT id, ordem, nome, descricao, vigente_de, vigente_ate FROM etapa ORDER BY ordem, id',
     ),
-    query(`SELECT id, etapa_id, ordem, titulo, vigente_de, vigente_ate
-             FROM etapa_card ORDER BY ordem, id`),
+    /* sim_nao e informacoes vem da atualizacao 13. Num banco sem ela as
+       colunas nao existem, e o roteiro inteiro nao pode parar por isso:
+       cai na leitura de antes e os cards vem como cards comuns */
+    query(`SELECT id, etapa_id, ordem, titulo, sim_nao, informacoes, vigente_de, vigente_ate
+             FROM etapa_card ORDER BY ordem, id`).catch((erro) => {
+      if (erro.code !== '42703') throw erro
+      return query(`SELECT id, etapa_id, ordem, titulo, vigente_de, vigente_ate
+                      FROM etapa_card ORDER BY ordem, id`)
+    }),
     query(`SELECT cc.card_id, c.chave, cc.ordem
              FROM etapa_card_cargo cc JOIN cargo c ON c.id = cc.cargo_id
             ORDER BY cc.ordem`),
@@ -151,6 +158,10 @@ export async function lerRoteiro() {
       id: String(l.id),
       ordem: l.ordem,
       titulo: l.titulo,
+      /* card de pergunta: marcar um check dele pede Sim ou Nao */
+      simNao: l.sim_nao ?? false,
+      /* o que o card faz — a dica que aparece ao passar o mouse */
+      informacoes: l.informacoes ?? '',
       cargos: cargosDoCard[l.id] ?? [],
       etiquetas: etiquetasDoCard[l.id] ?? [],
       checks: checksDoCard[l.id] ?? [],
@@ -302,8 +313,13 @@ async function gravarCargos(cardId, chaves) {
   return { ok: true }
 }
 
+/** O texto de "Informacoes do card": vazio vira NULL, e com teto. */
+const informacoesDoCorpo = (valor) => String(valor ?? '').trim().slice(0, 600) || null
+
 router.post('/etapas/:id/cards', exigeSessao, exige('editar_cards'), async (req, res) => {
   const titulo = String(req.body?.titulo ?? '').trim() || null
+  const simNao = req.body?.simNao === true
+  const informacoes = informacoesDoCorpo(req.body?.informacoes)
 
   try {
     const etapa = await query('SELECT id FROM etapa WHERE id = $1', [req.params.id])
@@ -311,10 +327,10 @@ router.post('/etapas/:id/cards', exigeSessao, exige('editar_cards'), async (req,
 
     const desde = await momento(obraDaChamada(req))
     const { rows } = await query(
-      `INSERT INTO etapa_card (etapa_id, ordem, titulo, vigente_de)
-       VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_card WHERE etapa_id = $1), -1) + 1, $2, $3)
+      `INSERT INTO etapa_card (etapa_id, ordem, titulo, sim_nao, informacoes, vigente_de)
+       VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_card WHERE etapa_id = $1), -1) + 1, $2, $3, $4, $5)
        RETURNING id`,
-      [req.params.id, titulo, desde],
+      [req.params.id, titulo, simNao, informacoes, desde],
     )
 
     const posto = await gravarCargos(rows[0].id, req.body?.cargos)
@@ -338,6 +354,21 @@ router.patch('/cards/:id', exigeSessao, exige('editar_cards'), async (req, res) 
     if (req.body?.titulo !== undefined) {
       await query('UPDATE etapa_card SET titulo = $1 WHERE id = $2', [
         String(req.body.titulo).trim() || null,
+        req.params.id,
+      ])
+    }
+    /* Virar (ou deixar de ser) pergunta vale para o card em todas as
+       obras que o enxergam — e o mesmo card. O que ja foi marcado fica:
+       check marcado antes da mudanca continua feito, so sem resposta. */
+    if (req.body?.simNao !== undefined) {
+      await query('UPDATE etapa_card SET sim_nao = $1 WHERE id = $2', [
+        req.body.simNao === true,
+        req.params.id,
+      ])
+    }
+    if (req.body?.informacoes !== undefined) {
+      await query('UPDATE etapa_card SET informacoes = $1 WHERE id = $2', [
+        informacoesDoCorpo(req.body.informacoes),
         req.params.id,
       ])
     }

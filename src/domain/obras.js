@@ -299,6 +299,119 @@ export function estadoDaEtapa(roteiro, obra, numero) {
 }
 
 /* ------------------------------------------------------------
+   Prazos e a COR do card no quadro
+
+   Tres cores, e cada uma responde uma pergunta so:
+
+     verde   ('ok')         obra padrao com os prazos em dia;
+     azul    ('emergencia') obra de emergencia com os prazos em dia;
+     amarelo ('atraso')     alguma coisa venceu — ou esta para vencer
+                            e longe de terminar. Vale para os dois
+                            tipos: atraso pesa mais que o tipo.
+
+   O que conta como prazo:
+     - a data de conclusao da obra;
+     - o prazo de cada ETAPA nesta obra (obra.prazos.etapas);
+     - o prazo de cada CHECK nesta obra (obra.prazos.checks).
+
+   "Para vencer" e faltar AVISO_ANTES_DIAS dias ou menos com o
+   trabalho daquele prazo abaixo de PERTO_DE_TERMINAR por cento. Para
+   um check so, "longe de terminar" e simplesmente nao estar feito.
+
+   Etapa ou check ja feitos nao atrasam nada, mesmo com o prazo no
+   passado: o prazo serviu.
+   ------------------------------------------------------------ */
+
+export const AVISO_ANTES_DIAS = 3
+export const PERTO_DE_TERMINAR = 80
+
+/** Dias de `hoje` ate `data` ('AAAA-MM-DD'); negativo quando ja passou. */
+export function diasAte(data, hoje) {
+  const emDias = (iso) => {
+    const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number)
+    return Date.UTC(a, m - 1, d) / 86400000
+  }
+  return Math.round(emDias(data) - emDias(hoje))
+}
+
+const pct = (feitos, total) => (total === 0 ? 0 : Math.round((feitos / total) * 100))
+
+/**
+ * A situacao da obra no quadro.
+ *
+ * Devolve { tom, motivos }, com `tom` em 'ok' | 'emergencia' | 'atraso'
+ * e cada motivo como
+ *   { nivel: 'atraso' | 'perto', alvo: 'obra' | 'etapa' | 'check',
+ *     prazo, dias, numero?, titulo?, setores: [chaves] }
+ * — os vencidos primeiro. Os `setores` sao quem ainda deve naquele
+ * prazo: e o "atraso por causa de um setor" que a tela escreve.
+ */
+export function situacaoDaObra(roteiro, obra, hoje) {
+  const tomBase = obra?.tipo === 'emergencia' ? 'emergencia' : 'ok'
+  if (!obra || obraFechada(obra)) return { tom: tomBase, motivos: [] }
+
+  const marcados = obra.checks ?? {}
+  const prazos = obra.prazos ?? {}
+  const motivos = []
+
+  const avaliar = (prazo, andamento, extra) => {
+    if (!prazo) return
+    const dias = diasAte(prazo, hoje)
+    if (dias < 0) motivos.push({ nivel: 'atraso', prazo, dias, ...extra })
+    else if (dias <= AVISO_ANTES_DIAS && andamento < PERTO_DE_TERMINAR) {
+      motivos.push({ nivel: 'perto', prazo, dias, ...extra })
+    }
+  }
+
+  /* a obra inteira: so enquanto sobrar check em aberto */
+  if (!obraConcluida(roteiro, marcados)) {
+    avaliar(obra.dataConclusao, progressoDaObra(roteiro, marcados), { alvo: 'obra', setores: [] })
+  }
+
+  ;(roteiro ?? []).forEach((etapa) => {
+    const checks = (etapa.cards ?? []).flatMap((c) => c.checks ?? [])
+
+    const prazoEtapa = prazos.etapas?.[etapa.id]
+    if (prazoEtapa && !etapaConcluida(etapa, marcados)) {
+      avaliar(prazoEtapa, pct(checks.filter((k) => feito(marcados, k.id)).length, checks.length), {
+        alvo: 'etapa',
+        numero: etapa.numero,
+        setores: setoresPendentes(roteiro, marcados, etapa.numero),
+      })
+    }
+
+    ;(etapa.cards ?? []).forEach((card) => {
+      ;(card.checks ?? []).forEach((check) => {
+        const prazoCheck = prazos.checks?.[check.id]
+        if (!prazoCheck || feito(marcados, check.id)) return
+        avaliar(prazoCheck, 0, {
+          alvo: 'check',
+          numero: etapa.numero,
+          titulo: check.titulo,
+          setores: cargosDoCheck(check, card),
+        })
+      })
+    })
+  })
+
+  motivos.sort((a, b) => (a.nivel === b.nivel ? a.dias - b.dias : a.nivel === 'atraso' ? -1 : 1))
+  return { tom: motivos.length > 0 ? 'atraso' : tomBase, motivos }
+}
+
+/**
+ * Como esta o prazo de UMA etapa ou de UM check, para a etiqueta dele:
+ * 'vencido' | 'perto' | 'ok' — ou null quando nao ha prazo ou ja foi
+ * feito. `andamento` e o percentual ja feito (0 para um check aberto).
+ */
+export function estadoDoPrazo(prazo, hoje, { feito: jaFeito = false, andamento = 0 } = {}) {
+  if (!prazo || jaFeito) return null
+  const dias = diasAte(prazo, hoje)
+  if (dias < 0) return 'vencido'
+  if (dias <= AVISO_ANTES_DIAS && andamento < PERTO_DE_TERMINAR) return 'perto'
+  return 'ok'
+}
+
+/* ------------------------------------------------------------
    Quem pode o que
    ------------------------------------------------------------ */
 
@@ -415,6 +528,16 @@ export function fundoDoCard(card, corDoCargo) {
   if (cores.length === 0) return '#6b7280'
   if (cores.length === 1) return cores[0]
   return `linear-gradient(120deg, ${cores.join(', ')})`
+}
+
+/**
+ * As cores do card no estilo NOVO (contorno, sem fundo): a primeira
+ * pinta o contorno e o nome; com mais de um setor, todas vao num fio
+ * de gradiente no alto do card. `cor` e a cor suave de cada setor.
+ */
+export function coresDoCard(card, cor) {
+  const cores = (card?.cargos ?? []).map(cor).filter(Boolean)
+  return cores.length > 0 ? cores : ['#6b7280']
 }
 
 /** Nome que aparece no topo do card: o titulo escrito ou os cargos dele. */

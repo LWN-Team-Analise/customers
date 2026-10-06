@@ -9,13 +9,15 @@ import { CampoArea } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
+import Dica from '@/components/Dica/Dica'
 import {
   avisoDeEtapa,
   cardConcluido,
   cardsQueValem,
   chaveDoCargo,
   checkTemDonoProprio,
-  fundoDoCard,
+  coresDoCard,
+  estadoDoPrazo,
   nomeDoCard,
   podeEditarCheck,
   rotuloPrioridadeObra,
@@ -23,9 +25,11 @@ import {
   tomPrioridadeObra,
 } from '@/domain/obras'
 import { textoSobre } from '@/utils/cor'
-import { dataExtensa, dataHora } from '@/utils/formato'
+import { dataBR, dataExtensa, dataHora, hojeISO } from '@/utils/formato'
 import ModalCard from './ModalCard'
 import ModalCheck from './ModalCheck'
+import ModalResposta from './ModalResposta'
+import ModalPrazo from './ModalPrazo'
 import ModalEtapa from './ModalEtapa'
 import ModalFechaEtapa from './ModalFechaEtapa'
 import ModalChat from './ModalChat'
@@ -78,6 +82,20 @@ const Icone = {
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="7" height="16" rx="1.6" />
       <rect x="14" y="4" width="7" height="10" rx="1.6" />
+    </svg>
+  ),
+  /* o calendario do prazo */
+  prazo: ({ tamanho = 13 }) => (
+    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4M16 3v4M4 10h16" />
+    </svg>
+  ),
+  /* o "i" das informacoes do card */
+  info: () => (
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.6v.2" />
     </svg>
   ),
   nota: () => (
@@ -141,9 +159,11 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     clientes,
     roteiroDaObra,
     cargoPorChave,
-    corDoCargo,
+    corSuaveDoCargo,
     nomeDoCargo,
     alternarCheck,
+    responderCheck,
+    definirPrazo,
     removerObra,
     adicionarObservacao,
     editarObservacao,
@@ -181,6 +201,10 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
      do quadro, para a resposta nao depender de por onde se marcou */
   const [avisoEtapa, setAvisoEtapa] = useState(null)
   const [menuFlutuante, setMenuFlutuante] = useState(false)
+  /* a pergunta Sim/Nao de um check de card de pergunta: {card, check} */
+  const [respondendo, setRespondendo] = useState(null)
+  /* o prazo sendo definido: {tipo: 'etapa'|'check', id, nome, prazo} */
+  const [prazoAlvo, setPrazoAlvo] = useState(null)
 
   /* pop-ups da obra */
   const [chat, setChat] = useState(false)
@@ -226,6 +250,30 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     }
     alternarCheck(obra.id, checkId)
   }
+
+  /* Card de PERGUNTA nao marca direto: abre o Sim/Nao. O resto segue
+     marcando e desmarcando no clique, como sempre. */
+  const clicarCheck = (card, check) => {
+    if (card.simNao) {
+      setRespondendo({ card, check })
+      return
+    }
+    marcarCheck(check.id)
+  }
+
+  /* a resposta tambem pode fechar a sua parte da etapa: o anuncio e o
+     mesmo da marcacao comum, so na primeira vez */
+  const responder = (checkId, resposta) => {
+    if (!obra.checks?.[checkId]) {
+      const novo = avisoDeEtapa(roteiro, obra.checks, checkId, chaveDoCargo(user))
+      if (novo) setAvisoEtapa(novo)
+    }
+    responderCheck(obra.id, checkId, resposta)
+  }
+
+  /* 'AAAA-MM-DD' de hoje: e com ele que as etiquetas de prazo dizem
+     "vencido" ou "perto" */
+  const hoje = hojeISO()
   const numeroAtual = etapaDaObra(obra)
   const etapaCorrente = roteiro.find((e) => e.numero === numeroAtual)
   const pct = progresso(obra)
@@ -239,6 +287,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const podeCards = !soLeitura && pode('editar_cards')
   const podeChecks = !soLeitura && pode('editar_checks')
   const podeObra = !soLeitura && pode('editar_obras')
+  /* prazo de etapa e de check: permissao propria */
+  const podePrazos = !soLeitura && pode('definir_prazos')
   /**
    * Apagar a obra — DUAS permissoes, porque sao dois gestos:
    *
@@ -512,7 +562,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                   <span
                     key={card.id}
                     className={`info__setor ${pronto ? 'is-pronto' : ''}`.trim()}
-                    style={{ '--setor-cor': fundoDoCard(card, corDoCargo) }}
+                    /* contorno e texto na cor suave do setor, sem fundo */
+                    style={{ '--setor-cor': coresDoCard(card, corSuaveDoCargo)[0] }}
                     title={pronto ? 'Concluído' : 'Pendente'}
                   >
                     {nomeDoCard(card, nomeDoCargo)}
@@ -637,6 +688,18 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               const valem = cardsQueValem(etapa)
               const prontos = valem.filter((c) => cardConcluido(c, obra.checks)).length
 
+              /* o prazo da etapa NESTA obra, e em que pe ele esta */
+              const prazoEtapa = obra.prazos?.etapas?.[etapa.id] ?? null
+              const checksDaEtapa = etapa.cards.flatMap((c) => c.checks)
+              const andamento = checksDaEtapa.length
+                ? (checksDaEtapa.filter((k) => obra.checks[k.id]).length / checksDaEtapa.length) * 100
+                : 0
+              const situacaoPrazo = estadoDoPrazo(prazoEtapa, hoje, {
+                feito: estado === 'concluida',
+                andamento,
+              })
+              const nomeEtapa = etapa.nome || rotuloEtapa(etapa.numero)
+
               return (
                 <section key={etapa.id} className="etapa vidro" data-estado={estado}>
                   <header className="etapa__topo">
@@ -686,6 +749,40 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                       aparece quando alguém escreveu alguma coisa. */}
                   {etapa.descricao && <p className="etapa__desc">{etapa.descricao}</p>}
 
+                  {/* O PRAZO da etapa nesta obra. Quem pode definir vê o
+                      botão mesmo sem prazo; quem não pode só vê quando há
+                      um. Vencido fica vermelho, perto fica âmbar — e é ele
+                      que deixa o card desta obra amarelo no quadro. */}
+                  {(prazoEtapa || podePrazos) && (
+                    <button
+                      type="button"
+                      className="prazo"
+                      data-estado={situacaoPrazo ?? (prazoEtapa ? 'cumprido' : 'vazio')}
+                      disabled={!podePrazos}
+                      onClick={() =>
+                        setPrazoAlvo({ tipo: 'etapa', id: etapa.id, nome: nomeEtapa, prazo: prazoEtapa })
+                      }
+                      title={
+                        podePrazos
+                          ? prazoEtapa
+                            ? 'Alterar ou tirar o prazo desta etapa'
+                            : 'Definir um prazo para esta etapa nesta obra'
+                          : undefined
+                      }
+                    >
+                      <Icone.prazo />
+                      {prazoEtapa ? (
+                        <>
+                          Prazo: <strong>{dataBR(prazoEtapa)}</strong>
+                          {situacaoPrazo === 'vencido' && <em>vencido</em>}
+                          {situacaoPrazo === 'perto' && <em>perto</em>}
+                        </>
+                      ) : (
+                        'Definir prazo'
+                      )}
+                    </button>
+                  )}
+
                   <div className="etapa__cards">
                     {etapa.cards.map((card) => (
                       <CardSetor
@@ -700,14 +797,24 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                         usuario={user}
                         podeCards={podeCards}
                         podeChecks={podeChecks}
-                        corDoCargo={corDoCargo}
+                        podePrazos={podePrazos}
+                        hoje={hoje}
+                        corSuaveDoCargo={corSuaveDoCargo}
                         nomeDoCargo={nomeDoCargo}
                         cargoPorChave={cargoPorChave}
                         pessoaPorId={pessoaPorId}
-                        aoMarcar={marcarCheck}
+                        aoMarcar={(check) => clicarCheck(card, check)}
                         aoEditarCard={() => setEditandoCard({ etapa, card })}
                         aoNovoCheck={() => setEditandoCheck({ card })}
                         aoEditarCheck={(check) => setEditandoCheck({ card, check })}
+                        aoPrazoCheck={(check) =>
+                          setPrazoAlvo({
+                            tipo: 'check',
+                            id: check.id,
+                            nome: check.titulo,
+                            prazo: obra.prazos?.checks?.[check.id] ?? null,
+                          })
+                        }
                       />
                     ))}
                   </div>
@@ -975,6 +1082,29 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         aoFechar={() => setEditandoCheck(null)}
       />
 
+      <ModalResposta
+        aberto={Boolean(respondendo)}
+        check={respondendo?.check}
+        nomeCard={respondendo?.card ? nomeDoCard(respondendo.card, nomeDoCargo) : ''}
+        marcado={Boolean(respondendo && obra.checks[respondendo.check.id])}
+        resposta={respondendo ? (obra.checks[respondendo.check.id]?.resposta ?? null) : null}
+        aoResponder={(valor) => responder(respondendo.check.id, valor)}
+        aoDesmarcar={() => alternarCheck(obra.id, respondendo.check.id)}
+        aoFechar={() => setRespondendo(null)}
+      />
+
+      <ModalPrazo
+        aberto={Boolean(prazoAlvo)}
+        alvo={prazoAlvo}
+        aoSalvar={(prazo) =>
+          definirPrazo(obra.id, {
+            ...(prazoAlvo.tipo === 'etapa' ? { etapaId: prazoAlvo.id } : { checkId: prazoAlvo.id }),
+            prazo,
+          })
+        }
+        aoFechar={() => setPrazoAlvo(null)}
+      />
+
       {/* os três em modo consulta quando a obra está fechada: a conversa
           inteira continua à vista, sem a caixa de escrever */}
       <ModalChat
@@ -1081,12 +1211,18 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 }
 
 /**
- * Card de um setor dentro da etapa: titulo na cor do cargo (gradiente
- * quando o card e de mais de um) e a lista de checks.
+ * Card de um setor dentro da etapa: contorno e nome na cor SUAVE do
+ * setor, fundo transparente, e a lista de checks. Com mais de um setor,
+ * um fio no alto leva as cores de todos.
  *
  * Duas travas diferentes, e o cadeado diz qual e:
  *  - `travado`: a etapa ainda nao abriu (so em obra padrao);
  *  - `semPermissao`: a etapa abriu, mas o card e de outro cargo.
+ *
+ * Card de PERGUNTA (card.simNao): o check respondido "nao" aparece com
+ * um X e a palavra "Nao"; o "sim", com o tique e "Sim".
+ *
+ * As informacoes do card (card.informacoes) aparecem ao passar o mouse.
  */
 function CardSetor({
   card,
@@ -1095,7 +1231,9 @@ function CardSetor({
   usuario,
   podeCards,
   podeChecks,
-  corDoCargo,
+  podePrazos,
+  hoje,
+  corSuaveDoCargo,
   nomeDoCargo,
   cargoPorChave,
   pessoaPorId,
@@ -1103,12 +1241,13 @@ function CardSetor({
   aoEditarCard,
   aoNovoCheck,
   aoEditarCheck,
+  aoPrazoCheck,
 }) {
   const feitas = card.checks.filter((c) => obra.checks[c.id]).length
   const pronto = card.checks.length > 0 && feitas === card.checks.length
   /* "de outro" e quando NENHUM check do card e do seu cargo */
   const semPermissao = !card.checks.some((c) => podeEditarCheck(usuario, c, card, obra))
-  const fundo = fundoDoCard(card, corDoCargo)
+  const cores = coresDoCard(card, corSuaveDoCargo)
   const titulo = nomeDoCard(card, nomeDoCargo)
 
   /**
@@ -1142,18 +1281,37 @@ function CardSetor({
   const donos = card.cargos.map((c) => cargoPorChave(c)?.nome ?? c).join(', ')
 
   return (
-    <article
+    /* a dica (card.informacoes) abre ao passar o mouse em qualquer ponto
+       do card — e e o card inteiro, e nao so um icone, porque e por cima
+       dele que a mao ja esta quando a pessoa se pergunta "isto e o que?" */
+    <Dica
+      as="article"
+      texto={card.informacoes}
+      titulo={titulo}
       className={`setorcard ${pronto ? 'is-pronto' : ''} ${
         semPermissao && !travado ? 'is-deoutro' : ''
       }`.trim()}
-      style={{ '--setor-cor': fundo, '--setor-cor-solida': corDoCargo(card.cargos[0]) }}
+      style={{
+        '--setor-cor': cores[0],
+        '--setor-fio': cores.length > 1 ? `linear-gradient(90deg, ${cores.join(', ')})` : 'none',
+      }}
     >
       <header className="setorcard__topo">
         {/* o nome inteiro na dica: o titulo corta com reticencias para
             a fila do cabecalho caber sempre */}
-        <h3 className="setorcard__titulo" title={titulo}>
+        <h3 className="setorcard__titulo" title={card.informacoes ? undefined : titulo}>
           {titulo}
         </h3>
+        {card.informacoes && (
+          <span className="setorcard__info" aria-label={`Informações: ${card.informacoes}`}>
+            <Icone.info />
+          </span>
+        )}
+        {card.simNao && (
+          <span className="setorcard__pergunta" title="Os checks deste card pedem Sim ou Não">
+            Sim/Não
+          </span>
+        )}
         {semPermissao && !travado && (
           <span className="setorcard__cadeado" title={`Só ${donos} marca estes checks`}>
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1209,36 +1367,58 @@ function CardSetor({
 
       <ul className="setorcard__tarefas">
         {card.checks.map((check) => {
-          const feito = Boolean(obra.checks[check.id])
+          const marca = obra.checks[check.id]
+          const feito = Boolean(marca)
+          /* so em card de pergunta: true = sim, false = nao. Check
+             marcado antes de o card virar pergunta fica sem resposta, e
+             aparece como um check comum feito. */
+          const resposta = card.simNao && feito ? (marca.resposta ?? null) : null
           const meu = podeEditarCheck(usuario, check, card, obra)
           const proprio = checkTemDonoProprio(check)
           const donosDoCheck = proprio
             ? check.cargos.map((c) => cargoPorChave(c)?.nome ?? c).join(', ')
             : donos
+          const prazo = obra.prazos?.checks?.[check.id] ?? null
+          const situacaoPrazo = estadoDoPrazo(prazo, hoje, { feito })
           return (
             <li key={check.id}>
               <button
                 type="button"
-                className={`tarefa ${feito ? 'is-feita' : ''} ${!meu ? 'is-deoutro' : ''}`.trim()}
-                onClick={() => aoMarcar(check.id)}
+                className={`tarefa ${feito ? 'is-feita' : ''} ${resposta === false ? 'is-nao' : ''} ${
+                  !meu ? 'is-deoutro' : ''
+                }`.trim()}
+                onClick={() => aoMarcar(check)}
                 disabled={travado || !meu}
                 title={
                   travado
                     ? undefined
                     : meu
-                      ? undefined
+                      ? card.simNao
+                        ? 'Responder Sim ou Não'
+                        : undefined
                       : `Somente ${donosDoCheck} marca este check`
                 }
                 aria-pressed={feito}
               >
                 <span className="tarefa__marca" aria-hidden="true">
-                  {feito && (
-                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m5 12.5 4.5 4.5L19 7" />
-                    </svg>
-                  )}
+                  {feito &&
+                    (resposta === false ? (
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round">
+                        <path d="M7 7l10 10M17 7 7 17" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m5 12.5 4.5 4.5L19 7" />
+                      </svg>
+                    ))}
                 </span>
-                {check.titulo}
+                <span className="tarefa__texto">{check.titulo}</span>
+                {/* a resposta escrita do lado: "Hospedagem  Não" */}
+                {resposta !== null && (
+                  <span className="tarefa__resposta" data-resposta={resposta ? 'sim' : 'nao'}>
+                    {resposta ? 'Sim' : 'Não'}
+                  </span>
+                )}
                 {/* dono diferente do card: a etiqueta diz de quem e */}
                 {proprio && (
                   <span className="tarefa__dono" title={`Check de ${donosDoCheck}`}>
@@ -1247,7 +1427,29 @@ function CardSetor({
                       .join('·')}
                   </span>
                 )}
+                {/* o prazo DESTE check nesta obra; some depois de feito */}
+                {prazo && !feito && (
+                  <span
+                    className="tarefa__prazo"
+                    data-estado={situacaoPrazo}
+                    title={situacaoPrazo === 'vencido' ? 'Prazo vencido' : 'Prazo'}
+                  >
+                    até {dataBR(prazo).slice(0, 5)}
+                  </span>
+                )}
               </button>
+
+              {podePrazos && !feito && (
+                <button
+                  type="button"
+                  className="tarefa__editar"
+                  onClick={() => aoPrazoCheck(check)}
+                  title={prazo ? 'Alterar ou tirar o prazo deste check' : 'Definir um prazo para este check'}
+                  aria-label={`Prazo do check ${check.titulo}`}
+                >
+                  <Icone.prazo />
+                </button>
+              )}
 
               {podeChecks && (
                 <button
@@ -1268,7 +1470,7 @@ function CardSetor({
           <li className="setorcard__semcheck">Sem check ainda.</li>
         )}
       </ul>
-    </article>
+    </Dica>
   )
 }
 

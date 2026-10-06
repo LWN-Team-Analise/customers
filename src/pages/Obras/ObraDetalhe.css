@@ -217,15 +217,17 @@
   gap: 5px;
 }
 
+/* o setor sem fundo chapado: contorno e texto na cor suave dele */
 .info__setor {
   position: relative;
-  padding: 4px 12px;
+  padding: 3px 11px;
+  border: 1.5px solid var(--setor-cor);
   border-radius: var(--radius-pill);
-  background: var(--setor-cor);
-  color: var(--setor-fg);
+  background: transparent;
+  color: var(--setor-cor);
   font-size: 0.72rem;
-  font-weight: 600;
-  opacity: 0.55;
+  font-weight: 700;
+  opacity: 0.6;
 }
 
 .info__setor.is-pronto {
@@ -433,18 +435,30 @@
 
 /* --setor-cor pode ser uma cor so ou um gradiente: card de mais de um
    cargo recebe as cores de todos eles (ver fundoDoCard). */
+/* SEM fundo chapado: o card e transparente, com o contorno e o nome
+   na cor SUAVE do setor (corSuave, src/utils/cor.js). Os checks correm
+   na cor normal do texto. Card de mais de um setor ganha o fio de
+   cores no alto (--setor-fio). */
 .setorcard {
   position: relative;
   overflow: hidden;
   isolation: isolate;
   padding: 11px 12px;
-  border: 0;
+  border: 1.5px solid var(--setor-cor);
   border-radius: var(--radius-md);
-  background: var(--setor-cor);
-  color: #fff;
+  background: transparent;
+  color: var(--text-base);
   box-shadow: none;
-  /* o anel do avatar precisa de cor chapada, nao de gradiente */
-  --avatar-anel: var(--setor-cor-solida, #6b7280);
+  --avatar-anel: var(--surface);
+}
+
+.setorcard::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 0;
+  height: 3px;
+  background: var(--setor-fio, none);
 }
 
 .setorcard > * {
@@ -473,7 +487,8 @@
   height: 20px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--control-bg-hover);
+  color: var(--text-muted);
 }
 
 .setorcard__topo {
@@ -494,6 +509,7 @@
   margin: 0;
   font-size: 0.86rem;
   font-weight: 700;
+  color: var(--setor-cor);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -504,7 +520,8 @@
 .setorcard__placar {
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.25);
+  background: color-mix(in srgb, var(--setor-cor) 14%, transparent);
+  color: var(--setor-cor);
   font-size: 0.66rem;
   font-weight: 700;
 }
@@ -536,7 +553,7 @@
 }
 
 .tarefa:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--control-bg-hover);
 }
 
 /* Check que não é seu: BLOQUEADO, e que se veja que está.
@@ -552,12 +569,12 @@
 
 .tarefa.is-deoutro .tarefa__marca {
   border-style: dashed;
-  border-color: rgba(255, 255, 255, 0.45);
+  border-color: var(--text-faint);
   background-image: linear-gradient(
     135deg,
     transparent 45%,
-    rgba(255, 255, 255, 0.5) 45%,
-    rgba(255, 255, 255, 0.5) 55%,
+    var(--text-faint) 45%,
+    var(--text-faint) 55%,
     transparent 55%
   );
 }
@@ -573,16 +590,24 @@
   height: 15px;
   flex-shrink: 0;
   margin-top: 1px;
-  border: 1.5px solid rgba(255, 255, 255, 0.75);
+  border: 1.5px solid var(--setor-cor);
   border-radius: 4px;
-  color: var(--setor-cor);
+  color: var(--surface);
   background: transparent;
   transition: background var(--dur-fast) var(--ease-out);
 }
 
+/* feito: a caixinha cheia na cor do setor, o tique por cima */
 .tarefa.is-feita .tarefa__marca {
-  background: #fff;
-  border-color: #fff;
+  background: var(--setor-cor);
+  border-color: var(--setor-cor);
+}
+
+/* respondido "Nao": a caixinha vira um X num cinza-azulado — e uma
+   resposta, nao um erro, entao nada de vermelho */
+.tarefa.is-nao .tarefa__marca {
+  background: var(--resposta-nao);
+  border-color: var(--resposta-nao);
 }
 
 .tarefa.is-feita {
@@ -919,14 +944,15 @@
   height: 20px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--control-bg-hover);
+  color: var(--text-muted);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out);
 }
 
 .setorcard__ferramentas button:hover {
-  background: rgba(255, 255, 255, 0.4);
+  background: color-mix(in srgb, var(--setor-cor) 22%, transparent);
+  color: var(--text-strong);
 }
 
 /* ---- lapis de cada check ---- */
@@ -952,7 +978,7 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #fff;
+  color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
   transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
@@ -964,7 +990,8 @@
 }
 
 .tarefa__editar:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
   opacity: 1;
 }
 
@@ -976,7 +1003,8 @@
   margin-left: auto;
   padding: 1px 7px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.28);
+  background: color-mix(in srgb, var(--setor-cor) 14%, transparent);
+  color: var(--setor-cor);
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.03em;
@@ -1321,9 +1349,7 @@
   font-size: 0.66rem;
   font-weight: 700;
   line-height: 1.5;
-  /* o anel claro separa a etiqueta do fundo colorido do card quando as
-     duas cores chegam perto — o mesmo recurso da etiqueta de setor */
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.32);
+  box-shadow: 0 0 0 1px var(--line);
 }
 
 /* ---- Excluir, no cabeçalho da obra concluída ----
@@ -1340,4 +1366,165 @@
   background: color-mix(in srgb, #ff6b5e 22%, transparent);
   border-color: #ff8f84;
   color: #fff;
+}
+
+/* ============================================================
+   Card de pergunta, informacoes e prazos (atualizacao 13)
+   ============================================================ */
+
+/* o "i" de quem tem informacoes: a dica abre no card inteiro, ele so
+   avisa que ela existe */
+.setorcard__info {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--setor-cor);
+  opacity: 0.85;
+}
+
+/* a marca de card que pede Sim ou Nao */
+.setorcard__pergunta {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--setor-cor) 55%, transparent);
+  border-radius: var(--radius-pill);
+  color: var(--setor-cor);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* o texto do check ocupa o espaco; resposta, dono e prazo vao no fim */
+.tarefa__texto {
+  min-width: 0;
+}
+
+/* a resposta escrita do lado do check: "Hospedagem  Nao". Sem o risco
+   do texto feito: ela e a informacao, nao o que ja passou */
+.tarefa__resposta {
+  display: inline-block;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.tarefa__resposta[data-resposta='nao'] {
+  background: color-mix(in srgb, var(--resposta-nao) 18%, transparent);
+  color: var(--resposta-nao);
+}
+
+.tarefa__resposta[data-resposta='sim'] {
+  background: color-mix(in srgb, var(--etapa-ok) 16%, transparent);
+  color: var(--etapa-ok);
+}
+
+/* o risco do check feito fica so no texto dele */
+.tarefa.is-feita {
+  text-decoration: none;
+}
+
+.tarefa.is-feita .tarefa__texto {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.tarefa__prazo {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.tarefa__prazo[data-estado='perto'] {
+  background: color-mix(in srgb, var(--prazo-perto) 18%, transparent);
+  color: var(--prazo-perto);
+}
+
+.tarefa__prazo[data-estado='vencido'] {
+  background: color-mix(in srgb, var(--prazo-vencido) 16%, transparent);
+  color: var(--prazo-vencido);
+}
+
+/* O prazo da etapa, logo abaixo do nome. Botao para quem pode definir;
+   so leitura para os outros (disabled, sem cara de botao). */
+.prazo {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.prazo:hover:not(:disabled) {
+  background: var(--control-bg-hover);
+  border-color: var(--line-strong);
+}
+
+.prazo:disabled {
+  cursor: default;
+}
+
+.prazo strong {
+  color: var(--text-strong);
+  font-weight: 800;
+}
+
+.prazo em {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font-style: normal;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.prazo[data-estado='ok'],
+.prazo[data-estado='cumprido'] {
+  border-style: solid;
+}
+
+.prazo[data-estado='perto'] {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--prazo-perto) 55%, transparent);
+  color: var(--prazo-perto);
+}
+
+.prazo[data-estado='perto'] em {
+  background: color-mix(in srgb, var(--prazo-perto) 18%, transparent);
+}
+
+.prazo[data-estado='vencido'] {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--prazo-vencido) 55%, transparent);
+  color: var(--prazo-vencido);
+}
+
+.prazo[data-estado='vencido'] em {
+  background: color-mix(in srgb, var(--prazo-vencido) 16%, transparent);
+}
+
+.prazo[data-estado='perto'] strong,
+.prazo[data-estado='vencido'] strong {
+  color: inherit;
 }

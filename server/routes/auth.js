@@ -56,6 +56,8 @@ function paraUsuario(linha) {
     cargoPermissoes: normalizar(linha.cargo_permissoes ?? []),
     // true = ainda esta com a senha padrao; a tela obriga a trocar no primeiro acesso
     senhaTemporaria: linha.senha_temporaria ?? false,
+    // cadastrado so pelo e-mail: falta a pessoa completar nome, nascimento e CPF
+    cadastroPendente: !linha.cpf,
   }
 }
 

@@ -3,27 +3,36 @@ import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import EtiquetasCard from './EtiquetasCard'
 import { SeletorMulti } from '@/components/Seletor/Seletor'
-import { CampoTexto } from '@/components/Campo/Campo'
+import { CampoArea, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
-import { fundoDoCard } from '@/domain/obras'
+import { coresDoCard } from '@/domain/obras'
 import './ModalRoteiro.css'
 
 /**
  * Card de setor dentro de uma etapa: cria e edita.
  *
- * Com mais de um cargo escolhido o card ganha um gradiente com a cor de
- * cada um — a previa embaixo mostra como vai ficar antes de salvar.
+ * O card fica com contorno e nome na cor (suave) do setor, sem fundo
+ * chapado. Com mais de um setor, um fio no alto leva as cores de todos —
+ * a previa embaixo mostra como vai ficar antes de salvar.
+ *
+ * Duas coisas dizem como o card se COMPORTA:
+ *   - "Pede resposta Sim ou Não?" — com Sim, marcar um check dele abre
+ *     a pergunta. Os dois contam como feito; o "não" aparece com um X
+ *     e a palavra "Não" do lado (ex.: Hospedagem — Não);
+ *   - "Informações do card" — o texto que aparece ao passar o mouse.
  *
  * O card vale DESTA obra em diante. Criar aqui coloca o card nesta
  * obra e nas proximas; excluir tira desta e das proximas. As obras
  * que ja passaram nao mudam — nem o que elas ja tinham marcado.
  */
 export default function ModalCard({ aberto, etapa, card = null, obraId = null, aoFechar }) {
-  const { cargos, corDoCargo, adicionarCard, atualizarCard, removerCard, rotuloEtapa, pode } =
+  const { cargos, corSuaveDoCargo, adicionarCard, atualizarCard, removerCard, rotuloEtapa, pode } =
     useDados()
 
   const [escolhidos, setEscolhidos] = useState([])
   const [titulo, setTitulo] = useState('')
+  const [simNao, setSimNao] = useState(false)
+  const [informacoes, setInformacoes] = useState('')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
@@ -39,6 +48,8 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
     if (!aberto) return
     setEscolhidos(card?.cargos ?? [])
     setTitulo(card?.titulo ?? '')
+    setSimNao(Boolean(card?.simNao))
+    setInformacoes(card?.informacoes ?? '')
     setErro('')
     setConfirmando(false)
   }, [aberto, card])
@@ -57,6 +68,8 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
       const mudouSetores = (card?.cargos ?? []).join('|') !== escolhidos.join('|')
       const campos = {
         titulo: titulo.trim(),
+        simNao,
+        informacoes: informacoes.trim(),
         obraId,
         ...(!editando || mudouSetores ? { cargos: escolhidos } : {}),
       }
@@ -83,7 +96,7 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
     }
   }
 
-  const previa = { cargos: escolhidos, titulo }
+  const coresPrevia = coresDoCard({ cargos: escolhidos }, corSuaveDoCargo)
 
   return (
     <Modal
@@ -120,12 +133,62 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
           onChange={(e) => setTitulo(e.target.value)}
         />
 
+        {/* Como o card se comporta ao marcar um check. "Sim" vira
+            pergunta: a pessoa responde, e o "não" também fecha o check —
+            com um X e a palavra "Não" do lado. */}
+        <div className="formrot__escolha">
+          <span className="formrot__rotulo formrot__rotulo--solto">
+            Obrigatório responder Sim ou Não?
+          </span>
+          <div className="formrot__opcoes" role="radiogroup" aria-label="O card pede resposta Sim ou Não">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!simNao}
+              className={`formrot__opcao ${!simNao ? 'is-atual' : ''}`.trim()}
+              onClick={() => setSimNao(false)}
+            >
+              Não — check comum
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={simNao}
+              className={`formrot__opcao ${simNao ? 'is-atual' : ''}`.trim()}
+              onClick={() => setSimNao(true)}
+            >
+              Sim — pergunta
+            </button>
+          </div>
+          <p className="formrot__dica formrot__dica--colada">
+            {simNao
+              ? 'Ao marcar um check deste card, abre a pergunta: Sim marca com ✓; Não também marca, mas com um X e "Não" do lado (ex.: Hospedagem — Não).'
+              : 'Marcar o check é só marcar: feito ou não feito.'}
+          </p>
+        </div>
+
+        <CampoArea
+          rotulo="Informações do card (opcional)"
+          largo
+          linhas={2}
+          maxLength={600}
+          placeholder="O que este card faz? Aparece ao passar o mouse sobre ele."
+          value={informacoes}
+          onChange={(e) => setInformacoes(e.target.value)}
+        />
+
         {escolhidos.length > 0 && (
           <div className="formrot__previa">
             <span className="formrot__previanome">Como vai ficar</span>
+            {/* o mesmo desenho do card na obra: contorno e nome na cor
+                suave do setor, e o fio de cores quando ha mais de um */}
             <span
               className="formrot__amostra"
-              style={{ background: fundoDoCard(previa, corDoCargo) }}
+              style={{
+                '--amostra-cor': coresPrevia[0],
+                '--amostra-fio':
+                  coresPrevia.length > 1 ? `linear-gradient(90deg, ${coresPrevia.join(', ')})` : 'none',
+              }}
             >
               {titulo.trim() ||
                 escolhidos.map((c) => cargos.find((x) => x.chave === c)?.nome ?? c).join(' + ')}

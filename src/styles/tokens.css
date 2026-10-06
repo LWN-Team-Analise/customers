@@ -261,6 +261,25 @@
 
   /* gradiente pedido para o botao de obra emergencia */
   --btn-emergencia: linear-gradient(120deg, #ff0000 0%, #ff741f 72%);
+
+  /* O card da obra no QUADRO: tinta suave e transparente, com o texto
+     na cor normal do tema. Verde = prazo ok, azul = emergencia, amarelo
+     = atraso (ou prazo perto e longe de terminar). O -acento pinta o
+     fio da esquerda e o selo do motivo. */
+  --quadro-ok-bg: rgba(46, 160, 92, 0.15);
+  --quadro-ok-borda: rgba(46, 160, 92, 0.42);
+  --quadro-ok-acento: #2a8a52;
+  --quadro-emerg-bg: rgba(52, 120, 228, 0.14);
+  --quadro-emerg-borda: rgba(52, 120, 228, 0.42);
+  --quadro-emerg-acento: #2f63c4;
+  --quadro-atraso-bg: rgba(236, 182, 10, 0.2);
+  --quadro-atraso-borda: rgba(204, 152, 0, 0.55);
+  --quadro-atraso-acento: #9a6f00;
+
+  /* prazos dentro da obra e a resposta 'Nao' de um check de pergunta */
+  --prazo-vencido: #b3261e;
+  --prazo-perto: #a26f00;
+  --resposta-nao: #5a6b88;
 }
 
 :root[data-theme='dark'] {
@@ -304,6 +323,20 @@
   --etapa-atual: #6f9df5;
   --etapa-travada: rgba(255, 255, 255, 0.28);
   --btn-emergencia: linear-gradient(120deg, #ff0000 0%, #ff741f 72%);
+
+  --quadro-ok-bg: rgba(79, 201, 138, 0.13);
+  --quadro-ok-borda: rgba(79, 201, 138, 0.38);
+  --quadro-ok-acento: #6fdca3;
+  --quadro-emerg-bg: rgba(111, 157, 245, 0.14);
+  --quadro-emerg-borda: rgba(111, 157, 245, 0.42);
+  --quadro-emerg-acento: #8fb3ff;
+  --quadro-atraso-bg: rgba(250, 204, 21, 0.14);
+  --quadro-atraso-borda: rgba(250, 204, 21, 0.45);
+  --quadro-atraso-acento: #f5d04a;
+
+  --prazo-vencido: #ff8a80;
+  --prazo-perto: #f5c542;
+  --resposta-nao: #a3b3cf;
 }
 
 /* =========================================================

@@ -17,7 +17,7 @@ import {
 } from '@/components/CutoutCard/CutoutCard'
 import { useDados } from '@/context/DadosContext'
 import Estrelas from '@/components/Estrelas/Estrelas'
-import { dataBR, dataHora } from '@/utils/formato'
+import { dataBR, dataHora, formatarCEP } from '@/utils/formato'
 import useCorDaLogo from '@/hooks/useCorDaLogo'
 import Confirma from '@/components/Confirma/Confirma'
 import ModalCliente from './ModalCliente'
@@ -520,7 +520,7 @@ function CardCliente({ cliente, numeros, nota, setor, podeMexer, aoEditar, aoApa
             </div>
             <div>
               <dt>CEP</dt>
-              <dd>{cliente.cep || '—'}</dd>
+              <dd>{cliente.cep ? formatarCEP(cliente.cep) : '—'}</dd>
             </div>
             <div>
               <dt>Setor</dt>
