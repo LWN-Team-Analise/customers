@@ -4,7 +4,7 @@ import Button from '@/components/Button/Button'
 import { SeletorMulti } from '@/components/Seletor/Seletor'
 import { CampoArea, CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
-import { checkDoSistema } from '@/domain/obras'
+import { CHECK_GASES, checkDoSistema } from '@/domain/obras'
 import './ModalRoteiro.css'
 
 /**
@@ -37,7 +37,6 @@ import './ModalRoteiro.css'
 export default function ModalCheck({
   aberto,
   card,
-  nomeCard,
   check = null,
   obraId = null,
   /* o prazo que este check ja tem nesta obra ('AAAA-MM-DD' ou null) */
@@ -45,6 +44,7 @@ export default function ModalCheck({
   aoFechar,
 }) {
   const {
+    obras,
     cargos,
     adicionarCheck,
     atualizarCheck,
@@ -68,6 +68,9 @@ export default function ModalCheck({
   const doCard = (card?.cargos ?? []).map(nomeDoCargo).join(' e ')
   /* o prazo e por obra: fora de uma obra nao ha onde gravar */
   const podePrazo = Boolean(obraId) && pode('definir_prazos')
+  /* check ja marcado em alguma obra nao muda para tras: a edicao vira
+     versao nova, so para as obras criadas daqui em diante */
+  const marcadoEm = editando ? obras.filter((o) => o.checks?.[check.id]).length : 0
 
   useEffect(() => {
     if (!aberto) return
@@ -131,14 +134,15 @@ export default function ModalCheck({
       aberto={aberto}
       aoFechar={aoFechar}
       titulo={editando ? 'Editar check' : 'Novo check'}
-      subtitulo={`Card ${nomeCard ?? ''}. Vale desta obra em diante.`}
       largura={500}
     >
       <form className="formrot" onSubmit={salvar} noValidate>
         {doSistema && (
           <p className="formrot__sistema" role="note">
-            Check do sistema: ele abre o fluxo dos ensaios. O nome fica, e ele não pode ser
-            excluído nem virar pergunta.
+            {check?.tipo === CHECK_GASES
+              ? 'Check do sistema: obrigatório na obra que tiver ensaio de GASES. '
+              : 'Check do sistema: ele abre o fluxo dos ensaios. '}
+            O nome fica, e ele não pode ser excluído nem virar pergunta.
           </p>
         )}
 
@@ -199,6 +203,13 @@ export default function ModalCheck({
           value={informacoes}
           onChange={(e) => setInformacoes(e.target.value)}
         />
+
+        {marcadoEm > 0 && (
+          <p className="formrot__dica">
+            Já marcado em {marcadoEm} obra{marcadoEm > 1 ? 's' : ''}: a mudança vale só para as obras
+            criadas a partir de agora.
+          </p>
+        )}
 
         {erro && (
           <p className="formrot__erro" role="alert">

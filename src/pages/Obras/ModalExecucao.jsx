@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import { useDados } from '@/context/DadosContext'
-import { diasAte, urgenciaDoPrazo } from '@/domain/obras'
+import { diasAte } from '@/domain/obras'
 import { dataBR, hojeISO } from '@/utils/formato'
 import './ModalEnsaios.css'
 
@@ -23,12 +23,11 @@ const diaDaSemana = (iso) => {
   return SEMANA[new Date(Date.UTC(a, m - 1, d)).getUTCDay()]
 }
 
-/** O selo do prazo da execucao, do verde ao vermelho. */
-function textoDaUrgencia(tom, restam) {
-  if (tom === 'vencido') return `atrasada há ${-restam} dia${restam < -1 ? 's' : ''}`
-  if (tom === 'vermelho') return restam === 0 ? 'vence hoje' : 'vence amanhã'
-  if (tom === 'laranja') return `faltam ${restam} dias`
-  if (tom === 'atraso') return `faltam ${restam} dias`
+/** Quanto falta para o prazo da execucao — so informa: a cor do card vem do prazo final. */
+function textoDoPrazo(restam) {
+  if (restam < 0) return `atrasada há ${-restam} dia${restam < -1 ? 's' : ''}`
+  if (restam === 0) return 'vence hoje'
+  if (restam === 1) return 'vence amanhã'
   return `faltam ${restam} dias`
 }
 
@@ -151,19 +150,17 @@ export default function ModalExecucao({
   }
 
   const restam = prazo ? diasAte(prazo, hoje) : null
-  const tomPrazo = prazo ? urgenciaDoPrazo(inicio, prazo, hoje) : null
 
   return (
     <Modal
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Execução dos ensaios"
-      subtitulo="O percentual de cada ensaio, dia a dia, dentro do período de execução."
       largura={760}
     >
       <div className="execucao">
         {/* ---- o periodo e o prazo da execucao ---- */}
-        <div className="execucao__periodo" data-tom={semPrazo ? 'vencido' : tomPrazo}>
+        <div className="execucao__periodo" data-tom={semPrazo ? 'vencido' : undefined}>
           <span className="execucao__rotulo">Período de execução</span>
           {semPrazo ? (
             <strong>Sem prazo da execução</strong>
@@ -172,7 +169,7 @@ export default function ModalExecucao({
               {dataBR(inicio)} → {dataBR(prazo)}
             </strong>
           )}
-          {!semPrazo && <em className="execucao__selo">{textoDaUrgencia(tomPrazo, restam)}</em>}
+          {!semPrazo && <em className="execucao__selo">{textoDoPrazo(restam)}</em>}
           {podePeriodo && (
             <button type="button" className="execucao__periodobotao" onClick={aoDefinirPeriodo}>
               {semPrazo ? 'Definir período' : 'Alterar período'}
@@ -300,9 +297,6 @@ export default function ModalExecucao({
 
                 {podeEditar && diaValido && (
                   <div className="execucao__salvar">
-                    <span className="formrot__dica formrot__dica--colada">
-                      Quanto cada ensaio estava feito em {dataBR(dia)}. Os outros dias não mudam.
-                    </span>
                     <Button
                       type="button"
                       variant="ghost"

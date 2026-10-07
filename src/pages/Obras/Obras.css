@@ -266,6 +266,21 @@
   --acao-fg: var(--quadro-emerg-acento);
 }
 
+/* "Editar" (o modelo da obra): neutro, do lado dos dois de criar */
+.acao--modelo {
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text-base);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.acao--modelo:hover {
+  filter: none;
+  background: var(--control-bg-hover);
+  border-color: var(--line-strong);
+}
+
 .acao--obra-padrao:hover,
 .acao--obra-emergencia:hover {
   filter: none;
@@ -326,8 +341,8 @@
   min-width: 0;
 }
 
-/* o nome (ou o papel) da etapa, na linha de baixo do rotulo:
-   "1ª Etapa" em cima, "Planejamento técnico" embaixo */
+/* o nome escrito da etapa, na linha de baixo do rotulo — so quando
+   acrescenta: "1° Etapa" no roteiro nao repete o "1ª Etapa" */
 .coluna__subtitulo {
   order: 10;
   flex: 1 0 100%;

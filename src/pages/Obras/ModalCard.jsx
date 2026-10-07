@@ -98,9 +98,7 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
       aberto={aberto}
       aoFechar={aoFechar}
       titulo={editando ? 'Editar card' : 'Novo card'}
-      subtitulo={`${rotuloEtapa(etapa?.numero ?? 1)} — ${
-        etapa?.nome ?? ''
-      }. Vale desta obra em diante.`}
+      subtitulo={rotuloEtapa(etapa?.numero ?? 1)}
       largura={520}
     >
       <form className="formrot" onSubmit={salvar} noValidate>

@@ -137,6 +137,23 @@
   overflow-wrap: anywhere;
 }
 
+/* HVAC / GASES no planejamento — as mesmas cores do catalogo */
+.ensaio__classe {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--quadro-emerg-bg);
+  color: var(--text-strong);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.ensaio__classe[data-classe='gases'] {
+  background: color-mix(in srgb, var(--prazo-perto) 20%, transparent);
+  color: var(--prazo-perto);
+}
+
 .ensaio__selo {
   flex-shrink: 0;
   padding: 1px 7px;
@@ -320,9 +337,91 @@
    linha: o campo encolhia ate sumir e nao dava para digitar o ensaio */
 .catalogo__novo {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
   gap: 10px;
+}
+
+.catalogo__classe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---- HVAC | GASES ---- */
+
+.classe {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--control-bg);
+}
+
+.classe__opcao {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.catalogo__classe .classe__opcao {
+  padding: 9px 12px;
+}
+
+.classe__opcao:hover:not(:disabled) {
+  color: var(--text-strong);
+}
+
+.classe__opcao[aria-checked='true'][data-classe='hvac'] {
+  background: var(--quadro-emerg-bg);
+  color: var(--text-strong);
+  box-shadow: inset 0 0 0 1px var(--quadro-emerg-borda);
+}
+
+.classe__opcao[aria-checked='true'][data-classe='gases'] {
+  background: color-mix(in srgb, var(--prazo-perto) 20%, transparent);
+  color: var(--prazo-perto);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--prazo-perto) 45%, transparent);
+}
+
+.classe__opcao:disabled {
+  cursor: default;
+}
+
+/* so leitura: um selo */
+.classe--selo {
+  padding: 2px 9px;
+  border: 0;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.classe--selo[data-classe='hvac'] {
+  background: var(--quadro-emerg-bg);
+  color: var(--text-strong);
+}
+
+.classe--selo[data-classe='gases'] {
+  background: color-mix(in srgb, var(--prazo-perto) 20%, transparent);
+  color: var(--prazo-perto);
+}
+
+.classe--selo[data-classe='nenhuma'] {
+  background: transparent;
+  color: var(--text-faint);
+  font-weight: 600;
+  text-transform: none;
 }
 
 .catalogo__novo .btn {
@@ -349,7 +448,8 @@
   color: var(--text-faint);
 }
 
-/* a faixa do periodo: a cor e a mesma escala do card no quadro */
+/* a faixa do periodo: so informa, no tom calmo — a cor do card vem do
+   prazo final. Vermelho so quando falta o prazo da execucao */
 .execucao__periodo {
   display: flex;
   align-items: center;
@@ -376,19 +476,6 @@
   font-weight: 800;
 }
 
-.execucao__periodo[data-tom='atraso'] {
-  --tom-bg: var(--quadro-atraso-bg);
-  --tom-borda: var(--quadro-atraso-borda);
-  --tom-acento: var(--quadro-atraso-acento);
-}
-
-.execucao__periodo[data-tom='laranja'] {
-  --tom-bg: var(--quadro-laranja-bg);
-  --tom-borda: var(--quadro-laranja-borda);
-  --tom-acento: var(--quadro-laranja-acento);
-}
-
-.execucao__periodo[data-tom='vermelho'],
 .execucao__periodo[data-tom='vencido'] {
   --tom-bg: var(--quadro-vermelho-bg);
   --tom-borda: var(--quadro-vermelho-borda);
@@ -622,7 +709,7 @@
 .execucao__salvar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
 }

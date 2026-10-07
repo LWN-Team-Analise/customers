@@ -3,7 +3,7 @@ import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import { CampoTexto } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
-import { DIAS_EMERGENCIA, diasAte, execucaoCurta } from '@/domain/obras'
+import { diasAte } from '@/domain/obras'
 import { dataBR } from '@/utils/formato'
 import './ModalRoteiro.css'
 
@@ -14,16 +14,15 @@ import './ModalRoteiro.css'
  *   Inicio da execucao — a entrada em campo. Opcional: sem ela, o
  *                        periodo comeca no inicio da obra;
  *   Prazo da execucao  — ate quando a execucao tem de fechar.
- *                        OBRIGATORIO: a etapa nao anda sem ele, e e dele
- *                        que sai a cor do card enquanto ela esta aberta.
+ *                        OBRIGATORIO: a etapa nao anda sem ele.
  *
  * O prazo final da OBRA e outro e nao muda aqui: a obra continua depois
  * da execucao (documentacao, entrega). O prazo da execucao nao passa
- * dele.
+ * dele — e nao mexe na cor do card nem no tipo da obra: execucao curta
+ * nao transforma obra padrao em emergencia.
  *
  * Quem define e quem tem "Pode definir prazo para checks"
- * (definir_prazos). Execucao menor que 3 dias transforma a obra padrao
- * em Obra Emergencial — a tela avisa antes de salvar.
+ * (definir_prazos).
  */
 export default function ModalPeriodo({ aberto, obra, aoFechar }) {
   const { definirExecucao } = useDados()
@@ -42,7 +41,6 @@ export default function ModalPeriodo({ aberto, obra, aoFechar }) {
   const comeco = inicio || obra?.dataInicio || ''
   const prazoObra = obra?.dataConclusao ?? ''
   const dias = comeco && prazo ? diasAte(prazo, comeco) : null
-  const viraEmergencia = obra?.tipo === 'padrao' && execucaoCurta(comeco, prazo)
 
   const salvar = async (evento) => {
     evento.preventDefault()
@@ -105,13 +103,6 @@ export default function ModalPeriodo({ aberto, obra, aoFechar }) {
         {dias !== null && dias >= 0 && (
           <p className="formrot__dica formrot__dica--colada">
             {dias === 0 ? 'Execução no mesmo dia.' : `${dias} dia${dias > 1 ? 's' : ''} de execução.`}
-          </p>
-        )}
-
-        {viraEmergencia && (
-          <p className="formrot__emergencia" role="status">
-            Execução em menos de {DIAS_EMERGENCIA} dias: ao salvar, esta obra passa a ser uma
-            Obra Emergencial.
           </p>
         )}
 

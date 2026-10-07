@@ -171,6 +171,13 @@ export function roteiroVigente(roteiro, nascimento) {
 const feito = (marcados, checkId) => Boolean(marcados?.[checkId])
 
 /**
+ * Os checks que a obra COBRA no card. O check opcional (o "Material de
+ * gases" na obra sem ensaio de gases — ver aplicarRegraDosGases) fica
+ * de fora: pode ser marcado, mas nao segura card, etapa nem conclusao.
+ */
+export const checksExigidos = (card) => (card?.checks ?? []).filter((c) => !c.opcional)
+
+/**
  * Card sem nenhum check nao entra na conta de nada.
  *
  * E o estado de quem acabou de criar o card e ainda nao escreveu os
@@ -178,12 +185,12 @@ const feito = (marcados, checkId) => Boolean(marcados?.[checkId])
  * TODAS as obras ate alguem lembrar de preencher — e ninguem ia
  * descobrir o porque.
  */
-const cardVale = (card) => (card?.checks?.length ?? 0) > 0
+const cardVale = (card) => checksExigidos(card).length > 0
 
-/** Card fechado = todos os checks dele marcados. */
+/** Card fechado = todos os checks cobrados dele marcados. */
 export function cardConcluido(card, marcados) {
   if (!cardVale(card)) return false
-  return card.checks.every((c) => feito(marcados, c.id))
+  return checksExigidos(card).every((c) => feito(marcados, c.id))
 }
 
 /** Etapa fecha quando todos os cards que valem fecharam. */
@@ -275,7 +282,7 @@ export function prontaParaConcluir(roteiro, obra) {
 
 /** Percentual concluido da obra (0–100), usado nas barras de progresso. */
 export function progressoDaObra(roteiro, marcados) {
-  const todos = (roteiro ?? []).flatMap((e) => e.cards.flatMap((c) => c.checks))
+  const todos = (roteiro ?? []).flatMap((e) => e.cards.flatMap(checksExigidos))
   if (todos.length === 0) return 0
   return Math.round((todos.filter((c) => feito(marcados, c.id)).length / todos.length) * 100)
 }
@@ -303,9 +310,8 @@ export function estadoDaEtapa(roteiro, obra, numero) {
 
    As tres primeiras etapas de fabrica tem um papel fixo (vem do
    banco, etapa.papel — ver db/atualizacao-14.sql.txt). E so para o
-   sistema saber onde esta cada coisa; na tela aparece o NOME da
-   etapa (1a Comercial, 2a Planejamento, 3a Execucao, 4a Entrega,
-   5a Encerramento):
+   sistema saber onde esta cada coisa; na tela ele nao aparece — a
+   etapa e "1ª Etapa", "2ª Etapa"...:
 
      planejamento   1a — mora ali o "Planejamento de ensaios";
      intermediaria  2a;
@@ -321,13 +327,55 @@ export function etapaDeExecucao(roteiro) {
   return (roteiro ?? []).find((e) => e.papel === 'execucao') ?? null
 }
 
-/** Os checks do sistema: o que abre a escolha e o que abre a execucao. */
+/** Os checks do sistema: o que abre a escolha, o que abre a execucao e o de gases. */
 export const CHECK_PLANEJAMENTO = 'planejamento_ensaios'
 export const CHECK_EXECUCAO = 'execucao_ensaios'
+export const CHECK_GASES = 'material_gases'
 
-/** true para os dois checks do sistema (nao se excluem nem se renomeiam). */
+/** true para os checks do sistema (nao se excluem nem se renomeiam). */
 export function checkDoSistema(check) {
   return Boolean(check?.tipo) && check.tipo !== 'comum'
+}
+
+/* ------------------------------------------------------------
+   O check "Material de gases" (2a etapa, Qualidade)
+
+   Cada ensaio do catalogo e HVAC ou GASES. O check de gases (tipo
+   'material_gases', atualizacao 17) so e OBRIGATORIO na obra que
+   tem algum ensaio de GASES planejado; nas outras ele fica opcional.
+   O servidor faz a mesma conta na conclusao da obra.
+   ------------------------------------------------------------ */
+
+/** Os ensaios de GASES planejados na obra. */
+export function ensaiosDeGases(obra, ensaioPorId) {
+  return (obra?.ensaios ?? [])
+    .map((id) => ensaioPorId(id))
+    .filter((e) => e?.classificacao === 'gases')
+}
+
+/**
+ * O roteiro da obra com o check de gases resolvido:
+ *   - sem ensaio de gases: `opcional: true` (fica fora da conta);
+ *   - com ensaio de gases: `exigidoPor` traz os nomes deles, que a
+ *     tela mostra ao passar o mouse.
+ */
+export function aplicarRegraDosGases(roteiro, gases) {
+  const tem = (roteiro ?? []).some((e) =>
+    (e.cards ?? []).some((c) => (c.checks ?? []).some((k) => k.tipo === CHECK_GASES)),
+  )
+  if (!tem) return roteiro
+  const nomes = (gases ?? []).map((e) => e.nome)
+  return roteiro.map((etapa) => ({
+    ...etapa,
+    cards: etapa.cards.map((card) => ({
+      ...card,
+      checks: card.checks.map((check) =>
+        check.tipo === CHECK_GASES
+          ? { ...check, opcional: nomes.length === 0, exigidoPor: nomes }
+          : check,
+      ),
+    })),
+  }))
 }
 
 /* ------------------------------------------------------------
@@ -335,32 +383,16 @@ export function checkDoSistema(check) {
 
      dataInicio     -> dataConclusao   a OBRA inteira — inclusive a
                                        documentacao e a entrega, que
-                                       vem depois da execucao;
-     execucaoInicio -> execucaoPrazo   so a ETAPA DE EXECUCAO (3a).
+                                       vem depois da execucao. E so
+                                       dele que sai a cor do card;
+     execucaoInicio -> execucaoPrazo   so a ETAPA DE EXECUCAO (3a),
+                                       definido dentro da obra. Nao
+                                       mexe na cor nem no tipo.
 
-   EMERGENCIA = execucao em menos de 3 dias
-
-   Com o periodo de execucao definido, e ele que conta. Sem ele,
-   conta a obra inteira: se a obra toda cabe em menos de 3 dias, a
-   execucao tambem cabe. Menos de DIAS_EMERGENCIA dias e Obra
-   Emergencial — o servidor aplica a mesma conta ao gravar
-   (server/routes/dados.js).
+   O TIPO e o do cadastro: so e Obra Emergencial a que foi aberta como
+   emergencia. Execucao curta (hoje, amanha) nao transforma obra padrao
+   em emergencia.
    ------------------------------------------------------------ */
-
-export const DIAS_EMERGENCIA = 3
-
-/** O periodo cabe em menos de 3 dias? */
-export function execucaoCurta(inicio, fim) {
-  if (!inicio || !fim) return false
-  return diasAte(fim, inicio) < DIAS_EMERGENCIA
-}
-
-/** O periodo que decide a emergencia: o da execucao, se definido; senao, o da obra. */
-export function periodoDaRegra({ dataInicio, dataConclusao, execucaoInicio, execucaoPrazo }) {
-  return execucaoPrazo
-    ? [execucaoInicio || dataInicio, execucaoPrazo]
-    : [dataInicio, dataConclusao]
-}
 
 /* ------------------------------------------------------------
    A execucao dos ENSAIOS
@@ -399,34 +431,29 @@ export function progressoExecucao(obra, nomeDoEnsaio = (id) => id) {
 
    O tom do card, do mais calmo ao mais urgente:
 
-     verde    ('ok')          obra padrao com os prazos em dia;
-     azul     ('emergencia')  obra de emergencia com os prazos em dia;
-     amarelo  ('atraso')      um check ou uma etapa passou do prazo —
-                              ou esta para vencer longe de terminar;
-     laranja  ('laranja')     prazo da execucao muito perto;
-     vermelho ('vermelho')    prazo da execucao amanha ou hoje;
-     vencido  ('vencido')     um dos dois prazos grandes ja passou —
-                              fica marcado como atrasado.
+     verde    ('ok')          obra padrao em dia — e toda obra SEM prazo
+                              final, ate ele ser definido;
+     azul     ('emergencia')  obra de emergencia em dia;
+     amarelo  ('atraso')      o prazo final passou da metade do periodo
+                              (ou faltam 3 dias), ou um check passou do
+                              prazo dele — ou esta a 3 dias de vencer;
+     laranja  ('laranja')     prazo final muito perto (2 dias, ou um
+                              quarto do periodo);
+     vermelho ('vermelho')    prazo final amanha ou hoje;
+     vencido  ('vencido')     o prazo final ja passou — fica marcado
+                              como atrasado.
 
    Vale o MAIS urgente de todos os motivos.
 
-   Os dois prazos grandes pesam em momentos diferentes:
+   A escala sai do PRAZO FINAL DA OBRA (dataInicio -> dataConclusao),
+   em qualquer etapa, enquanto sobrar check aberto (urgenciaDoPrazo:
+   o vermelho chega 1 dia antes). O prazo DA EXECUCAO nao entra: com a
+   execucao hoje ou amanha e o prazo final longe, o card continua verde.
 
-     PRAZO DA EXECUCAO (execucaoPrazo) — so enquanto a 3a etapa esta
-       ABERTA. Nela, a cor anda do verde ao vermelho conforme o tempo
-       que resta do periodo de execucao (urgenciaDoPrazo), e o vermelho
-       chega 1 dia antes. Fechada a execucao, ele sai da conta: o card
-       volta a cor de sempre.
-     PRAZO FINAL DA OBRA (dataConclusao) — a obra inteira, em qualquer
-       etapa, enquanto sobrar check aberto: vencido e "Atrasada";
-       faltando AVISO_ANTES_DIAS dias com a obra abaixo de
-       PERTO_DE_TERMINAR por cento, amarelo.
+   Na EMERGENCIA o card fica azul ate o prazo final vencer.
 
-   Na EMERGENCIA o periodo ja e menor que 3 dias, entao a escala nao
-   diz nada: ela fica azul ate um prazo vencer.
-
-   Check ou etapa ja feitos nao atrasam nada, mesmo com o prazo no
-   passado: o prazo serviu.
+   Check ja feito nao atrasa nada, mesmo com o prazo no passado: o
+   prazo serviu.
    ------------------------------------------------------------ */
 
 export const AVISO_ANTES_DIAS = 3
@@ -444,11 +471,9 @@ export function diasAte(data, hoje) {
   return Math.round(emDias(data) - emDias(hoje))
 }
 
-const pct = (feitos, total) => (total === 0 ? 0 : Math.round((feitos / total) * 100))
-
 /**
- * O relogio de um prazo com periodo (o da execucao): 'ok' | 'atraso'
- * (amarelo) | 'laranja' | 'vermelho' | 'vencido'.
+ * O relogio do prazo final da obra: 'ok' | 'atraso' (amarelo) |
+ * 'laranja' | 'vermelho' | 'vencido'.
  *
  * Mede o que RESTA do periodo (do inicio ao prazo):
  *   - mais da metade e mais de 3 dias ........ verde;
@@ -470,26 +495,11 @@ export function urgenciaDoPrazo(inicio, prazo, hoje) {
 }
 
 /**
- * A etapa de execucao ainda pesa na cor desta obra?
- *
- * So enquanto ela esta ABERTA — e, na obra padrao, depois de a obra
- * chegar nela (antes disso a execucao ainda nem comecou). Na emergencia
- * as etapas abrem todas juntas, entao vale desde o comeco.
- */
-export function execucaoEmAndamento(roteiro, obra) {
-  const execucao = etapaDeExecucao(roteiro)
-  if (!execucao || !obra) return false
-  const marcados = obra.checks ?? {}
-  if (etapaConcluida(execucao, marcados)) return false
-  return obra.tipo === 'emergencia' || etapaAtual(roteiro, marcados) >= execucao.numero
-}
-
-/**
  * A situacao da obra no quadro.
  *
  * Devolve { tom, motivos }. `tom` e um dos de PESO_DO_TOM e cada motivo
- *   { tom, venceu, alvo: 'obra' | 'execucao' | 'etapa' | 'check',
- *     prazo, dias, numero?, titulo?, setores: [chaves] }
+ *   { tom, venceu, alvo: 'obra' | 'check', prazo, dias, numero?,
+ *     titulo?, setores: [chaves] }
  * — do mais urgente para o menos. Os `setores` sao quem ainda deve
  * naquele prazo: e o "atraso por causa de um setor" que a tela escreve.
  */
@@ -499,77 +509,37 @@ export function situacaoDaObra(roteiro, obra, hoje) {
 
   const marcados = obra.checks ?? {}
   const prazos = obra.prazos ?? {}
-  const emergencia = obra.tipo === 'emergencia'
   const motivos = []
 
-  /* prazo de etapa ou de check: venceu, ou esta para vencer longe de
-     terminar — os dois deixam o card amarelo */
-  const avaliar = (prazo, andamento, extra) => {
-    if (!prazo) return
-    const dias = diasAte(prazo, hoje)
-    if (dias < 0) motivos.push({ tom: 'atraso', venceu: true, prazo, dias, ...extra })
-    else if (dias <= AVISO_ANTES_DIAS && andamento < PERTO_DE_TERMINAR) {
-      motivos.push({ tom: 'atraso', venceu: false, prazo, dias, ...extra })
-    }
-  }
-
-  /* o prazo FINAL DA OBRA: a obra inteira, enquanto sobrar check aberto */
+  /* o PRAZO FINAL DA OBRA: a escala inteira, enquanto sobrar check aberto */
   if (obra.dataConclusao && !obraConcluida(roteiro, marcados)) {
     const prazo = obra.dataConclusao
     const dias = diasAte(prazo, hoje)
-    let tom = null
-    if (dias < 0) tom = 'vencido'
-    else if (
-      !emergencia &&
-      dias <= AVISO_ANTES_DIAS &&
-      progressoDaObra(roteiro, marcados) < PERTO_DE_TERMINAR
-    ) {
-      tom = 'atraso'
-    }
-    if (tom) motivos.push({ tom, venceu: dias < 0, alvo: 'obra', prazo, dias, setores: [] })
-  }
-
-  /* o prazo DA EXECUCAO: so enquanto a 3a etapa esta aberta */
-  if (obra.execucaoPrazo && execucaoEmAndamento(roteiro, obra)) {
-    const prazo = obra.execucaoPrazo
-    const dias = diasAte(prazo, hoje)
-    const execucao = etapaDeExecucao(roteiro)
-    const tom = emergencia
-      ? dias < 0
-        ? 'vencido'
-        : null
-      : urgenciaDoPrazo(obra.execucaoInicio ?? obra.dataInicio, prazo, hoje)
+    const tom =
+      obra.tipo === 'emergencia'
+        ? dias < 0
+          ? 'vencido'
+          : null
+        : urgenciaDoPrazo(obra.dataInicio, prazo, hoje)
     if (tom && tom !== 'ok') {
-      motivos.push({
-        tom,
-        venceu: dias < 0,
-        alvo: 'execucao',
-        prazo,
-        dias,
-        numero: execucao.numero,
-        setores: setoresPendentes(roteiro, marcados, execucao.numero),
-      })
+      motivos.push({ tom, venceu: dias < 0, alvo: 'obra', prazo, dias, setores: [] })
     }
   }
 
+  /* o prazo de um CHECK: venceu, ou vence em ate 3 dias — amarelo */
   ;(roteiro ?? []).forEach((etapa) => {
-    const checks = (etapa.cards ?? []).flatMap((c) => c.checks ?? [])
-
-    const prazoEtapa = prazos.etapas?.[etapa.id]
-    if (prazoEtapa && !etapaConcluida(etapa, marcados)) {
-      avaliar(prazoEtapa, pct(checks.filter((k) => feito(marcados, k.id)).length, checks.length), {
-        alvo: 'etapa',
-        numero: etapa.numero,
-        setores: setoresPendentes(roteiro, marcados, etapa.numero),
-      })
-    }
-
     ;(etapa.cards ?? []).forEach((card) => {
       ;(card.checks ?? []).forEach((check) => {
-        const prazoCheck = prazos.checks?.[check.id]
-        if (!prazoCheck || feito(marcados, check.id)) return
-        avaliar(prazoCheck, 0, {
+        const prazo = prazos.checks?.[check.id]
+        if (!prazo || feito(marcados, check.id)) return
+        const dias = diasAte(prazo, hoje)
+        if (dias > AVISO_ANTES_DIAS) return
+        motivos.push({
+          tom: 'atraso',
+          venceu: dias < 0,
           alvo: 'check',
+          prazo,
+          dias,
           numero: etapa.numero,
           titulo: check.titulo,
           setores: cargosDoCheck(check, card),
@@ -768,7 +738,7 @@ export function avisoDeEtapa(roteiro, marcados, checkId, cargo) {
   if (!etapa) return null
 
   const meus = (etapa.cards ?? []).flatMap((card) =>
-    (card.checks ?? []).filter((k) => cargosDoCheck(k, card).includes(cargo)),
+    checksExigidos(card).filter((k) => cargosDoCheck(k, card).includes(cargo)),
   )
   if (meus.length === 0) return null
 
@@ -783,7 +753,7 @@ export function avisoDeEtapa(roteiro, marcados, checkId, cargo) {
      acabou de fechar, e listar a si mesmo seria o aviso se contradizer */
   const pendentes = new Set()
   ;(etapa.cards ?? []).forEach((card) => {
-    ;(card.checks ?? []).forEach((k) => {
+    checksExigidos(card).forEach((k) => {
       if (depois[k.id]) return
       cargosDoCheck(k, card).forEach((c) => {
         if (c !== cargo) pendentes.add(c)

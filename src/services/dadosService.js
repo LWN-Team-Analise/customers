@@ -87,10 +87,7 @@ export async function carregarImagemDoCliente(id) {
 
 /* ---------------- Obras ---------------- */
 
-/**
- * Devolve { id, tipo }. O tipo pode voltar 'emergencia' mesmo pedindo
- * obra padrao: execucao em menos de 3 dias e emergencia por regra.
- */
+/** Devolve { id, tipo }: o tipo e o pedido (padrao ou emergencia). */
 export async function criarObra(campos) {
   const { id, tipo } = await post('/dados/obras', campos)
   return { id, tipo }

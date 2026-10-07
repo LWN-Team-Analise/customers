@@ -11,7 +11,7 @@
  * em diante": so as obras criadas dali para a frente sentem a mudanca.
  */
 
-import { del, get, patch, post } from './api'
+import { del, get, patch, post, put } from './api'
 
 /** Anexa o obraId na query, para os DELETE (que nao levam corpo). */
 const comObra = (caminho, obraId) =>
@@ -71,7 +71,20 @@ export async function criarCheck(cardId, campos) {
   return check
 }
 
+/**
+ * Devolve { ok, id, versionado, obras }. Check que alguma obra ja marcou
+ * nao muda para tras: vira versao nova (`id` novo, `versionado: true`),
+ * so para as obras criadas dali em diante.
+ */
 export const editarCheck = (id, campos) => patch(`/roteiro/checks/${id}`, campos)
+
+/**
+ * A fila inteira de um card, na ordem nova — pode trazer um check que
+ * estava em outro card (o arrastado para ca). Devolve
+ * { ok, checkIds, versionados: [{ de, para, titulo, obras }] }.
+ */
+export const ordenarChecks = (cardId, checkIds, obraId) =>
+  put(`/roteiro/cards/${cardId}/checks/ordem`, { checkIds, obraId })
 export const apagarCheck = (id, obraId) => del(comObra(`/roteiro/checks/${id}`, obraId))
 
 /* ---------------- Etiquetas do card ---------------- */
