@@ -349,7 +349,8 @@
   color: var(--text-faint);
 }
 
-/* a faixa do periodo: a cor e a mesma escala do card no quadro */
+/* a faixa do periodo: so informa, no tom calmo — a cor do card vem do
+   prazo final. Vermelho so quando falta o prazo da execucao */
 .execucao__periodo {
   display: flex;
   align-items: center;
@@ -376,19 +377,6 @@
   font-weight: 800;
 }
 
-.execucao__periodo[data-tom='atraso'] {
-  --tom-bg: var(--quadro-atraso-bg);
-  --tom-borda: var(--quadro-atraso-borda);
-  --tom-acento: var(--quadro-atraso-acento);
-}
-
-.execucao__periodo[data-tom='laranja'] {
-  --tom-bg: var(--quadro-laranja-bg);
-  --tom-borda: var(--quadro-laranja-borda);
-  --tom-acento: var(--quadro-laranja-acento);
-}
-
-.execucao__periodo[data-tom='vermelho'],
 .execucao__periodo[data-tom='vencido'] {
   --tom-bg: var(--quadro-vermelho-bg);
   --tom-borda: var(--quadro-vermelho-borda);
@@ -622,7 +610,7 @@
 .execucao__salvar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
 }

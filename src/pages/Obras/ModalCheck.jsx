@@ -37,7 +37,6 @@ import './ModalRoteiro.css'
 export default function ModalCheck({
   aberto,
   card,
-  nomeCard,
   check = null,
   obraId = null,
   /* o prazo que este check ja tem nesta obra ('AAAA-MM-DD' ou null) */
@@ -131,7 +130,6 @@ export default function ModalCheck({
       aberto={aberto}
       aoFechar={aoFechar}
       titulo={editando ? 'Editar check' : 'Novo check'}
-      subtitulo={`Card ${nomeCard ?? ''}. Vale desta obra em diante.`}
       largura={500}
     >
       <form className="formrot" onSubmit={salvar} noValidate>

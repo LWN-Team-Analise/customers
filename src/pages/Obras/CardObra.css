@@ -5,13 +5,13 @@
    (nada de branco sobre cor chapada). A cor inteira sai de --tom-*,
    escolhida pelo data-tom — que vem de situacaoDaObra:
 
-     ok          verde    obra padrao com os prazos em dia
-     emergencia  azul     obra de emergencia com os prazos em dia
-     atraso      amarelo  check/etapa vencido, ou um prazo chegando
-     laranja     laranja  prazo da execucao muito perto
-     vermelho    vermelho prazo da execucao amanha ou hoje
-     vencido     vermelho o prazo da execucao ou o final da obra ja
-                          passou (fio mais grosso e o selo "Atrasada")
+     ok          verde    obra padrao em dia (ou sem prazo final)
+     emergencia  azul     obra de emergencia em dia
+     atraso      amarelo  prazo final passou da metade, ou check vencido
+     laranja     laranja  prazo final muito perto
+     vermelho    vermelho prazo final amanha ou hoje
+     vencido     vermelho o prazo final ja passou (fio mais grosso e
+                          o selo "Atrasada")
 
    O -acento pinta o fio da esquerda, a linha do motivo e a barra da
    execucao. Os valores de cada tema estao em src/styles/tokens.css.

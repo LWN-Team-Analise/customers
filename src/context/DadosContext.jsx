@@ -403,7 +403,7 @@ export function DadosProvider({ children }) {
   /* ============================================================
      Execucao e ENSAIOS
 
-     O periodo de execucao (entrada em campo -> prazo final), o
+     O periodo de execucao (entrada em campo -> prazo da execucao), o
      Planejamento de ensaios (quais ensaios a obra vai fazer) e a
      execucao dia a dia (ensaio + dia + percentual). As regras
      moram no servidor; aqui so grava e recarrega.

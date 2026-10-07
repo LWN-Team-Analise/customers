@@ -194,15 +194,3 @@
     grid-template-columns: 1fr;
   }
 }
-
-/* "vai virar emergencia": no azul da emergencia, nao no vermelho de erro */
-.formrot__emergencia {
-  margin: 0;
-  padding: 10px 13px;
-  border: 1px solid var(--quadro-emerg-borda);
-  border-radius: var(--radius-sm);
-  background: var(--quadro-emerg-bg);
-  color: var(--text-strong);
-  font-size: 0.8rem;
-  line-height: 1.45;
-}

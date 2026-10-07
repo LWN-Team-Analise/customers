@@ -79,17 +79,3 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 15px;
 }
-
-/* "execucao em menos de 3 dias: vira emergencia" — no azul suave da
-   emergencia, que e o que a obra vai ser */
-.formobra__vira {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding: 10px 13px;
-  border: 1px solid var(--quadro-emerg-borda);
-  border-radius: var(--radius-sm);
-  background: var(--quadro-emerg-bg);
-  color: var(--text-strong);
-  font-size: 0.8rem;
-  line-height: 1.45;
-}

@@ -26,10 +26,9 @@ function quando(m) {
  *   "Atrasada há 2 dias — prazo final 04/10"
  *   "Prazo final vence amanhã"
  *   "Prazo de "Hospedagem" venceu em 03/10 — Administrativo"
- *   "Prazo da 2ª Etapa vence em 2 dias — Qualidade, Time Técnico"
- * Os setores no fim sao quem ainda deve naquele prazo.
+ * Os setores no fim sao quem ainda deve naquele check.
  */
-function textoDoMotivo(m, rotuloEtapa, nomeDoCargo, comSelo = false) {
+function textoDoMotivo(m, nomeDoCargo, comSelo = false) {
   if (m.alvo === 'obra') {
     if (m.dias < 0) {
       /* ao lado do selo "Atrasada" a palavra nao se repete */
@@ -38,18 +37,8 @@ function textoDoMotivo(m, rotuloEtapa, nomeDoCargo, comSelo = false) {
     }
     return `Prazo final ${quando(m)}`
   }
-  /* o prazo da EXECUCAO (so a 3a etapa, enquanto ela esta aberta) */
-  if (m.alvo === 'execucao') {
-    const quem = m.setores?.length ? ` — ${m.setores.map(nomeDoCargo).join(', ')}` : ''
-    if (m.dias < 0) {
-      const ha = `há ${-m.dias} dia${m.dias < -1 ? 's' : ''}`
-      return comSelo ? `Execução ${ha}${quem}` : `Execução atrasada ${ha}${quem}`
-    }
-    return `Prazo da execução ${quando(m)}${quem}`
-  }
-  const alvo = m.alvo === 'etapa' ? `Prazo da ${rotuloEtapa(m.numero)}` : `Prazo de "${m.titulo}"`
   const quem = m.setores?.length ? ` — ${m.setores.map(nomeDoCargo).join(', ')}` : ''
-  return `${alvo} ${quando(m)}${quem}`
+  return `Prazo de "${m.titulo}" ${quando(m)}${quem}`
 }
 
 /**
@@ -58,14 +47,15 @@ function textoDoMotivo(m, rotuloEtapa, nomeDoCargo, comSelo = false) {
  *
  * A COR conta como a obra esta (situacaoDaObra, em src/domain/obras.js):
  *
- *   verde     obra padrao com os prazos em dia;
- *   azul      obra de emergencia com os prazos em dia;
- *   amarelo   um check ou uma etapa passou do prazo — ou um prazo esta
- *             chegando longe de terminar;
- *   laranja   prazo da EXECUCAO muito perto (so com a 3a etapa aberta);
- *   vermelho  prazo da execucao amanha ou hoje — ou um prazo (o da
- *             execucao ou o final da obra) ja vencido, com o selo
+ *   verde     obra padrao em dia, ou ainda sem prazo final;
+ *   azul      obra de emergencia em dia;
+ *   amarelo   o prazo final passou da metade, ou um check passou do
+ *             prazo dele (ou vence em ate 3 dias);
+ *   laranja   prazo final muito perto;
+ *   vermelho  prazo final amanha ou hoje — ou ja vencido, com o selo
  *             "Atrasada".
+ *
+ * O prazo da EXECUCAO nao entra na cor: so o prazo final da obra.
  *
  * Quando a cor nao e a de sempre, uma linha diz o PORQUE (o motivo mais
  * urgente; os outros ficam na dica dele).
@@ -89,7 +79,6 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
     concluida,
     etiquetasDaObra,
     termoEtapa,
-    rotuloEtapa,
     nomeDoCargo,
     execucaoDaObra,
   } = useDados()
@@ -146,7 +135,7 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
       className="obracard"
       data-tom={tom}
       onClick={aoAbrir}
-      title={motivos.length > 1 ? motivos.map((m) => textoDoMotivo(m, rotuloEtapa, nomeDoCargo)).join('\n') : undefined}
+      title={motivos.length > 1 ? motivos.map((m) => textoDoMotivo(m, nomeDoCargo)).join('\n') : undefined}
     >
       <header className="obracard__topo">
         <Avatar nome={cliente?.nome} foto={cliente?.logo} tamanho={26} quadrado />
@@ -181,7 +170,7 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
       {motivos.length > 0 && (
         <p className="obracard__motivo">
           {tom === 'vencido' && <span className="obracard__atrasada">Atrasada</span>}
-          <span>{textoDoMotivo(motivos[0], rotuloEtapa, nomeDoCargo, tom === 'vencido')}</span>
+          <span>{textoDoMotivo(motivos[0], nomeDoCargo, tom === 'vencido')}</span>
           {motivos.length > 1 && <em>+{motivos.length - 1}</em>}
         </p>
       )}

@@ -1431,107 +1431,12 @@
   color: var(--prazo-vencido);
 }
 
-/* O prazo da etapa, logo abaixo do nome. Botao para quem pode definir;
-   so leitura para os outros (disabled, sem cara de botao). */
-.prazo {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border: 1px dashed var(--control-border);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-}
-
-.prazo:hover:not(:disabled) {
-  background: var(--control-bg-hover);
-  border-color: var(--line-strong);
-}
-
-.prazo:disabled {
-  cursor: default;
-}
-
-.prazo strong {
-  color: var(--text-strong);
-  font-weight: 800;
-}
-
-.prazo em {
-  padding: 0 6px;
-  border-radius: var(--radius-pill);
-  font-style: normal;
-  font-size: 0.62rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.prazo[data-estado='ok'],
-.prazo[data-estado='cumprido'] {
-  border-style: solid;
-}
-
-.prazo[data-estado='perto'] {
-  border-style: solid;
-  border-color: color-mix(in srgb, var(--prazo-perto) 55%, transparent);
-  color: var(--prazo-perto);
-}
-
-.prazo[data-estado='perto'] em {
-  background: color-mix(in srgb, var(--prazo-perto) 18%, transparent);
-}
-
-.prazo[data-estado='vencido'] {
-  border-style: solid;
-  border-color: color-mix(in srgb, var(--prazo-vencido) 55%, transparent);
-  color: var(--prazo-vencido);
-}
-
-.prazo[data-estado='vencido'] em {
-  background: color-mix(in srgb, var(--prazo-vencido) 16%, transparent);
-}
-
-.prazo[data-estado='perto'] strong,
-.prazo[data-estado='vencido'] strong {
-  color: inherit;
-}
-
 /* ============================================================
    Etapas fixas, execucao e os checks do sistema (atualizacao 14)
    ============================================================ */
 
-/* o cadeado da etapa de fabrica, logo depois do nome */
-.etapa__fixa {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--control-bg-hover);
-  color: var(--text-muted);
-}
-
-/* o numero da etapa ("1ª Etapa"), embaixo do nome */
-.etapa__papel {
-  margin: -4px 0 0;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-/* o bloco da execucao: periodo + prazo final + andamento dos ensaios.
-   A cor e a mesma escala do card da obra no quadro */
+/* o bloco da execucao: periodo + andamento dos ensaios. Fica no tom
+   calmo; so o vermelho de "falta o prazo da execucao" */
 .execbloco {
   display: flex;
   flex-direction: column;
@@ -1542,19 +1447,6 @@
   background: var(--tom-bg, var(--quadro-ok-bg));
 }
 
-.execbloco[data-tom='atraso'] {
-  --tom-bg: var(--quadro-atraso-bg);
-  --tom-borda: var(--quadro-atraso-borda);
-  --tom-acento: var(--quadro-atraso-acento);
-}
-
-.execbloco[data-tom='laranja'] {
-  --tom-bg: var(--quadro-laranja-bg);
-  --tom-borda: var(--quadro-laranja-borda);
-  --tom-acento: var(--quadro-laranja-acento);
-}
-
-.execbloco[data-tom='vermelho'],
 .execbloco[data-tom='vencido'] {
   --tom-bg: var(--quadro-vermelho-bg);
   --tom-borda: var(--quadro-vermelho-borda);

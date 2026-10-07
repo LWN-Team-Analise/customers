@@ -973,40 +973,15 @@ const PRIORIDADES = ['baixa', 'media', 'alta']
      data_inicio     -> data_conclusao   a OBRA inteira (inclusive a
                                          documentacao e a entrega,
                                          que vem depois da execucao);
-     execucao_inicio -> execucao_prazo   so a ETAPA DE EXECUCAO (3a).
+     execucao_inicio -> execucao_prazo   so a ETAPA DE EXECUCAO (3a),
+                                         definido dentro da obra
+                                         (PUT /obras/:id/execucao).
 
-   EMERGENCIA = execucao em menos de 3 dias
-
-   Com o periodo de execucao definido, e ele que conta. Sem ele, conta
-   a obra inteira (do inicio ao prazo final): se a obra toda cabe em
-   menos de 3 dias, a execucao tambem cabe. Menor que DIAS_EMERGENCIA,
-   a obra e uma Obra Emergencial — ao nascer, e tambem depois, se
-   alguem mexer nas datas e a obra padrao passar a caber em menos de
-   3 dias (fica no historico).
-
-   O caminho de volta NAO e automatico: uma emergencia aberta de
-   proposito nao deixa de ser so porque uma data mudou.
-
-   A tela faz a mesma conta (src/domain/obras.js) para avisar antes
-   de salvar; aqui e o que vale.
+   O cadastro da obra so tem o inicio e o prazo final. O TIPO e o do
+   cadastro: so e emergencia a obra aberta como emergencia — data
+   nenhuma (nem execucao em menos de 3 dias) transforma obra padrao em
+   emergencia.
    ------------------------------------------------------------ */
-
-const DIAS_EMERGENCIA = 3
-
-/** Dias de 'de' ate 'ate' ('AAAA-MM-DD'); negativo quando 'ate' vem antes. */
-function diasEntreDatas(de, ate) {
-  const emDias = (iso) => {
-    const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number)
-    return Date.UTC(a, m - 1, d) / 86400000
-  }
-  return Math.round(emDias(ate) - emDias(de))
-}
-
-/** A execucao cabe em menos de 3 dias? */
-function execucaoCurta(inicio, fim) {
-  if (!inicio || !fim) return false
-  return diasEntreDatas(inicio, fim) < DIAS_EMERGENCIA
-}
 
 /** Hoje no calendario do Brasil: o servidor pode estar rodando em UTC. */
 function hojeNoBrasil() {
@@ -1033,34 +1008,6 @@ async function datasDaObra(obraId) {
   }
 }
 
-/** O periodo que decide a emergencia: o da execucao, se definido; senao, o da obra. */
-function periodoDaRegra({ inicio, prazoFinal, execucaoInicio, execucaoPrazo }) {
-  return execucaoPrazo ? [execucaoInicio ?? inicio, execucaoPrazo] : [inicio, prazoFinal]
-}
-
-/**
- * Depois de mexer nas datas: a obra PADRAO cuja execucao ficou com
- * menos de 3 dias vira emergencia. Devolve true quando virou.
- */
-async function aplicarRegraDeEmergencia(req, obraId) {
-  const datas = await datasDaObra(obraId)
-  if (!datas || datas.tipo !== 'padrao') return false
-  if (!execucaoCurta(...periodoDaRegra(datas))) return false
-
-  await query(
-    `UPDATE obra SET tipo = 'emergencia', prioridade = 'alta', atualizado_por = $1 WHERE id = $2`,
-    [req.dono.sub, obraId],
-  )
-  await registrarAtividade(req, {
-    acao: 'obra.emergencia',
-    categoria: 'obra',
-    entidade: ['obra', obraId],
-    descricao: 'Obra passou a ser emergencial (execução em menos de 3 dias)',
-    detalhes: await descreverObra(obraId),
-  })
-  return true
-}
-
 /* o nome de cada coluna da obra como o historico escreve "o que mudou" */
 const ROTULO_CAMPO_OBRA = {
   descricao: 'descrição',
@@ -1068,8 +1015,6 @@ const ROTULO_CAMPO_OBRA = {
   cliente_id: 'cliente',
   data_inicio: 'início',
   data_conclusao: 'prazo final',
-  execucao_inicio: 'início da execução',
-  execucao_prazo: 'prazo da execução',
   tipo: 'tipo',
   prioridade: 'prioridade',
 }
@@ -1083,27 +1028,16 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
   const descricao = texto(req.body?.descricao)
   const dataInicio = texto(req.body?.dataInicio) || hojeNoBrasil()
   const dataConclusao = texto(req.body?.dataConclusao) || null
-  const execucaoInicio = texto(req.body?.execucaoInicio) || null
-  const execucaoPrazo = texto(req.body?.execucaoPrazo) || null
 
-  /* execucao em menos de 3 dias e emergencia, mesmo aberta pelo botao
-     de obra padrao: e a regra, nao uma escolha da tela */
-  const curta = execucaoCurta(
-    ...periodoDaRegra({ inicio: dataInicio, prazoFinal: dataConclusao, execucaoInicio, execucaoPrazo }),
-  )
-  const tipo = req.body?.tipo === 'emergencia' || curta ? 'emergencia' : 'padrao'
+  /* o tipo e o do botao que abriu o cadastro, e so ele */
+  const tipo = req.body?.tipo === 'emergencia' ? 'emergencia' : 'padrao'
   // emergencia e sempre alta; o gatilho do banco garante, aqui so evita ida a toa
   const prioridade = tipo === 'emergencia' ? 'alta' : (req.body?.prioridade ?? 'media')
 
-  for (const data of [dataInicio, dataConclusao, execucaoInicio, execucaoPrazo]) {
+  for (const data of [dataInicio, dataConclusao]) {
     if (data && !dataValida(data)) return res.status(400).json({ erro: 'Data inválida.' })
   }
-  const erroDeDatas = conferirDatas({
-    inicio: dataInicio,
-    prazoFinal: dataConclusao,
-    execucaoInicio,
-    execucaoPrazo,
-  })
+  const erroDeDatas = conferirDatas({ inicio: dataInicio, prazoFinal: dataConclusao })
   if (erroDeDatas) return res.status(400).json({ erro: erroDeDatas })
 
   if (!clienteId) return res.status(400).json({ erro: 'Escolha a empresa.' })
@@ -1124,44 +1058,18 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
   }
 
   try {
-    const valores = [
-      clienteId,
-      proposta,
-      descricao,
-      tipo,
-      prioridade,
-      dataInicio,
-      dataConclusao,
-      req.dono.sub,
-    ]
-    /* as datas da execucao so vao quando foram informadas: banco sem as
-       atualizacoes 14/15 continua criando obra normalmente */
-    const { rows } = execucaoInicio || execucaoPrazo
-      ? await query(
-          `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
-                             data_inicio, data_conclusao, criado_por, atualizado_por,
-                             execucao_inicio, execucao_prazo)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)
-           RETURNING id`,
-          [...valores, execucaoInicio, execucaoPrazo],
-        )
-      : await query(
-          `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
-                             data_inicio, data_conclusao, criado_por, atualizado_por)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-           RETURNING id`,
-          valores,
-        )
+    const { rows } = await query(
+      `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
+                         data_inicio, data_conclusao, criado_por, atualizado_por)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+       RETURNING id`,
+      [clienteId, proposta, descricao, tipo, prioridade, dataInicio, dataConclusao, req.dono.sub],
+    )
     await registrarAtividade(req, {
       acao: 'obra.criada',
       categoria: 'obra',
       entidade: ['obra', rows[0].id],
-      descricao:
-        tipo !== 'emergencia'
-          ? 'Nova obra criada'
-          : curta && req.body?.tipo !== 'emergencia'
-            ? 'Nova obra de emergência criada (execução em menos de 3 dias)'
-            : 'Nova obra de emergência criada',
+      descricao: tipo === 'emergencia' ? 'Nova obra de emergência criada' : 'Nova obra criada',
       detalhes: await descreverObra(rows[0].id),
     })
     return res.status(201).json({ id: String(rows[0].id), tipo })
@@ -1188,9 +1096,7 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
   if (req.body?.clienteId !== undefined) por('cliente_id', req.body.clienteId)
   if (req.body?.dataInicio !== undefined) por('data_inicio', req.body.dataInicio || null)
   if (req.body?.dataConclusao !== undefined) por('data_conclusao', req.body.dataConclusao || null)
-  if (req.body?.execucaoInicio !== undefined) por('execucao_inicio', req.body.execucaoInicio || null)
-  if (req.body?.execucaoPrazo !== undefined) por('execucao_prazo', req.body.execucaoPrazo || null)
-  for (const campo of ['dataInicio', 'dataConclusao', 'execucaoInicio', 'execucaoPrazo']) {
+  for (const campo of ['dataInicio', 'dataConclusao']) {
     const valor = texto(req.body?.[campo])
     if (valor && !dataValida(valor)) return res.status(400).json({ erro: 'Data inválida.' })
   }
@@ -1227,6 +1133,25 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
       return tratar(e, res, 'dados/obra-editar-conferir')
     }
   }
+
+  /* as datas novas contra as que ficam: o prazo final nao vem antes do
+     inicio, nem antes da execucao ja definida dentro da obra */
+  if (req.body?.dataInicio !== undefined || req.body?.dataConclusao !== undefined) {
+    try {
+      const antes = await datasDaObra(req.params.id)
+      if (!antes) return res.status(404).json({ erro: 'Obra não encontrada.' })
+      const erroDeDatas = conferirDatas({
+        ...antes,
+        ...(req.body?.dataInicio !== undefined && { inicio: texto(req.body.dataInicio) || null }),
+        ...(req.body?.dataConclusao !== undefined && {
+          prazoFinal: texto(req.body.dataConclusao) || null,
+        }),
+      })
+      if (erroDeDatas) return res.status(400).json({ erro: erroDeDatas })
+    } catch (e) {
+      return tratar(e, res, 'dados/obra-editar-datas')
+    }
+  }
   if (req.body?.prioridade !== undefined) {
     if (!PRIORIDADES.includes(req.body.prioridade)) {
       return res.status(400).json({ erro: 'Prioridade inválida.' })
@@ -1246,10 +1171,6 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Obra não encontrada.' })
 
-    /* as datas podem ter mudado: a regra da emergencia olha para elas */
-    const datas = await datasDaObra(req.params.id)
-    const virouEmergencia = await aplicarRegraDeEmergencia(req, req.params.id)
-
     await registrarAtividade(req, {
       acao: 'obra.editada',
       categoria: 'obra',
@@ -1263,12 +1184,9 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
           .join(', '),
       },
     })
-    return res.json({ ok: true, tipo: virouEmergencia ? 'emergencia' : datas?.tipo })
+    return res.json({ ok: true })
   } catch (e) {
     if (e.code === '23503') return res.status(400).json({ erro: 'Cliente não encontrado.' })
-    if (e.code === '42703') {
-      return res.status(501).json({ erro: 'Início da execução ainda não existe no banco (atualização 14).' })
-    }
     return tratar(e, res, 'dados/obra-editar')
   }
 })
@@ -1815,12 +1733,14 @@ router.put('/obras/:id/prazos', exigeSessao, exige('definir_prazos'), obraAberta
    execucao nao anda sem o prazo dela.
 
    Quem define e quem tem `definir_prazos` — a mesma permissao dos
-   prazos de check e de etapa. Periodo menor que 3 dias transforma a
-   obra padrao em emergencia (aplicarRegraDeEmergencia).
+   prazos de check. Periodo curto (hoje, amanha) nao muda o tipo da
+   obra, e o prazo dela nao mexe na cor do card: a cor vem do prazo
+   final.
    ------------------------------------------------------------ */
 
 /**
- * A ordem das datas, a mesma na criacao e no periodo da execucao.
+ * A ordem das datas, a mesma na criacao, na edicao e no periodo da
+ * execucao.
  * Devolve o recado do primeiro problema, ou null.
  */
 function conferirDatas({ inicio, prazoFinal, execucaoInicio, execucaoPrazo }) {
@@ -1874,8 +1794,7 @@ router.put('/obras/:id/execucao', exigeSessao, exige('definir_prazos'), obraAber
         prazo_execucao: dataLida(prazo),
       },
     })
-    const virouEmergencia = await aplicarRegraDeEmergencia(req, req.params.id)
-    return res.json({ ok: true, tipo: virouEmergencia ? 'emergencia' : antes.tipo })
+    return res.json({ ok: true })
   } catch (e) {
     if (e.code === '42703') {
       return res.status(501).json({ erro: 'Período de execução ainda não existe no banco (atualizações 14 e 15).' })

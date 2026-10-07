@@ -6,15 +6,15 @@ import { CampoTexto } from '@/components/Campo/Campo'
 import '@/pages/Obras/ModalRoteiro.css'
 
 /**
- * O prazo de uma etapa ou de um check, NESTA obra.
+ * O prazo de um check, NESTA obra.
  *
  * So abre para quem tem `definir_prazos` ("Pode definir prazo para
  * checks") — a tela nem mostra o botao sem ela, e a API recusa do mesmo
  * jeito. Salvar vazio, ou "Tirar prazo", apaga.
  *
  * Dois jeitos de chegar aqui:
- *   - pelo calendario de UM check (ou da etapa): `alvo` ja diz qual e
- *     — { tipo: 'etapa' | 'check', id, nome, prazo };
+ *   - pelo calendario de UM check: `alvo` ja diz qual e
+ *     — { tipo: 'check', id, nome, prazo };
  *   - pelo "Prazos dos checks" da etapa: `alvo.checks` traz a lista
  *     [{ id, rotulo, prazo }] e a pessoa ESCOLHE o check, depois a data.
  *     O prazo fica gravado naquele check especifico.
@@ -69,7 +69,7 @@ export default function ModalPrazo({ aberto, alvo, aoSalvar, aoFechar }) {
         escolhendo
           ? alvo?.nome
           : alvo
-            ? `${alvo.tipo === 'etapa' ? 'Etapa' : 'Check'}: ${alvo.nome}`
+            ? `Check: ${alvo.nome}`
             : undefined
       }
       largura={440}

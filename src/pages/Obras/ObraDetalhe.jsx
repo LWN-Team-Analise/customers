@@ -26,7 +26,6 @@ import {
   rotuloPrioridadeObra,
   tituloDaObra,
   tomPrioridadeObra,
-  urgenciaDoPrazo,
 } from '@/domain/obras'
 import { textoSobre } from '@/utils/cor'
 import { dataBR, dataExtensa, dataHora, hojeISO } from '@/utils/formato'
@@ -96,13 +95,6 @@ const Icone = {
     <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="5" width="16" height="15" rx="2" />
       <path d="M8 3v4M16 3v4M4 10h16" />
-    </svg>
-  ),
-  /* o cadeado pequeno da etapa fixa */
-  fixa: () => (
-    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-      <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
-      <path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" />
     </svg>
   ),
   /* o "i" das informacoes do card */
@@ -218,7 +210,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const [menuFlutuante, setMenuFlutuante] = useState(false)
   /* a pergunta Sim/Nao de um check de card de pergunta: {card, check} */
   const [respondendo, setRespondendo] = useState(null)
-  /* o prazo sendo definido: {tipo: 'etapa'|'check', id, nome, prazo} —
+  /* o prazo sendo definido: {tipo: 'check', id, nome, prazo} —
      ou, pelo "Prazos dos checks" da etapa, {nome, checks: [...]} para a
      pessoa escolher o check */
   const [prazoAlvo, setPrazoAlvo] = useState(null)
@@ -734,16 +726,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               const valem = cardsQueValem(etapa)
               const prontos = valem.filter((c) => cardConcluido(c, obra.checks)).length
 
-              /* o prazo da etapa NESTA obra, e em que pe ele esta */
-              const prazoEtapa = obra.prazos?.etapas?.[etapa.id] ?? null
-              const checksDaEtapa = etapa.cards.flatMap((c) => c.checks)
-              const andamento = checksDaEtapa.length
-                ? (checksDaEtapa.filter((k) => obra.checks[k.id]).length / checksDaEtapa.length) * 100
-                : 0
-              const situacaoPrazo = estadoDoPrazo(prazoEtapa, hoje, {
-                feito: estado === 'concluida',
-                andamento,
-              })
               const nomeEtapa = etapa.nome || rotuloEtapa(etapa.numero)
               const ehExecucao = etapa.papel === 'execucao'
               /* os checks da etapa, para o "Prazos dos checks" escolher um */
@@ -760,25 +742,11 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               return (
                 <section key={etapa.id} className="etapa vidro" data-estado={estado}>
                   <header className="etapa__topo">
-                    {/* O NOME da etapa é o título ("Comercial"). Antes
-                        aqui ficava o rótulo automático ("1ª Etapa") e o
-                        nome ia embaixo, pequeno — o lugar de destaque
-                        gasto para dizer uma coisa que a ordem das
-                        colunas já diz. Etapa sem nome cai no rótulo. */}
+                    {/* O NOME da etapa é o título ("1° Etapa"); etapa sem
+                        nome cai no rótulo automático ("1ª Etapa") */}
                     <h2 className="etapa__titulo" title={rotuloEtapa(etapa.numero)}>
-                      {etapa.nome || rotuloEtapa(etapa.numero)}
+                      {nomeEtapa}
                     </h2>
-                    {/* etapa de fabrica: o esqueleto do fluxo, que nao se
-                        renomeia nem se exclui */}
-                    {etapa.fixa && (
-                      <span
-                        className="etapa__fixa"
-                        title="Etapa fixa do fluxo: não pode ser renomeada, reordenada nem excluída"
-                        aria-label="Etapa fixa"
-                      >
-                        <Icone.fixa />
-                      </span>
-                    )}
                     {estado === 'concluida' && <Icone.ok />}
                     {estado === 'atual' && <Icone.atual />}
                     {estado === 'bloqueada' && <Icone.travada />}
@@ -810,7 +778,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                             className="etapa__botao"
                             onClick={() => setEditandoCard({ etapa })}
                             title="Novo card nesta etapa"
-                            aria-label={`Novo card em ${etapa.nome || rotuloEtapa(etapa.numero)}`}
+                            aria-label={`Novo card em ${nomeEtapa}`}
                           >
                             <Icone.mais tamanho={15} />
                           </button>
@@ -821,7 +789,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                             className="etapa__botao"
                             onClick={() => setEditandoEtapa({ etapa })}
                             title="Editar o nome e a descrição desta etapa"
-                            aria-label={`Editar ${etapa.nome || rotuloEtapa(etapa.numero)}`}
+                            aria-label={`Editar ${nomeEtapa}`}
                           >
                             <Icone.lapis />
                           </button>
@@ -829,12 +797,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                       </span>
                     )}
                   </header>
-
-                  {/* o numero da etapa embaixo do nome: "Comercial" em cima,
-                      "1ª Etapa" embaixo — o mesmo par da coluna do quadro */}
-                  {etapa.nome && etapa.nome !== rotuloEtapa(etapa.numero) && (
-                    <p className="etapa__papel">{rotuloEtapa(etapa.numero)}</p>
-                  )}
 
                   {/* a linha de apoio: em que pé a etapa está. Só
                       aparece quando alguém escreveu alguma coisa. */}
@@ -851,40 +813,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                       podePeriodo={podePrazos}
                       aoDefinir={() => setPeriodo(true)}
                     />
-                  )}
-
-                  {/* O PRAZO da etapa nesta obra. Quem pode definir vê o
-                      botão mesmo sem prazo; quem não pode só vê quando há
-                      um. Vencido fica vermelho, perto fica âmbar — e é ele
-                      que deixa o card desta obra amarelo no quadro. */}
-                  {(prazoEtapa || podePrazos) && (
-                    <button
-                      type="button"
-                      className="prazo"
-                      data-estado={situacaoPrazo ?? (prazoEtapa ? 'cumprido' : 'vazio')}
-                      disabled={!podePrazos}
-                      onClick={() =>
-                        setPrazoAlvo({ tipo: 'etapa', id: etapa.id, nome: nomeEtapa, prazo: prazoEtapa })
-                      }
-                      title={
-                        podePrazos
-                          ? prazoEtapa
-                            ? 'Alterar ou tirar o prazo desta etapa'
-                            : 'Definir um prazo para esta etapa nesta obra'
-                          : undefined
-                      }
-                    >
-                      <Icone.prazo />
-                      {prazoEtapa ? (
-                        <>
-                          Prazo: <strong>{dataBR(prazoEtapa)}</strong>
-                          {situacaoPrazo === 'vencido' && <em>vencido</em>}
-                          {situacaoPrazo === 'perto' && <em>perto</em>}
-                        </>
-                      ) : (
-                        'Definir prazo'
-                      )}
-                    </button>
                   )}
 
                   <div className="etapa__cards">
@@ -1181,7 +1109,6 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
       <ModalCheck
         aberto={Boolean(editandoCheck)}
         card={editandoCheck?.card}
-        nomeCard={editandoCheck?.card ? nomeDoCard(editandoCheck.card, nomeDoCargo) : ''}
         check={editandoCheck?.check ?? null}
         obraId={obra.id}
         prazoAtual={
@@ -1271,12 +1198,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
       <ModalPrazo
         aberto={Boolean(prazoAlvo)}
         alvo={prazoAlvo}
-        aoSalvar={(prazo, alvoId) =>
-          definirPrazo(obra.id, {
-            ...(prazoAlvo.tipo === 'etapa' ? { etapaId: alvoId } : { checkId: alvoId }),
-            prazo,
-          })
-        }
+        aoSalvar={(prazo, alvoId) => definirPrazo(obra.id, { checkId: alvoId, prazo })}
         aoFechar={() => setPrazoAlvo(null)}
       />
 
@@ -1391,16 +1313,15 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
  * e outro, e fica na faixa de cima da tela.
  *
  * O prazo da execucao e OBRIGATORIO aqui: sem ele a etapa nao anda (os
- * checks dela nao marcam), e o bloco diz isso em vermelho. Com ele, a
- * faixa pega a mesma cor que o card da obra tem no quadro — do verde ao
- * vermelho conforme o tempo que resta (urgenciaDoPrazo). Fechada a
- * etapa, o prazo dela deixa de cobrar: o bloco so registra o periodo.
+ * checks dela nao marcam), e o bloco diz isso em vermelho. Com ele, o
+ * bloco so informa o periodo e quanto falta: a cor do card da obra vem
+ * do prazo final, nunca deste.
  */
 function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir }) {
   const inicio = obra.execucaoInicio ?? obra.dataInicio
   const prazo = obra.execucaoPrazo
   const restam = prazo ? diasAte(prazo, hoje) : null
-  const tom = fechada ? 'ok' : prazo ? urgenciaDoPrazo(inicio, prazo, hoje) : 'vencido'
+  const tom = fechada || prazo ? 'ok' : 'vencido'
 
   const quando =
     fechada

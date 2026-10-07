@@ -36,6 +36,7 @@ const ARQUIVOS = [
   'db/atualizacao-13.sql.txt',
   'db/atualizacao-14.sql.txt',
   'db/atualizacao-15.sql.txt',
+  'db/atualizacao-16.sql.txt',
 ]
 
 /**
@@ -105,6 +106,10 @@ const CONFERENCIA = [
   ['obra.execucao_inicio', col('obra', 'execucao_inicio')],
   ['gerenciar_ensaios no acesso total', permissaoNoAcessoTotal('gerenciar_ensaios')],
   ['obra.execucao_prazo', col('obra', 'execucao_prazo')],
+  [
+    'etapas fixas com o nome automatico',
+    "SELECT NOT EXISTS (SELECT 1 FROM etapa WHERE fixa AND vigente_ate IS NULL AND nome IN ('Comercial', 'Planejamento', 'Execução', 'Entrega', 'Encerramento')) AS ok",
+  ],
 ]
 
 function col(tabela, coluna) {

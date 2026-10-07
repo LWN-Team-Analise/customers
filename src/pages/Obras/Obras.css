@@ -326,8 +326,8 @@
   min-width: 0;
 }
 
-/* o nome (ou o papel) da etapa, na linha de baixo do rotulo:
-   "1ª Etapa" em cima, "Planejamento técnico" embaixo */
+/* o nome escrito da etapa, na linha de baixo do rotulo — so quando
+   acrescenta: "1° Etapa" no roteiro nao repete o "1ª Etapa" */
 .coluna__subtitulo {
   order: 10;
   flex: 1 0 100%;
