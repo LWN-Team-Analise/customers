@@ -956,6 +956,33 @@
   min-width: 0;
 }
 
+/* Os botoes do check (prazo, editar) FECHADOS nao ocupam largura: com
+   so `opacity: 0` eles guardavam o lugar, o texto do check quebrava
+   linha antes da hora e sobrava um vao em branco no fim da linha. Mesma
+   mecanica das ferramentas do card: a largura abre no hover. */
+.tarefa__acoes {
+  display: flex;
+  flex-shrink: 0;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.setorcard__tarefas li:hover .tarefa__acoes,
+.tarefa__acoes:focus-within {
+  max-width: 80px;
+  opacity: 1;
+}
+
+/* tela de toque nao tem hover: ali os botoes ficam sempre a mostra */
+@media (hover: none) {
+  .tarefa__acoes {
+    max-width: none;
+    opacity: 1;
+  }
+}
+
 .tarefa__editar {
   display: grid;
   place-items: center;
@@ -968,19 +995,68 @@
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.85;
   transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
 
-.setorcard__tarefas li:hover .tarefa__editar,
 .tarefa__editar:focus-visible {
-  opacity: 0.85;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* o pegador: e por ele que o check se arrasta */
+.tarefa__pegador {
+  cursor: grab;
+}
+
+.tarefa__pegador:active {
+  cursor: grabbing;
+}
+
+/* durante o arraste: o check pego fica apagado, e a linha diz onde ele
+   cai — em cima do check alvo, ou no fim do card */
+.setorcard__tarefas li.is-arrastando {
+  opacity: 0.4;
+}
+
+.setorcard__tarefas li.is-alvo {
+  box-shadow: 0 -2px 0 0 var(--accent);
+}
+
+.setorcard__tarefas.is-alvo-fim {
+  box-shadow: 0 2px 0 0 var(--accent);
+}
+
+/* no modelo da obra o check nao se marca, mas tambem nao e "de outro" */
+.tarefa.is-modelo:disabled {
+  opacity: 1;
+  cursor: default;
 }
 
 .tarefa__editar:hover {
   background: var(--control-bg-hover);
   color: var(--text-strong);
   opacity: 1;
+}
+
+/* "Material de gases": "obrigatório" (a obra tem ensaio de gases) no
+   tom de alerta; "opcional" apagado, para nao parecer pendencia */
+.tarefa__gases {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--control-bg-hover);
+  color: var(--text-faint);
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1.7;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tarefa__gases[data-exigido='sim'] {
+  background: color-mix(in srgb, var(--prazo-perto) 18%, transparent);
+  color: var(--prazo-perto);
 }
 
 /* Check com dono diferente do card: a sigla do cargo dele aparece no

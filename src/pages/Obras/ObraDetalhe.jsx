@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import AppShell from '@/components/AppShell/AppShell'
-import Avatar, { PilhaAvatares } from '@/components/Avatar/Avatar'
+import Avatar from '@/components/Avatar/Avatar'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import Confirma from '@/components/Confirma/Confirma'
@@ -9,7 +9,6 @@ import { CampoArea } from '@/components/Campo/Campo'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
-import Dica from '@/components/Dica/Dica'
 import {
   avisoDeEtapa,
   cardConcluido,
@@ -17,10 +16,8 @@ import {
   chaveDoCargo,
   CHECK_EXECUCAO,
   CHECK_PLANEJAMENTO,
-  checkTemDonoProprio,
   corDoSetorDoCard,
   diasAte,
-  estadoDoPrazo,
   nomeDoCard,
   podeEditarCheck,
   rotuloPrioridadeObra,
@@ -43,96 +40,11 @@ import Rastreabilidade from './Rastreabilidade'
 import ModalEtiquetas from './ModalEtiquetas'
 import ModalAnexos from './ModalAnexos'
 import ModalObra from './ModalObra'
+import CardSetor from './CardSetor'
+import { textoDaVersao, useArrasteDeChecks } from './arrasteChecks'
+import { Icone } from './IconesObra'
 import './ObraDetalhe.css'
 
-const Icone = {
-  voltar: () => (
-    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5m0 0 6-6m-6 6 6 6" />
-    </svg>
-  ),
-  ok: () => (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="var(--etapa-ok)" />
-      <path d="m8 12.3 2.6 2.6L16 9.5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  atual: () => (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="var(--etapa-atual)" />
-      <circle cx="12" cy="12" r="3.4" fill="#fff" />
-    </svg>
-  ),
-  travada: () => (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--etapa-travada)" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
-      <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
-      <path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" />
-    </svg>
-  ),
-  mais: ({ tamanho = 16 }) => (
-    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  ),
-  lapis: () => (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" />
-    </svg>
-  ),
-  lixo: () => (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
-    </svg>
-  ),
-  etapa: () => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="7" height="16" rx="1.6" />
-      <rect x="14" y="4" width="7" height="10" rx="1.6" />
-    </svg>
-  ),
-  /* o calendario do prazo */
-  prazo: ({ tamanho = 13 }) => (
-    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="5" width="16" height="15" rx="2" />
-      <path d="M8 3v4M16 3v4M4 10h16" />
-    </svg>
-  ),
-  /* o "i" das informacoes do card */
-  info: () => (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 11v5.5M12 7.6v.2" />
-    </svg>
-  ),
-  nota: () => (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 4.8A1.8 1.8 0 0 1 6.8 3h10.4A1.8 1.8 0 0 1 19 4.8v14.4A1.8 1.8 0 0 1 17.2 21H6.8A1.8 1.8 0 0 1 5 19.2z" />
-      <path d="M8.5 8h7M8.5 12h7M8.5 16h4" />
-    </svg>
-  ),
-  chat: ({ tamanho = 16 }) => (
-    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 15.5a2 2 0 0 1-2 2H8l-4 3.5v-14a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
-      <path d="M8.5 9h7M8.5 12.5h4.5" />
-    </svg>
-  ),
-  etiqueta: ({ tamanho = 16 }) => (
-    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3.5 11.4V4.8A1.3 1.3 0 0 1 4.8 3.5h6.6a1.3 1.3 0 0 1 .9.4l8 8a1.3 1.3 0 0 1 0 1.8l-6.6 6.6a1.3 1.3 0 0 1-1.8 0l-8-8a1.3 1.3 0 0 1-.4-.9z" />
-      <circle cx="7.9" cy="7.9" r="1.3" />
-    </svg>
-  ),
-  lixo: ({ tamanho = 15 }) => (
-    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
-    </svg>
-  ),
-  clipe: ({ tamanho = 16 }) => (
-    <svg viewBox="0 0 24 24" width={tamanho} height={tamanho} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 11.5 12.2 19.3a5 5 0 0 1-7-7L13 4.4a3.4 3.4 0 0 1 4.8 4.8l-7.7 7.7a1.8 1.8 0 0 1-2.5-2.5l7.2-7.2" />
-    </svg>
-  ),
-}
 
 /**
  * A tela da obra.
@@ -186,6 +98,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
     rotuloEtapa,
     carregando,
     pode,
+    ordenarChecks,
   } = useDados()
 
   const [novaObs, setNovaObs] = useState(false)
@@ -232,6 +145,17 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const [apagando, setApagando] = useState(false)
 
   const obra = obraPorId(id)
+
+  /* o recado de uma mudanca no roteiro que nao aparece nesta obra (o
+     check arrastado ja tinha sido marcado em alguma obra) */
+  const [avisoRoteiro, setAvisoRoteiro] = useState(null)
+  const arraste = useArrasteDeChecks({
+    ordenar: async (cardId, checkIds) => {
+      const r = await ordenarChecks(cardId, checkIds, obra?.id)
+      if (r?.versionados?.length > 0) setAvisoRoteiro(textoDaVersao(r.versionados, true))
+    },
+    aoRecusar: setAvisoRoteiro,
+  })
 
   if (carregando && !obra) {
     return (
@@ -820,6 +744,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                       <CardSetor
                         key={card.id}
                         card={card}
+                        etapa={etapa}
+                        arraste={soLeitura ? null : arraste}
                         obra={obra}
                         /* na obra fechada todo check e so leitura, mesmo
                            os da etapa que estava aberta */
@@ -1149,6 +1075,24 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
       <ModalPeriodo aberto={periodo} obra={obra} aoFechar={() => setPeriodo(false)} />
 
       <Modal
+        aberto={Boolean(avisoRoteiro)}
+        aoFechar={() => setAvisoRoteiro(null)}
+        titulo="Roteiro"
+        largura={440}
+      >
+        <div className="formrot">
+          <p className="formrot__sistema" role="note">
+            {avisoRoteiro}
+          </p>
+          <footer className="formobra__acoes">
+            <Button type="button" onClick={() => setAvisoRoteiro(null)}>
+              Entendi
+            </Button>
+          </footer>
+        </div>
+      </Modal>
+
+      <Modal
         aberto={faltaPrazoExecucao}
         aoFechar={() => setFaltaPrazoExecucao(false)}
         titulo="Falta o prazo da execução"
@@ -1368,291 +1312,6 @@ function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir }
         </div>
       )}
     </div>
-  )
-}
-
-/**
- * Card de um setor dentro da etapa: contorno e nome na cor SUAVE do
- * setor, fundo transparente, e a lista de checks. O card e de um setor
- * so — o gradiente de varios setores saiu.
- *
- * Duas travas diferentes, e o cadeado diz qual e:
- *  - `travado`: a etapa ainda nao abriu (so em obra padrao);
- *  - `semPermissao`: a etapa abriu, mas o card e de outro setor.
- *
- * Tudo o que diz como cada check se comporta e DO CHECK:
- *  - check de pergunta (check.simNao): o respondido "nao" aparece com um
- *    X e a palavra "Nao"; o "sim", com o tique e "Sim";
- *  - os dois do sistema (Planejamento e Execucao dos ensaios) abrem o
- *    proprio pop-up e mostram quantos ensaios / quanto ja foi executado;
- *  - as informacoes do check aparecem ao passar o mouse nele.
- *
- * As informacoes do card (card.informacoes) aparecem ao passar o mouse
- * no card.
- */
-function CardSetor({
-  card,
-  obra,
-  travado,
-  usuario,
-  podeCards,
-  podeChecks,
-  podePrazos,
-  hoje,
-  execucao,
-  corSuaveDoCargo,
-  nomeDoCargo,
-  cargoPorChave,
-  pessoaPorId,
-  aoMarcar,
-  aoEditarCard,
-  aoNovoCheck,
-  aoEditarCheck,
-  aoPrazoCheck,
-}) {
-  const feitas = card.checks.filter((c) => obra.checks[c.id]).length
-  const pronto = card.checks.length > 0 && feitas === card.checks.length
-  /* "de outro" e quando NENHUM check do card e do seu setor */
-  const semPermissao = !card.checks.some((c) => podeEditarCheck(usuario, c, card, obra))
-  const cor = corDoSetorDoCard(card, corSuaveDoCargo)
-  const titulo = nomeDoCard(card, nomeDoCargo)
-
-  /**
-   * Os rostos de quem marcou algum check DESTE card.
-   *
-   * Antes aparecia so o ultimo. Mas um card costuma ser trabalho de mais
-   * de uma pessoa — o tecnico marca um check, o GQ marca outro — e mostrar
-   * so quem chegou por ultimo apagava o outro da tela. Agora aparecem os
-   * dois, do mais recente para o mais antigo.
-   *
-   * Sem repetir: quem marcou tres checks aparece uma vez so.
-   */
-  const responsaveis = useMemo(() => {
-    const marcas = card.checks
-      .map((c) => obra.checks[c.id])
-      .filter(Boolean)
-      .sort((a, b) => String(b.feitoEm).localeCompare(String(a.feitoEm)))
-
-    const vistos = new Set()
-    const gente = []
-    marcas.forEach((marca) => {
-      const id = String(marca.feitoPor ?? "")
-      if (!id || vistos.has(id)) return
-      vistos.add(id)
-      const pessoa = pessoaPorId(id)
-      if (pessoa) gente.push(pessoa)
-    })
-    return gente
-  }, [card.checks, obra.checks, pessoaPorId])
-
-  const donos = card.cargos.map((c) => cargoPorChave(c)?.nome ?? c).join(', ')
-
-  return (
-    /* a dica (card.informacoes) abre ao passar o mouse no card; num check
-       que tem as proprias informacoes, a do check toma o lugar enquanto o
-       mouse esta nele (ver Dica) */
-    <Dica
-      as="article"
-      texto={card.informacoes}
-      titulo={titulo}
-      className={`setorcard ${pronto ? 'is-pronto' : ''} ${
-        semPermissao && !travado ? 'is-deoutro' : ''
-      }`.trim()}
-      style={{ '--setor-cor': cor }}
-    >
-      <header className="setorcard__topo">
-        {/* o nome inteiro na dica: o titulo corta com reticencias para
-            a fila do cabecalho caber sempre */}
-        <h3 className="setorcard__titulo" title={card.informacoes ? undefined : titulo}>
-          {titulo}
-        </h3>
-        {card.informacoes && (
-          <span className="setorcard__info" aria-label={`Informações: ${card.informacoes}`}>
-            <Icone.info />
-          </span>
-        )}
-        {semPermissao && !travado && (
-          <span className="setorcard__cadeado" title={`Só ${donos} marca estes checks`}>
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
-              <path d="M8.4 10.5V7.8a3.6 3.6 0 0 1 7.2 0v2.7" />
-            </svg>
-          </span>
-        )}
-        <span className="setorcard__placar">
-          {feitas}/{card.checks.length}
-        </span>
-        {responsaveis.length > 0 && (
-          <PilhaAvatares pessoas={responsaveis} tamanho={20} limite={4} />
-        )}
-
-        {(podeChecks || podeCards) && (
-          <span className="setorcard__ferramentas">
-            {podeChecks && (
-              <button
-                type="button"
-                onClick={aoNovoCheck}
-                title="Novo check neste card"
-                aria-label={`Novo check em ${titulo}`}
-              >
-                <Icone.mais tamanho={14} />
-              </button>
-            )}
-            {podeCards && (
-              <button
-                type="button"
-                onClick={aoEditarCard}
-                title="Editar ou excluir o card"
-                aria-label={`Editar o card ${titulo}`}
-              >
-                <Icone.lapis />
-              </button>
-            )}
-          </span>
-        )}
-      </header>
-
-      {/* as etiquetas DESTE card. Nada a ver com as da obra: outro
-          catalogo, outra caixa, e nenhuma das duas puxa a outra. */}
-      {(card.etiquetas ?? []).length > 0 && (
-        <ul className="setorcard__etiquetas">
-          {card.etiquetas.map((e) => (
-            <li key={e.id} style={{ background: e.cor }}>
-              {e.nome}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <ul className="setorcard__tarefas">
-        {card.checks.map((check) => {
-          const marca = obra.checks[check.id]
-          const feito = Boolean(marca)
-          /* so em check de pergunta: true = sim, false = nao. Check
-             marcado antes de virar pergunta fica sem resposta, e
-             aparece como um check comum feito. */
-          const resposta = check.simNao && feito ? (marca.resposta ?? null) : null
-          const meu = podeEditarCheck(usuario, check, card, obra)
-          const proprio = checkTemDonoProprio(check)
-          const donosDoCheck = proprio
-            ? check.cargos.map((c) => cargoPorChave(c)?.nome ?? c).join(', ')
-            : donos
-          const prazo = obra.prazos?.checks?.[check.id] ?? null
-          const situacaoPrazo = estadoDoPrazo(prazo, hoje, { feito })
-          const planejamento = check.tipo === CHECK_PLANEJAMENTO
-          const execucaoDosEnsaios = check.tipo === CHECK_EXECUCAO
-          const doSistema = planejamento || execucaoDosEnsaios
-          /* os dois do sistema abrem o pop-up mesmo para quem nao marca:
-             la a pessoa VE os ensaios, so nao mexe */
-          const abreSemPermissao = doSistema && !travado
-          return (
-            <Dica as="li" key={check.id} texto={check.informacoes} titulo={check.titulo}>
-              <button
-                type="button"
-                className={`tarefa ${feito ? 'is-feita' : ''} ${resposta === false ? 'is-nao' : ''} ${
-                  !meu && !abreSemPermissao ? 'is-deoutro' : ''
-                } ${doSistema ? 'is-sistema' : ''}`.trim()}
-                onClick={() => aoMarcar(check)}
-                disabled={travado || (!meu && !abreSemPermissao)}
-                title={
-                  travado || check.informacoes
-                    ? undefined
-                    : planejamento
-                      ? 'Escolher os ensaios desta obra'
-                      : execucaoDosEnsaios
-                        ? 'Registrar a execução dos ensaios'
-                        : meu
-                          ? check.simNao
-                            ? 'Responder Sim ou Não'
-                            : undefined
-                          : `Somente ${donosDoCheck} marca este check`
-                }
-                aria-pressed={feito}
-              >
-                <span className="tarefa__marca" aria-hidden="true">
-                  {feito &&
-                    (resposta === false ? (
-                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round">
-                        <path d="M7 7l10 10M17 7 7 17" />
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m5 12.5 4.5 4.5L19 7" />
-                      </svg>
-                    ))}
-                </span>
-                <span className="tarefa__texto">{check.titulo}</span>
-                {/* a resposta escrita do lado: "Hospedagem  Não" */}
-                {resposta !== null && (
-                  <span className="tarefa__resposta" data-resposta={resposta ? 'sim' : 'nao'}>
-                    {resposta ? 'Sim' : 'Não'}
-                  </span>
-                )}
-                {/* o check que ainda pede resposta: o selo avisa antes do clique */}
-                {check.simNao && !feito && <span className="tarefa__pergunta">Sim/Não</span>}
-                {/* os do sistema dizem em que pe estao */}
-                {planejamento && (
-                  <span className="tarefa__ensaios">
-                    {(obra.ensaios ?? []).length === 0
-                      ? 'escolher'
-                      : `${obra.ensaios.length} ensaio${obra.ensaios.length > 1 ? 's' : ''}`}
-                  </span>
-                )}
-                {execucaoDosEnsaios && (
-                  <span className="tarefa__ensaios">{execucao ? `${execucao.geral}%` : 'sem ensaios'}</span>
-                )}
-                {/* dono diferente do card: a etiqueta diz de quem e */}
-                {proprio && (
-                  <span className="tarefa__dono" title={`Check de ${donosDoCheck}`}>
-                    {check.cargos
-                      .map((c) => cargoPorChave(c)?.curto ?? c.slice(0, 3))
-                      .join('·')}
-                  </span>
-                )}
-                {/* o prazo DESTE check nesta obra; some depois de feito */}
-                {prazo && !feito && (
-                  <span
-                    className="tarefa__prazo"
-                    data-estado={situacaoPrazo}
-                    title={situacaoPrazo === 'vencido' ? 'Prazo vencido' : 'Prazo'}
-                  >
-                    até {dataBR(prazo).slice(0, 5)}
-                  </span>
-                )}
-              </button>
-
-              {podePrazos && !feito && (
-                <button
-                  type="button"
-                  className="tarefa__editar"
-                  onClick={() => aoPrazoCheck(check)}
-                  title={prazo ? 'Alterar ou tirar o prazo deste check' : 'Definir um prazo para este check'}
-                  aria-label={`Prazo do check ${check.titulo}`}
-                >
-                  <Icone.prazo />
-                </button>
-              )}
-
-              {podeChecks && (
-                <button
-                  type="button"
-                  className="tarefa__editar"
-                  onClick={() => aoEditarCheck(check)}
-                  title="Editar ou excluir o check"
-                  aria-label={`Editar o check ${check.titulo}`}
-                >
-                  <Icone.lapis />
-                </button>
-              )}
-            </Dica>
-          )
-        })}
-
-        {card.checks.length === 0 && (
-          <li className="setorcard__semcheck">Sem check ainda.</li>
-        )}
-      </ul>
-    </Dica>
   )
 }
 

@@ -171,6 +171,13 @@ export function roteiroVigente(roteiro, nascimento) {
 const feito = (marcados, checkId) => Boolean(marcados?.[checkId])
 
 /**
+ * Os checks que a obra COBRA no card. O check opcional (o "Material de
+ * gases" na obra sem ensaio de gases — ver aplicarRegraDosGases) fica
+ * de fora: pode ser marcado, mas nao segura card, etapa nem conclusao.
+ */
+export const checksExigidos = (card) => (card?.checks ?? []).filter((c) => !c.opcional)
+
+/**
  * Card sem nenhum check nao entra na conta de nada.
  *
  * E o estado de quem acabou de criar o card e ainda nao escreveu os
@@ -178,12 +185,12 @@ const feito = (marcados, checkId) => Boolean(marcados?.[checkId])
  * TODAS as obras ate alguem lembrar de preencher — e ninguem ia
  * descobrir o porque.
  */
-const cardVale = (card) => (card?.checks?.length ?? 0) > 0
+const cardVale = (card) => checksExigidos(card).length > 0
 
-/** Card fechado = todos os checks dele marcados. */
+/** Card fechado = todos os checks cobrados dele marcados. */
 export function cardConcluido(card, marcados) {
   if (!cardVale(card)) return false
-  return card.checks.every((c) => feito(marcados, c.id))
+  return checksExigidos(card).every((c) => feito(marcados, c.id))
 }
 
 /** Etapa fecha quando todos os cards que valem fecharam. */
@@ -275,7 +282,7 @@ export function prontaParaConcluir(roteiro, obra) {
 
 /** Percentual concluido da obra (0–100), usado nas barras de progresso. */
 export function progressoDaObra(roteiro, marcados) {
-  const todos = (roteiro ?? []).flatMap((e) => e.cards.flatMap((c) => c.checks))
+  const todos = (roteiro ?? []).flatMap((e) => e.cards.flatMap(checksExigidos))
   if (todos.length === 0) return 0
   return Math.round((todos.filter((c) => feito(marcados, c.id)).length / todos.length) * 100)
 }
@@ -320,13 +327,55 @@ export function etapaDeExecucao(roteiro) {
   return (roteiro ?? []).find((e) => e.papel === 'execucao') ?? null
 }
 
-/** Os checks do sistema: o que abre a escolha e o que abre a execucao. */
+/** Os checks do sistema: o que abre a escolha, o que abre a execucao e o de gases. */
 export const CHECK_PLANEJAMENTO = 'planejamento_ensaios'
 export const CHECK_EXECUCAO = 'execucao_ensaios'
+export const CHECK_GASES = 'material_gases'
 
-/** true para os dois checks do sistema (nao se excluem nem se renomeiam). */
+/** true para os checks do sistema (nao se excluem nem se renomeiam). */
 export function checkDoSistema(check) {
   return Boolean(check?.tipo) && check.tipo !== 'comum'
+}
+
+/* ------------------------------------------------------------
+   O check "Material de gases" (2a etapa, Qualidade)
+
+   Cada ensaio do catalogo e HVAC ou GASES. O check de gases (tipo
+   'material_gases', atualizacao 17) so e OBRIGATORIO na obra que
+   tem algum ensaio de GASES planejado; nas outras ele fica opcional.
+   O servidor faz a mesma conta na conclusao da obra.
+   ------------------------------------------------------------ */
+
+/** Os ensaios de GASES planejados na obra. */
+export function ensaiosDeGases(obra, ensaioPorId) {
+  return (obra?.ensaios ?? [])
+    .map((id) => ensaioPorId(id))
+    .filter((e) => e?.classificacao === 'gases')
+}
+
+/**
+ * O roteiro da obra com o check de gases resolvido:
+ *   - sem ensaio de gases: `opcional: true` (fica fora da conta);
+ *   - com ensaio de gases: `exigidoPor` traz os nomes deles, que a
+ *     tela mostra ao passar o mouse.
+ */
+export function aplicarRegraDosGases(roteiro, gases) {
+  const tem = (roteiro ?? []).some((e) =>
+    (e.cards ?? []).some((c) => (c.checks ?? []).some((k) => k.tipo === CHECK_GASES)),
+  )
+  if (!tem) return roteiro
+  const nomes = (gases ?? []).map((e) => e.nome)
+  return roteiro.map((etapa) => ({
+    ...etapa,
+    cards: etapa.cards.map((card) => ({
+      ...card,
+      checks: card.checks.map((check) =>
+        check.tipo === CHECK_GASES
+          ? { ...check, opcional: nomes.length === 0, exigidoPor: nomes }
+          : check,
+      ),
+    })),
+  }))
 }
 
 /* ------------------------------------------------------------
@@ -689,7 +738,7 @@ export function avisoDeEtapa(roteiro, marcados, checkId, cargo) {
   if (!etapa) return null
 
   const meus = (etapa.cards ?? []).flatMap((card) =>
-    (card.checks ?? []).filter((k) => cargosDoCheck(k, card).includes(cargo)),
+    checksExigidos(card).filter((k) => cargosDoCheck(k, card).includes(cargo)),
   )
   if (meus.length === 0) return null
 
@@ -704,7 +753,7 @@ export function avisoDeEtapa(roteiro, marcados, checkId, cargo) {
      acabou de fechar, e listar a si mesmo seria o aviso se contradizer */
   const pendentes = new Set()
   ;(etapa.cards ?? []).forEach((card) => {
-    ;(card.checks ?? []).forEach((k) => {
+    checksExigidos(card).forEach((k) => {
       if (depois[k.id]) return
       cargosDoCheck(k, card).forEach((c) => {
         if (c !== cargo) pendentes.add(c)

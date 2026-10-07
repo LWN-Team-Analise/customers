@@ -166,8 +166,8 @@ export async function lerRoteiro() {
       simNao: l.sim_nao ?? false,
       /* o que o check pede — a dica que aparece ao passar o mouse */
       informacoes: l.informacoes ?? '',
-      /* 'comum', ou um dos dois do sistema: 'planejamento_ensaios' e
-         'execucao_ensaios' (ver db/atualizacao-14.sql.txt) */
+      /* 'comum', ou um do sistema: 'planejamento_ensaios' e
+         'execucao_ensaios' (atualizacao 14), 'material_gases' (17) */
       tipo: l.tipo ?? 'comum',
       vigenteDe: l.vigente_de,
       vigenteAte: l.vigente_ate,
@@ -484,10 +484,11 @@ router.delete('/cards/:id', exigeSessao, exige('editar_cards'), async (req, res)
      informacoes  a dica ao passar o mouse;
      cargos       quem marca (vazio = o setor do card).
 
-   Os dois checks do SISTEMA (tipo 'planejamento_ensaios' e
-   'execucao_ensaios', atualizacao 14) sustentam o fluxo dos
-   ensaios: nao se excluem, nao mudam de nome e nao viram
-   pergunta. Quem marca e a dica continuam editaveis.
+   Os checks do SISTEMA (tipo 'planejamento_ensaios' e
+   'execucao_ensaios', atualizacao 14; 'material_gases',
+   atualizacao 17) sustentam o fluxo dos ensaios: nao se excluem,
+   nao mudam de nome e nao viram pergunta. Quem marca e a dica
+   continuam editaveis.
    ------------------------------------------------------------ */
 
 const CHECK_DO_SISTEMA =
@@ -527,6 +528,83 @@ async function gravarCargosDoCheck(checkId, chaves) {
     )
   }
   return { ok: true }
+}
+
+/* ------------------------------------------------------------
+   Check ja MARCADO nao muda para tras
+
+   Editar um check (nome, pergunta, dica, quem marca) ou leva-lo para
+   outro card muda o que as obras enxergam. Enquanto nenhuma obra o
+   marcou, a mudanca e feita no proprio check e vale em toda obra.
+
+   Depois que alguma obra o marcou, ele e VERSIONADO: o de antes sai
+   agora (vigente_ate = agora) e um novo, ja com a mudanca, entra no
+   mesmo instante (vigente_de = agora). As obras que ja existem
+   continuam com o de antes — com as marcas e os prazos dele — e so as
+   criadas dali em diante pegam o novo.
+   ------------------------------------------------------------ */
+
+/** Em quantas obras o check ja foi marcado. */
+async function obrasQueMarcaram(checkId) {
+  const { rows } = await query('SELECT count(*)::int AS n FROM obra_check WHERE check_id = $1', [checkId])
+  return rows[0]?.n ?? 0
+}
+
+/** As chaves dos cargos donos do check (vazio = segue o card). */
+async function cargosDoCheck(checkId) {
+  const { rows } = await query(
+    `SELECT c.chave FROM etapa_check_cargo kc JOIN cargo c ON c.id = kc.cargo_id
+      WHERE kc.check_id = $1 ORDER BY kc.ordem`,
+    [checkId],
+  )
+  return rows.map((l) => l.chave)
+}
+
+const limparCargos = (chaves) => [...new Set((chaves ?? []).map((c) => String(c).trim()).filter(Boolean))]
+
+/** Todos os cargos da lista existem? (antes de versionar, para nao fechar o check a toa) */
+async function cargosExistem(chaves) {
+  if (chaves.length === 0) return true
+  const { rows } = await query('SELECT count(*)::int AS n FROM cargo WHERE chave = ANY($1)', [chaves])
+  return rows[0]?.n === chaves.length
+}
+
+/**
+ * Fecha o check agora e abre a versao nova, com `mudancas` por cima do
+ * que ele tinha. Devolve o id da versao nova.
+ *
+ * O de antes fecha PRIMEIRO: os checks do sistema tem indice unico por
+ * tipo entre os que valem. Se a versao nova nao entrar, o de antes
+ * reabre.
+ */
+async function versionarCheck(checkId, mudancas = {}) {
+  const { rows: antes } = await query('SELECT * FROM etapa_check WHERE id = $1', [checkId])
+  const atual = antes[0]
+  const cargos = mudancas.cargos ?? (await cargosDoCheck(checkId))
+  const agora = new Date()
+
+  await query('UPDATE etapa_check SET vigente_ate = $1 WHERE id = $2', [agora, checkId])
+  try {
+    const { rows } = await query(
+      `INSERT INTO etapa_check (card_id, ordem, titulo, sim_nao, informacoes, tipo, vigente_de)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id`,
+      [
+        mudancas.cardId ?? atual.card_id,
+        mudancas.ordem ?? atual.ordem,
+        mudancas.titulo ?? atual.titulo,
+        mudancas.simNao ?? atual.sim_nao,
+        mudancas.informacoes !== undefined ? mudancas.informacoes : atual.informacoes,
+        atual.tipo,
+        agora,
+      ],
+    )
+    await gravarCargosDoCheck(rows[0].id, cargos)
+    return String(rows[0].id)
+  } catch (erro) {
+    await query('UPDATE etapa_check SET vigente_ate = $1 WHERE id = $2', [atual.vigente_ate, checkId])
+    throw erro
+  }
 }
 
 router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req, res) => {
@@ -591,53 +669,156 @@ router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res
     const tipo = await tipoDoCheck(req.params.id)
     if (!tipo) return res.status(404).json({ erro: 'Check não encontrado.' })
 
+    const { rows: lidos } = await query(
+      'SELECT card_id, titulo, sim_nao, informacoes, vigente_ate FROM etapa_check WHERE id = $1',
+      [req.params.id],
+    )
+    const atual = lidos[0]
+    const cargosAtuais = await cargosDoCheck(req.params.id)
+
+    /* o check como ele fica: o que veio na chamada por cima do que ele tem */
+    const novo = {
+      titulo: atual.titulo,
+      simNao: atual.sim_nao === true,
+      informacoes: atual.informacoes ?? null,
+      cargos: cargosAtuais,
+    }
     if (req.body?.titulo !== undefined) {
-      const titulo = String(req.body.titulo).trim()
-      if (!titulo) return res.status(400).json({ erro: 'Escreva o que precisa ser feito.' })
-      const atual = await query('SELECT titulo FROM etapa_check WHERE id = $1', [req.params.id])
-      if (tipo !== 'comum' && atual.rows[0]?.titulo !== titulo) {
+      novo.titulo = String(req.body.titulo).trim()
+      if (!novo.titulo) return res.status(400).json({ erro: 'Escreva o que precisa ser feito.' })
+      if (tipo !== 'comum' && atual.titulo !== novo.titulo) {
         return res.status(409).json({ erro: CHECK_DO_SISTEMA })
       }
-      await query('UPDATE etapa_check SET titulo = $1 WHERE id = $2', [titulo, req.params.id])
     }
-
-    /* Virar (ou deixar de ser) pergunta vale para o check em todas as
-       obras que o enxergam — e o mesmo check. O que ja foi marcado fica:
-       marcado antes da mudanca continua feito, so sem resposta. */
     if (req.body?.simNao !== undefined) {
       if (tipo !== 'comum' && req.body.simNao === true) {
         return res.status(409).json({ erro: CHECK_DO_SISTEMA })
       }
-      await query('UPDATE etapa_check SET sim_nao = $1 WHERE id = $2', [
-        req.body.simNao === true,
-        req.params.id,
-      ])
+      novo.simNao = req.body.simNao === true
     }
-
-    if (req.body?.informacoes !== undefined) {
-      await query('UPDATE etapa_check SET informacoes = $1 WHERE id = $2', [
-        informacoesDoCorpo(req.body.informacoes),
-        req.params.id,
-      ])
-    }
-
+    if (req.body?.informacoes !== undefined) novo.informacoes = informacoesDoCorpo(req.body.informacoes)
     if (req.body?.cargos !== undefined) {
-      const alvo = await query('SELECT id FROM etapa_check WHERE id = $1', [req.params.id])
-      if (!alvo.rows[0]) return res.status(404).json({ erro: 'Check não encontrado.' })
-      const posto = await gravarCargosDoCheck(req.params.id, req.body.cargos)
-      if (posto.erro) return res.status(400).json({ erro: posto.erro })
+      novo.cargos = limparCargos(req.body.cargos)
+      if (!(await cargosExistem(novo.cargos))) return res.status(400).json({ erro: 'Cargo não encontrado.' })
     }
 
-    const check = await query('SELECT card_id, titulo FROM etapa_check WHERE id = $1', [req.params.id])
-    if (check.rows[0]) {
-      await registrarRoteiro(req, 'check.editado', 'Check do roteiro editado', {
-        ...(await nomesDoCard(check.rows[0].card_id)),
-        check: check.rows[0].titulo,
-      })
+    const mudou =
+      novo.titulo !== atual.titulo ||
+      novo.simNao !== (atual.sim_nao === true) ||
+      novo.informacoes !== (atual.informacoes ?? null) ||
+      novo.cargos.join('|') !== cargosAtuais.join('|')
+    if (!mudou) return res.json({ ok: true, id: String(req.params.id), versionado: false })
+
+    /* ja marcado em alguma obra (e ainda valendo): a mudanca e uma
+       versao nova, so para as obras criadas daqui em diante */
+    const marcadas = atual.vigente_ate ? 0 : await obrasQueMarcaram(req.params.id)
+    let id = String(req.params.id)
+    if (marcadas > 0) {
+      id = await versionarCheck(req.params.id, novo)
+    } else {
+      await query('UPDATE etapa_check SET titulo = $1, sim_nao = $2, informacoes = $3 WHERE id = $4', [
+        novo.titulo,
+        novo.simNao,
+        novo.informacoes,
+        req.params.id,
+      ])
+      await gravarCargosDoCheck(req.params.id, novo.cargos)
     }
-    return res.json({ ok: true })
+
+    await registrarRoteiro(
+      req,
+      'check.editado',
+      marcadas > 0 ? 'Check do roteiro editado (vale para as próximas obras)' : 'Check do roteiro editado',
+      { ...(await nomesDoCard(atual.card_id)), check: novo.titulo },
+    )
+    return res.json({ ok: true, id, versionado: marcadas > 0, obras: marcadas })
   } catch (erro) {
     return tratar(erro, res, 'roteiro/check-editar')
+  }
+})
+
+/* ------------------------------------------------------------
+   A ORDEM dos checks — arrastar para cima, para baixo, ou para
+   outro card (de qualquer setor, de qualquer etapa)
+
+   PUT /roteiro/cards/:id/checks/ordem  { checkIds: [...] }
+
+   `checkIds` e a fila inteira do card de destino, na ordem nova — e
+   pode trazer um check que estava em outro card (o que foi arrastado
+   para ca). Mudar a ordem dentro do card vale na hora, em toda obra.
+   Levar para outro card segue a regra de cima: sem marca, o check
+   muda de card; ja marcado em alguma obra, vira versao nova no card
+   novo, so para as obras criadas daqui em diante.
+
+   Os checks do sistema mudam de ordem e de card, mas nao saem da
+   etapa deles: e por ela que o fluxo dos ensaios os encontra.
+   ------------------------------------------------------------ */
+
+router.put('/cards/:id/checks/ordem', exigeSessao, exige('editar_checks'), async (req, res) => {
+  const pedidos = [...new Set((req.body?.checkIds ?? []).map((id) => String(id)))]
+  if (pedidos.length === 0) return res.status(400).json({ erro: 'Diga a ordem dos checks.' })
+
+  try {
+    const { rows: cards } = await query(
+      'SELECT id, etapa_id FROM etapa_card WHERE id = $1 AND vigente_ate IS NULL',
+      [req.params.id],
+    )
+    const destino = cards[0]
+    if (!destino) return res.status(404).json({ erro: 'Card não encontrado.' })
+
+    const { rows: checks } = await query(
+      `SELECT ck.id, ck.card_id, ck.titulo, ck.tipo, ck.vigente_ate, kd.etapa_id
+         FROM etapa_check ck JOIN etapa_card kd ON kd.id = ck.card_id
+        WHERE ck.id = ANY($1::bigint[])`,
+      [pedidos],
+    )
+    if (checks.length !== pedidos.length || checks.some((c) => c.vigente_ate)) {
+      return res.status(404).json({ erro: 'Check não encontrado (ele pode ter saído do roteiro).' })
+    }
+    const sistemaForaDaEtapa = checks.find(
+      (c) => c.tipo !== 'comum' && String(c.etapa_id) !== String(destino.etapa_id),
+    )
+    if (sistemaForaDaEtapa) {
+      return res.status(409).json({
+        erro: `"${sistemaForaDaEtapa.titulo}" é do sistema: muda de ordem e de card, mas não sai da etapa dele.`,
+      })
+    }
+
+    const fila = []
+    const versionados = []
+    for (const id of pedidos) {
+      const check = checks.find((c) => String(c.id) === id)
+      if (String(check.card_id) === String(destino.id)) {
+        fila.push(id)
+        continue
+      }
+      const marcadas = await obrasQueMarcaram(id)
+      if (marcadas > 0) {
+        const novoId = await versionarCheck(id, { cardId: destino.id })
+        versionados.push({ de: id, para: novoId, titulo: check.titulo, obras: marcadas })
+        fila.push(novoId)
+      } else {
+        await query('UPDATE etapa_check SET card_id = $1 WHERE id = $2', [destino.id, id])
+        fila.push(id)
+      }
+    }
+    for (const [ordem, id] of fila.entries()) {
+      await query('UPDATE etapa_check SET ordem = $1 WHERE id = $2', [ordem, id])
+    }
+
+    const movidos = checks.filter((c) => String(c.card_id) !== String(destino.id))
+    await registrarRoteiro(
+      req,
+      movidos.length > 0 ? 'check.movido' : 'check.reordenado',
+      movidos.length > 0 ? 'Check levado para outro card' : 'Ordem dos checks alterada',
+      {
+        ...(await nomesDoCard(destino.id)),
+        ...(movidos.length > 0 ? { check: movidos.map((c) => c.titulo).join(', ') } : {}),
+      },
+    )
+    return res.json({ ok: true, checkIds: fila, versionados })
+  } catch (erro) {
+    return tratar(erro, res, 'roteiro/check-ordem')
   }
 })
 

@@ -266,6 +266,21 @@
   --acao-fg: var(--quadro-emerg-acento);
 }
 
+/* "Editar" (o modelo da obra): neutro, do lado dos dois de criar */
+.acao--modelo {
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text-base);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.acao--modelo:hover {
+  filter: none;
+  background: var(--control-bg-hover);
+  border-color: var(--line-strong);
+}
+
 .acao--obra-padrao:hover,
 .acao--obra-emergencia:hover {
   filter: none;

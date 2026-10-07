@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useDados } from '@/context/DadosContext'
-import { chaveDoCargo, diasAte, progressoDaObra, situacaoDaObra } from '@/domain/obras'
+import { chaveDoCargo, checksExigidos, diasAte, progressoDaObra, situacaoDaObra } from '@/domain/obras'
 import { hojeISO } from '@/utils/formato'
 import { Colunas, Linha, Rosca } from './graficos'
 import PainelDespesas from './PainelDespesas'
@@ -416,7 +416,7 @@ export default function Painel({ mes, passo = 'mes' }) {
   const checksAbertos = useMemo(
     () =>
       abertas.reduce((total, obra) => {
-        const todos = roteiroDaObra(obra).flatMap((e) => e.cards.flatMap((c) => c.checks ?? []))
+        const todos = roteiroDaObra(obra).flatMap((e) => e.cards.flatMap(checksExigidos))
         return total + todos.filter((c) => !obra.checks?.[c.id]).length
       }, 0),
     [abertas, roteiroDaObra],

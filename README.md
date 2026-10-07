@@ -143,7 +143,8 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-9.sql.txt`, `db/atualizacao-10.sql.txt`,
 > `db/atualizacao-11.sql.txt`, `db/atualizacao-12.sql.txt`,
 > `db/atualizacao-13.sql.txt`, `db/atualizacao-14.sql.txt`,
-> `db/atualizacao-15.sql.txt` e, por ultimo, `db/atualizacao-16.sql.txt`.
+> `db/atualizacao-15.sql.txt`, `db/atualizacao-16.sql.txt` e, por ultimo,
+> `db/atualizacao-17.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -201,6 +202,7 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-14.sql.txt` | etapas fixas, checks dos ensaios, catalogo e execucao de ensaios |
 | `db/atualizacao-15.sql.txt` | prazo da execucao separado do prazo da obra                      |
 | `db/atualizacao-16.sql.txt` | etapas de volta a "1° Etapa"...; fim da regra dos 3 dias         |
+| `db/atualizacao-17.sql.txt` | ensaio HVAC/GASES; check "Material de gases" do sistema          |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
@@ -1450,6 +1452,12 @@ quadro. O card so abre a obra: os checks moram dentro dela.
 Obra nova nasce **so** pelos botoes **+ Obra padrao** (verde) e **+ Obra
 emergencia** (azul) da barra — as colunas nao tem "+".
 
+Ao lado deles, **Editar** abre o **Modelo da obra** (`ModalModeloObra`): o
+roteiro que uma obra criada agora vai ter, com todas as etapas abertas, para
+criar e editar etapas, cards e checks — e arrastar checks — sem precisar
+entrar numa obra. Tudo ali vale para as obras criadas a partir de agora.
+Aparece para quem tem alguma das permissoes do roteiro.
+
 ### A cor do card
 
 A cor sai de `situacaoDaObra()` (`src/domain/obras.js`), e vale a mais urgente:
@@ -1539,8 +1547,27 @@ com a data de nascimento de X; excluir carimba `vigente_ate` com a mesma data
 Depois de filtrar, as etapas sao **renumeradas dentro da propria obra**: se a 2a
 saiu do roteiro em maio, a obra de junho ve a antiga 3a como a sua 2a.
 
-Renomear uma etapa, um card ou um check continua valendo para todas: e a mesma
-peca, so mudou o rotulo.
+Renomear uma etapa ou um card continua valendo para todas: e a mesma peca, so
+mudou o rotulo.
+
+**Check ja marcado nao muda para tras.** Editar um check (nome, Sim/Nao,
+informacoes, quem marca) ou leva-lo para outro card:
+
+- ninguem marcou ainda: a mudanca e feita no proprio check e vale em toda obra;
+- alguma obra ja marcou: o check vira **versao nova** (o de antes fecha agora,
+  o novo abre agora). As obras que ja existem continuam com o de antes — com
+  as marcas e os prazos dele — e so as criadas dali em diante pegam o novo. O
+  pop-up do check avisa ("Ja marcado em N obras...") antes de salvar.
+
+**Arrastar checks.** Pelo pegador (o primeiro botao que aparece ao passar o
+mouse no check) o check sobe, desce ou vai para outro card — de qualquer
+setor, de qualquer etapa — dentro da obra ou no Modelo da obra
+(`PUT /roteiro/cards/:id/checks/ordem`, `src/pages/Obras/arrasteChecks.js`).
+Mudar a ordem vale na hora; mudar de card segue a regra de cima. Os checks do
+sistema mudam de ordem e de card, mas nao saem da etapa deles.
+
+Os botoes do check (pegador, prazo, lapis) so ocupam lugar com o mouse em
+cima: fechados nao tem largura, e o texto do check usa a linha inteira.
 
 ### Etapas fixas, prazos e ensaios
 
@@ -1602,6 +1629,18 @@ ficar abaixo disso (um dia corrigido, um ensaio novo no planejamento).
 editar ensaios" (`gerenciar_ensaios`) cria, renomeia e exclui pelo botao
 "Gerenciar ensaios" do planejamento. Excluir um ensaio ja usado so o tira do
 catalogo: as obras que o tinham continuam com ele e com a execucao.
+
+Todo ensaio e **HVAC** ou **GASES** (`ensaio.classificacao`, atualizacao 17):
+escolhido ao criar (o "Adicionar" so libera com a classificacao) e trocavel na
+lista. Os ensaios que ja existiam ficam sem classificacao ate alguem escolher.
+
+**Material de gases.** O check da Qualidade na 2a etapa que fala de gases
+("Material de gases") virou check do sistema (`tipo = 'material_gases'`). Ele
+so e **obrigatorio** na obra que tem algum ensaio de GASES planejado — a dica
+dele diz qual ("Obrigatorio: esta obra tem ensaio de GASES atribuido (...)") e
+o selo fica "obrigatorio". Nas outras obras ele fica "opcional": pode ser
+marcado, mas nao segura o card, a etapa, o progresso nem a conclusao da obra
+(`aplicarRegraDosGases` na tela; a mesma conta no `POST /obras/:id/concluir`).
 
 As duas permissoes novas (`definir_prazos` e `gerenciar_ensaios`) so entram
 sozinhas no setor de acesso total. Os outros setores ganham marcando a caixa

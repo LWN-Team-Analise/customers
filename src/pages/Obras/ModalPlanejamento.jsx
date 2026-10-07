@@ -24,6 +24,16 @@ import './ModalEnsaios.css'
  * Tirar um ensaio da obra NAO apaga a execucao registrada dele: os dias
  * ficam guardados e voltam se ele for posto de novo.
  */
+/** O selo HVAC / GASES do ensaio (nada no ensaio ainda sem classificacao). */
+function ClasseDoEnsaio({ valor }) {
+  if (!valor) return null
+  return (
+    <span className="ensaio__classe" data-classe={valor}>
+      {valor === 'gases' ? 'GASES' : 'HVAC'}
+    </span>
+  )
+}
+
 export default function ModalPlanejamento({
   aberto,
   obra,
@@ -167,6 +177,7 @@ export default function ModalPlanejamento({
                   >
                     <Pegador />
                     <span className="ensaio__nome">{e.nome}</span>
+                    <ClasseDoEnsaio valor={e.classificacao} />
                     <button
                       type="button"
                       className="ensaio__mover"
@@ -221,6 +232,7 @@ export default function ModalPlanejamento({
                 >
                   {podeEditar && <Pegador />}
                   <span className="ensaio__nome">{nome(id)}</span>
+                  <ClasseDoEnsaio valor={ensaioPorId(id)?.classificacao} />
                   {comRegistro.has(id) && (
                     <span className="ensaio__selo" title="Já tem execução registrada">
                       em execução

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
-import { cargosDoCheck, chaveDoCargo, estadoDaEtapa, podeEditarCheck } from '@/domain/obras'
+import { cargosDoCheck, chaveDoCargo, checksExigidos, estadoDaEtapa, podeEditarCheck } from '@/domain/obras'
 
 /**
  * As TAREFAS da pagina inicial.
@@ -59,6 +59,9 @@ export default function useTarefas() {
           etapa.cards.forEach((card) => {
             ;(card.checks ?? []).forEach((check) => {
               const marca = obra.checks?.[check.id]
+              /* o check opcional (Material de gases sem ensaio de gases)
+                 nao vira tarefa de ninguem enquanto nao for marcado */
+              if (check.opcional && !marca) return
               const cargos = cargosDoCheck(check, card)
 
               lista.push({
@@ -77,7 +80,7 @@ export default function useTarefas() {
                 cardTitulo: card.titulo ?? '',
                 cardCargos: card.cargos ?? [],
                 /* quantos checks o card tem — e o denominador do "3 de 5" */
-                cardTotal: (card.checks ?? []).length,
+                cardTotal: checksExigidos(card).length,
                 cargos,
                 status: marca ? 'concluida' : estado === 'bloqueada' ? 'espera' : 'andamento',
                 feitoPor: marca?.feitoPor ?? null,

@@ -14,6 +14,7 @@ import {
 import { dataExtensa, dataHora, hojeISO } from '@/utils/formato'
 import CardObra from './CardObra'
 import ModalObra from './ModalObra'
+import ModalModeloObra from './ModalModeloObra'
 import ModalMembros from './ModalMembros'
 import ModalSetores from './ModalSetores'
 import ModalObservacoes from './ModalObservacoes'
@@ -181,6 +182,8 @@ export default function Obras() {
   const navigate = useNavigate()
 
   const [modalObra, setModalObra] = useState(null) // 'padrao' | 'emergencia' | null
+  /* o modelo da obra: editar o roteiro sem entrar numa obra */
+  const [modelo, setModelo] = useState(false)
   const [modalMembros, setModalMembros] = useState(false)
   const [modalSetores, setModalSetores] = useState(false)
   /* qual aba do pop-up de observacoes abrir: 'atuais', 'historico' ou
@@ -190,6 +193,7 @@ export default function Obras() {
 
   /* sem a permissao, o botao nem aparece — e a API recusa igual */
   const podeCriarObra = pode('editar_obras')
+  const podeModelo = pode('editar_etapa') || pode('editar_cards') || pode('editar_checks')
 
   const [prioridade, setPrioridade] = useState(null)
   const [ateData, setAteData] = useState('')
@@ -504,6 +508,30 @@ export default function Obras() {
                 <Mais />
                 Obra emergência
               </button>
+              {podeModelo && (
+                <button
+                  type="button"
+                  className="acao acao--modelo"
+                  onClick={() => setModelo(true)}
+                  title="Editar as etapas, os cards e os checks das próximas obras"
+                >
+                  Editar
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* sem permissao de criar obra, o Editar fica sozinho */}
+          {!podeCriarObra && podeModelo && (
+            <div className="barra__criar">
+              <button
+                type="button"
+                className="acao acao--modelo"
+                onClick={() => setModelo(true)}
+                title="Editar as etapas, os cards e os checks das próximas obras"
+              >
+                Editar
+              </button>
             </div>
           )}
 
@@ -676,6 +704,8 @@ export default function Obras() {
           </div>
         </div>
       </section>
+
+      <ModalModeloObra aberto={modelo} aoFechar={() => setModelo(false)} />
 
       <ModalObra
         aberto={modalObra !== null}

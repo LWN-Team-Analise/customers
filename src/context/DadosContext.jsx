@@ -8,7 +8,9 @@ import { corAdaptada, corSuave, textoSobre } from '@/utils/cor'
 import { hojeISO } from '@/utils/formato'
 import { podeFazer } from '@/domain/permissoes'
 import {
+  aplicarRegraDosGases,
   chaveDoCargo,
+  ensaiosDeGases,
   estadoDaEtapa,
   etapaAtual,
   obraFechada,
@@ -799,6 +801,12 @@ export function DadosProvider({ children }) {
     [gravar],
   )
 
+  /* arrastar: a fila do card de destino, na ordem nova (ver arrasteChecks.js) */
+  const ordenarChecks = useCallback(
+    (cardId, checkIds, obraId) => gravar(() => roteiroApi.ordenarChecks(cardId, checkIds, obraId)),
+    [gravar],
+  )
+
   /* ============================================================
      A equipe que as telas enxergam
 
@@ -839,10 +847,18 @@ export function DadosProvider({ children }) {
 
   const { roteiro: roteiroBruto } = estado
 
-  /** O roteiro como esta obra o enxerga (com as etapas renumeradas). */
+  /**
+   * O roteiro como esta obra o enxerga (com as etapas renumeradas) — e
+   * com o check "Material de gases" obrigatorio so se ela tem ensaio de
+   * gases planejado (aplicarRegraDosGases).
+   */
   const roteiroDaObra = useCallback(
-    (obra) => roteiroVigente(roteiroBruto, obra?.criadoEm),
-    [roteiroBruto],
+    (obra) =>
+      aplicarRegraDosGases(
+        roteiroVigente(roteiroBruto, obra?.criadoEm),
+        ensaiosDeGases(obra, ensaioPorId),
+      ),
+    [roteiroBruto, ensaioPorId],
   )
 
   /** O roteiro que vale HOJE — para telas que nao falam de uma obra so. */
@@ -1112,6 +1128,7 @@ export function DadosProvider({ children }) {
       adicionarCheck,
       atualizarCheck,
       removerCheck,
+      ordenarChecks,
 
       concluida,
       prontaParaConcluir,
@@ -1221,6 +1238,7 @@ export function DadosProvider({ children }) {
       adicionarCheck,
       atualizarCheck,
       removerCheck,
+      ordenarChecks,
       concluida,
       prontaParaConcluir,
       etapaDaObra,

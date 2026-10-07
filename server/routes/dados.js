@@ -346,13 +346,7 @@ async function lerTudo(usuarioId) {
     setores: setores.rows.map(paraSetor),
     /* o catalogo inteiro, inclusive o que saiu (ativo = false): a obra
        que ja planejou um ensaio retirado continua mostrando o nome dele */
-    ensaios: ensaios.rows.map((l) => ({
-      id: String(l.id),
-      nome: l.nome,
-      descricao: l.descricao ?? '',
-      ordem: l.ordem,
-      ativo: l.ativo,
-    })),
+    ensaios: ensaios.rows.map(paraEnsaio),
     etiquetas: etiquetas.rows.map((l) => ({
       id: String(l.id),
       nome: l.nome,
@@ -1279,22 +1273,36 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
 
        vigenteDe <= nascimento < vigenteAte, nos tres niveis — etapa,
        card e check —, porque apagar a etapa apaga junto o que estava
-       dentro dela. */
-    const conta = await query(
-      `SELECT count(*)                                  AS total,
-              count(*) FILTER (WHERE m.obra_id IS NULL) AS abertos
-         FROM obra o
-         JOIN etapa_check ec ON ec.vigente_de <= o.criado_em
-                            AND (ec.vigente_ate IS NULL OR o.criado_em < ec.vigente_ate)
-         JOIN etapa_card kd  ON kd.id = ec.card_id
-                            AND kd.vigente_de <= o.criado_em
-                            AND (kd.vigente_ate IS NULL OR o.criado_em < kd.vigente_ate)
-         JOIN etapa et       ON et.id = kd.etapa_id
-                            AND et.vigente_de <= o.criado_em
-                            AND (et.vigente_ate IS NULL OR o.criado_em < et.vigente_ate)
-         LEFT JOIN obra_check m ON m.obra_id = o.id AND m.check_id = ec.id
-        WHERE o.id = $1`,
-      [req.params.id],
+       dentro dela.
+
+       O check "Material de gases" (tipo material_gases) so conta na
+       obra que tem ensaio de GASES planejado; nas outras e opcional. */
+    const contar = (comGases) =>
+      query(
+        `SELECT count(*)                                  AS total,
+                count(*) FILTER (WHERE m.obra_id IS NULL) AS abertos
+           FROM obra o
+           JOIN etapa_check ec ON ec.vigente_de <= o.criado_em
+                              AND (ec.vigente_ate IS NULL OR o.criado_em < ec.vigente_ate)
+           JOIN etapa_card kd  ON kd.id = ec.card_id
+                              AND kd.vigente_de <= o.criado_em
+                              AND (kd.vigente_ate IS NULL OR o.criado_em < kd.vigente_ate)
+           JOIN etapa et       ON et.id = kd.etapa_id
+                              AND et.vigente_de <= o.criado_em
+                              AND (et.vigente_ate IS NULL OR o.criado_em < et.vigente_ate)
+           LEFT JOIN obra_check m ON m.obra_id = o.id AND m.check_id = ec.id
+          WHERE o.id = $1
+          ${comGases
+            ? `AND (ec.tipo <> 'material_gases'
+                   OR EXISTS (SELECT 1 FROM obra_ensaio oe
+                                JOIN ensaio en ON en.id = oe.ensaio_id
+                               WHERE oe.obra_id = o.id AND en.classificacao = 'gases'))`
+            : ''}`,
+        [req.params.id],
+      )
+    /* banco sem as atualizacoes 14/17: a conta de antes, com todo check */
+    const conta = await contar(true).catch((erro) =>
+      ['42703', '42P01'].includes(erro.code) ? contar(false) : Promise.reject(erro),
     )
 
     const { total, abertos } = conta.rows[0] ?? { total: 0, abertos: 0 }
@@ -2023,27 +2031,41 @@ router.put('/obras/:id/execucao/dia', exigeSessao, obraAberta, async (req, res) 
    o tinham, com a execucao registrada. Sem uso nenhum, sai de vez.
    ------------------------------------------------------------ */
 
-const paraEnsaio = (l) => ({
-  id: String(l.id),
-  nome: l.nome,
-  descricao: l.descricao ?? '',
-  ordem: l.ordem,
-  ativo: l.ativo,
-})
+function paraEnsaio(l) {
+  return {
+    id: String(l.id),
+    nome: l.nome,
+    descricao: l.descricao ?? '',
+    ordem: l.ordem,
+    ativo: l.ativo,
+    /* 'hvac' | 'gases' — null no ensaio antigo, ainda sem classificacao */
+    classificacao: l.classificacao ?? null,
+  }
+}
 
 const SEM_ENSAIO = 'Ensaios ainda não existem no banco (atualização 14).'
+const SEM_CLASSIFICACAO = 'A classificação dos ensaios ainda não existe no banco (atualização 17).'
+
+/** As duas classificacoes de ensaio. */
+const CLASSIFICACOES = ['hvac', 'gases']
 
 router.post('/ensaios', exigeSessao, exige('gerenciar_ensaios'), async (req, res) => {
   const nome = texto(req.body?.nome)
   const descricao = texto(req.body?.descricao).slice(0, 600) || null
+  const classificacao = texto(req.body?.classificacao)
   if (!nome) return res.status(400).json({ erro: 'Escreva o nome do ensaio.' })
+  /* todo ensaio novo nasce HVAC ou GASES: e a classificacao que decide
+     se a obra precisa do check "Material de gases" */
+  if (!CLASSIFICACOES.includes(classificacao)) {
+    return res.status(400).json({ erro: 'Escolha a classificação do ensaio: HVAC ou GASES.' })
+  }
 
   try {
     const { rows } = await query(
-      `INSERT INTO ensaio (nome, descricao, ordem, criado_por)
-       VALUES ($1, $2, coalesce((SELECT max(ordem) FROM ensaio), 0) + 1, $3)
+      `INSERT INTO ensaio (nome, descricao, classificacao, ordem, criado_por)
+       VALUES ($1, $2, $3, coalesce((SELECT max(ordem) FROM ensaio), 0) + 1, $4)
        RETURNING *`,
-      [nome, descricao, req.dono.sub],
+      [nome, descricao, classificacao, req.dono.sub],
     )
     await registrarAtividade(req, {
       acao: 'ensaio.criado',
@@ -2056,6 +2078,7 @@ router.post('/ensaios', exigeSessao, exige('gerenciar_ensaios'), async (req, res
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ erro: 'Já existe um ensaio com esse nome.' })
     if (e.code === '42P01') return res.status(501).json({ erro: SEM_ENSAIO })
+    if (e.code === '42703') return res.status(501).json({ erro: SEM_CLASSIFICACAO })
     return tratar(e, res, 'dados/ensaio-criar')
   }
 })
@@ -2072,6 +2095,14 @@ router.patch('/ensaios/:id', exigeSessao, exige('gerenciar_ensaios'), async (req
   if (req.body?.descricao !== undefined) {
     valores.push(texto(req.body.descricao).slice(0, 600) || null)
     campos.push(`descricao = $${valores.length}`)
+  }
+  if (req.body?.classificacao !== undefined) {
+    const classificacao = texto(req.body.classificacao)
+    if (!CLASSIFICACOES.includes(classificacao)) {
+      return res.status(400).json({ erro: 'A classificação do ensaio é HVAC ou GASES.' })
+    }
+    valores.push(classificacao)
+    campos.push(`classificacao = $${valores.length}`)
   }
   if (campos.length === 0) return res.status(400).json({ erro: 'Nada para alterar.' })
   valores.push(req.params.id)
@@ -2093,6 +2124,7 @@ router.patch('/ensaios/:id', exigeSessao, exige('gerenciar_ensaios'), async (req
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ erro: 'Já existe um ensaio com esse nome.' })
     if (e.code === '42P01') return res.status(501).json({ erro: SEM_ENSAIO })
+    if (e.code === '42703') return res.status(501).json({ erro: SEM_CLASSIFICACAO })
     return tratar(e, res, 'dados/ensaio-editar')
   }
 })

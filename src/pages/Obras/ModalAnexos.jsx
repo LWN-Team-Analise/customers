@@ -188,11 +188,6 @@ export default function ModalAnexos({ aberto, obra, somenteLeitura = false, aoFe
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Anexos da obra"
-      subtitulo={
-        somenteLeitura
-          ? undefined
-          : 'Os documentos ficam guardados nesta obra. Até 4 MB por arquivo.'
-      }
       largura={520}
     >
       <div className="anexos">
