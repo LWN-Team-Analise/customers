@@ -141,7 +141,9 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-5.sql.txt`, `db/atualizacao-6.sql.txt`,
 > `db/atualizacao-7.sql.txt`, `db/atualizacao-8.sql.txt`,
 > `db/atualizacao-9.sql.txt`, `db/atualizacao-10.sql.txt`,
-> `db/atualizacao-11.sql.txt` e, por ultimo, `db/atualizacao-12.sql.txt`.
+> `db/atualizacao-11.sql.txt`, `db/atualizacao-12.sql.txt`,
+> `db/atualizacao-13.sql.txt`, `db/atualizacao-14.sql.txt` e, por ultimo,
+> `db/atualizacao-15.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -195,6 +197,9 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-10.sql.txt` | cliente no envio (obra opcional) e as permissoes da aba Despesas |
 | `db/atualizacao-11.sql.txt` | permissoes "Ver dashboard" e "Excluir lancamento de despesa"    |
 | `db/atualizacao-12.sql.txt` | CPF opcional: cadastro de colaborador so pelo e-mail             |
+| `db/atualizacao-13.sql.txt` | check Sim/Nao, informacoes do card e do check, prazos por obra   |
+| `db/atualizacao-14.sql.txt` | etapas fixas, checks dos ensaios, catalogo e execucao de ensaios |
+| `db/atualizacao-15.sql.txt` | prazo da execucao separado do prazo da obra; nomes das etapas    |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
@@ -1279,6 +1284,22 @@ inteiros de calendario**, com `Date.UTC` nas duas pontas: subtrair dois
 `new Date()` erra por uma hora em toda virada de horario de verao, e um
 relatorio que muda de resultado em outubro nao serve para nada.
 
+### A ordem do Dashboard
+
+1. **Atraso e adiantamento** — no topo. Um resumo com tres contadores para as
+   obras **em andamento hoje** (adiantadas, no prazo, atrasadas — e as sem
+   prazo final) e para as **concluidas no mes** (adiantadas, no dia,
+   atrasadas), com as atrasadas pelo nome. Embaixo, os cartoes Atraso e
+   Adiantamento, obra a obra.
+   Em andamento: **atrasada** e a que tem algum prazo vencido (o final, o de
+   uma etapa ou o de um check); **adiantada** e a que ja fez pelo menos 10
+   pontos a mais do que o tempo que passou entre o inicio e o prazo final; o
+   resto com prazo e **no prazo**.
+2. **Tempo de resposta**.
+3. **Entregas no prazo** (a rosca).
+4. Tempo medio de obra em campo — a etapa de execucao e a fixa
+   (`etapa.papel = 'execucao'`) quando existe.
+
 ### Os graficos
 
 Quatro, em `src/pages/Home/graficos.jsx`, **sem biblioteca nenhuma**:
@@ -1417,12 +1438,55 @@ Quem separa as duas listas e o `DadosContext`: `observacoesQuadro` (o que vale
 hoje, e o que o painel mostra) e `historicoObservacoes` (o que venceu, da
 vencida mais recente para a mais antiga).
 
+### O quadro
+
+Uma coluna por etapa, **lado a lado**, ocupando a largura — 1ª Comercial,
+2ª Planejamento, 3ª Execucao, 4ª Entrega, 5ª Encerramento. A obra padrao
+fica na coluna da etapa em que esta; etapa sem obra aparece em branco. Na
+ponta direita, **Obras emergenciais** e, embaixo dela, as **Observacoes** do
+quadro. O card so abre a obra: os checks moram dentro dela.
+
+Obra nova nasce **so** pelos botoes **+ Obra padrao** (verde) e **+ Obra
+emergencia** (azul) da barra — as colunas nao tem "+".
+
+### A cor do card
+
+A cor sai de `situacaoDaObra()` (`src/domain/obras.js`), e vale a mais urgente:
+
+| Cor      | Quando                                                                 |
+| -------- | ---------------------------------------------------------------------- |
+| verde    | obra padrao com os prazos em dia                                       |
+| azul     | obra de emergencia com os prazos em dia                                |
+| amarelo  | um check ou uma etapa passou do prazo; ou um prazo chegando longe de terminar |
+| laranja  | 3a etapa aberta, prazo da execucao muito perto (2 dias, ou ultimo quarto) |
+| vermelho | prazo da execucao amanha ou hoje; ou um prazo ja vencido (selo Atrasada)  |
+
+**Sao dois prazos, e cada um manda numa coisa:**
+
+- **Prazo final da obra** (`data_conclusao`) — a obra inteira, ate a entrega
+  da documentacao. Pesa em qualquer etapa enquanto houver check aberto:
+  vencido e "Atrasada"; faltando 3 dias com a obra abaixo de 80%, amarelo.
+- **Prazo da execucao** (`execucao_prazo`, com `execucao_inicio`) — so a 3a
+  etapa. Enquanto ela esta aberta, a cor anda do verde ao vermelho conforme o
+  tempo que resta do periodo de execucao (amarelo com metade ou 3 dias,
+  laranja com um quarto ou 2 dias, vermelho **1 dia antes**). **Fechada a 3a
+  etapa, ele sai da conta** e o card volta a cor normal — se o prazo da obra
+  estiver em dia.
+
+Exemplo: obra de 10 dias com execucao de 3. Nos 3 dias de execucao o card
+segue o prazo da execucao; depois dela, so o prazo da obra conta.
+
+Na emergencia (periodo menor que 3 dias) a escala nao diz nada: ela fica azul
+ate um prazo vencer. Quando a cor nao e a de sempre, uma linha no card diz o
+porque ("Prazo de "Hospedagem" venceu em 03/10 — ADM", "Prazo da execucao
+vence amanha").
+
 ### O card da obra
 
 O card mostra a logo da empresa, **o n. da proposta e o nome do cliente**, a
-etapa atual, a descricao, a prioridade com a data prevista e as fotos de quem
-mexeu na obra. As etiquetas `[tec] [gq]` no canto superior direito sao os
-setores que ainda devem informacao na etapa atual.
+etapa atual, os setores que ainda devem informacao nela, o motivo da cor, a
+descricao, a barra da execucao dos ensaios, a prioridade com o inicio e o
+prazo final e as fotos de quem mexeu na obra.
 
 O titulo e `"1042/2026 - Acme"`: **o n. da proposta na frente**, porque e por
 ele que a obra e procurada no resto da empresa — quem liga perguntando de uma
@@ -1484,6 +1548,68 @@ saiu do roteiro em maio, a obra de junho ve a antiga 3a como a sua 2a.
 
 Renomear uma etapa, um card ou um check continua valendo para todas: e a mesma
 peca, so mudou o rotulo.
+
+### Etapas fixas, prazos e ensaios
+
+**Etapas fixas.** As etapas de fabrica (`etapa.fixa`, atualizacao 14) sao o
+esqueleto do fluxo e **nao se renomeiam, nao se reordenam e nao se excluem** —
+a tela mostra um cadeado no lugar do lapis e a API responde 409. Os nomes
+sao 1ª Comercial, 2ª Planejamento, 3ª Execucao, 4ª Entrega e 5ª Encerramento
+(atualizacao 15), no quadro e dentro da obra. As tres primeiras tem um papel
+interno (`etapa.papel`: planejamento, intermediaria, execucao) — e por ele que
+o sistema acha onde mora o Planejamento de ensaios e qual etapa e a execucao.
+So as etapas criadas a mao seguem editaveis. Os cards e os checks dentro de
+uma etapa fixa continuam editaveis.
+
+**O card e de um setor so.** O gradiente de varios setores (e "qualquer um
+deles marca") saiu. Quem marca cada check e decidido NO CHECK.
+
+**Tudo o que diz como um check se comporta mora no check:**
+
+- `[ ] Obrigatorio responder Sim ou Nao?` — marcada, o check abre a pergunta.
+  Sim marca com ✓; Nao tambem marca, com um X e "Nao" do lado. No mesmo card um
+  check pode pedir resposta e o do lado nao;
+- **Prazo** nesta obra (com a permissao "Pode definir prazo para checks");
+- **Quem marca** (vazio = o setor do card);
+- **Informacoes** — a dica ao passar o mouse.
+
+**Prazo de um check especifico.** Com `definir_prazos`, o calendario no
+cabecalho da etapa abre "Prazos dos checks": escolher o check, escolher a
+data, salvar. O prazo fica gravado naquele check, naquela obra
+(`obra_prazo_check`). O calendario de cada check faz o mesmo direto.
+
+**Emergencia = execucao em menos de 3 dias.** Com o periodo de execucao
+definido (`execucao_inicio` → `execucao_prazo`), conta ele; sem ele, conta a
+obra inteira (inicio → prazo final). Menor que 3 dias, a obra e Obra
+Emergencial — ao nascer (mesmo aberta pelo + Obra padrao, o formulario
+avisa) e depois, se alguem mexer nas datas (fica no historico).
+
+**A execucao exige o prazo dela.** Na etapa de execucao nenhum check se marca
+sem o prazo da execucao; o bloco da etapa avisa e leva ao "Periodo de
+execucao", que grava so o periodo da 3a etapa (nunca o prazo final da obra,
+e nao deixa passar dele).
+
+**Planejamento de ensaios (1a etapa).** O check abre a escolha dos ensaios:
+a pessoa **arrasta** os ensaios do catalogo para a caixa da obra (e de volta
+para tirar; dentro da caixa, arrastar muda a ordem). Fica em `obra_ensaio`.
+O check so fecha com ao menos um ensaio.
+
+**Execucao dos ensaios (3a etapa).** O check abre so os ensaios planejados.
+Dentro do periodo de execucao, o responsavel escolhe um **dia** e diz quanto
+cada ensaio estava feito naquele dia (`obra_ensaio_progresso`: ensaio + dia +
+percentual — um dia nao apaga o outro). O andamento de um ensaio e o do dia
+mais recente; o da execucao e a media (Vazao 100% + Smoke Test 50% = 75%). O
+check **so fecha com todos em 100%**, e reabre sozinho se um ensaio voltar a
+ficar abaixo disso (um dia corrigido, um ensaio novo no planejamento).
+
+**Catalogo de ensaios.** Comeca com Teste 1, 2 e 3. Quem tem "Adicionar /
+editar ensaios" (`gerenciar_ensaios`) cria, renomeia e exclui pelo botao
+"Gerenciar ensaios" do planejamento. Excluir um ensaio ja usado so o tira do
+catalogo: as obras que o tinham continuam com ele e com a execucao.
+
+As duas permissoes novas (`definir_prazos` e `gerenciar_ensaios`) so entram
+sozinhas no setor de acesso total. Os outros setores ganham marcando a caixa
+em Usuarios > Setor.
 
 ### Chat, etiquetas e anexos
 

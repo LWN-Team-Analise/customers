@@ -4,7 +4,6 @@ import {
   etapaDeExecucao,
   nomeProprioDaEtapa,
   obraConcluida,
-  PAPEL_DA_ETAPA,
   rotuloPrioridadeObra,
   tituloDaObra,
   tomPrioridadeObra,
@@ -30,12 +29,23 @@ function quando(m) {
  *   "Prazo da 2ª Etapa vence em 2 dias — Qualidade, Time Técnico"
  * Os setores no fim sao quem ainda deve naquele prazo.
  */
-function textoDoMotivo(m, rotuloEtapa, nomeDoCargo) {
+function textoDoMotivo(m, rotuloEtapa, nomeDoCargo, comSelo = false) {
   if (m.alvo === 'obra') {
     if (m.dias < 0) {
-      return `Atrasada há ${-m.dias} dia${m.dias < -1 ? 's' : ''} — prazo final ${dataBR(m.prazo).slice(0, 5)}`
+      /* ao lado do selo "Atrasada" a palavra nao se repete */
+      const ha = `há ${-m.dias} dia${m.dias < -1 ? 's' : ''} · prazo final ${dataBR(m.prazo).slice(0, 5)}`
+      return comSelo ? ha : `Atrasada ${ha}`
     }
     return `Prazo final ${quando(m)}`
+  }
+  /* o prazo da EXECUCAO (so a 3a etapa, enquanto ela esta aberta) */
+  if (m.alvo === 'execucao') {
+    const quem = m.setores?.length ? ` — ${m.setores.map(nomeDoCargo).join(', ')}` : ''
+    if (m.dias < 0) {
+      const ha = `há ${-m.dias} dia${m.dias < -1 ? 's' : ''}`
+      return comSelo ? `Execução ${ha}${quem}` : `Execução atrasada ${ha}${quem}`
+    }
+    return `Prazo da execução ${quando(m)}${quem}`
   }
   const alvo = m.alvo === 'etapa' ? `Prazo da ${rotuloEtapa(m.numero)}` : `Prazo de "${m.titulo}"`
   const quem = m.setores?.length ? ` — ${m.setores.map(nomeDoCargo).join(', ')}` : ''
@@ -50,11 +60,12 @@ function textoDoMotivo(m, rotuloEtapa, nomeDoCargo) {
  *
  *   verde     obra padrao com os prazos em dia;
  *   azul      obra de emergencia com os prazos em dia;
- *   amarelo   um check ou uma etapa passou do prazo — ou o prazo final
- *             esta chegando;
- *   laranja   prazo final muito perto;
- *   vermelho  prazo final amanha ou hoje — ou ja vencido (ai com o selo
- *             "Atrasada").
+ *   amarelo   um check ou uma etapa passou do prazo — ou um prazo esta
+ *             chegando longe de terminar;
+ *   laranja   prazo da EXECUCAO muito perto (so com a 3a etapa aberta);
+ *   vermelho  prazo da execucao amanha ou hoje — ou um prazo (o da
+ *             execucao ou o final da obra) ja vencido, com o selo
+ *             "Atrasada".
  *
  * Quando a cor nao e a de sempre, uma linha diz o PORQUE (o motivo mais
  * urgente; os outros ficam na dica dele).
@@ -127,9 +138,7 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
     execucao !== null &&
     (obra.tipo === 'emergencia' || !etapaExec || numeroEtapa >= etapaExec.numero || execucao.geral > 0)
 
-  const nomeDaEtapa = etapa
-    ? nomeProprioDaEtapa(etapa.nome, rotuloDaEtapa) || PAPEL_DA_ETAPA[etapa.papel] || ''
-    : ''
+  const nomeDaEtapa = etapa ? nomeProprioDaEtapa(etapa.nome, rotuloDaEtapa) : ''
 
   return (
     <button
@@ -172,7 +181,7 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
       {motivos.length > 0 && (
         <p className="obracard__motivo">
           {tom === 'vencido' && <span className="obracard__atrasada">Atrasada</span>}
-          <span>{textoDoMotivo(motivos[0], rotuloEtapa, nomeDoCargo)}</span>
+          <span>{textoDoMotivo(motivos[0], rotuloEtapa, nomeDoCargo, tom === 'vencido')}</span>
           {motivos.length > 1 && <em>+{motivos.length - 1}</em>}
         </p>
       )}

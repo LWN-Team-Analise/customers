@@ -202,6 +202,14 @@
   flex-wrap: wrap;
 }
 
+/* o .btn nasce com width: 100%; numa fila que quebra linha ele tomaria
+   a linha inteira */
+.ensaios__acoes .btn,
+.execucao__salvar .btn,
+.execucao .formobra__acoes .btn {
+  width: auto;
+}
+
 .ensaios__catalogo {
   margin-right: auto;
   padding: 10px 16px;
@@ -307,14 +315,22 @@
   background: var(--danger-bg);
 }
 
+/* o campo toma a linha e o botao fica do tamanho do texto dele. Antes
+   os dois eram flex, e o .btn (que nasce com width: 100%) engolia a
+   linha: o campo encolhia ate sumir e nao dava para digitar o ensaio */
 .catalogo__novo {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 10px;
 }
 
-.catalogo__novo > :first-child {
-  flex: 1;
+.catalogo__novo .btn {
+  width: auto;
+  min-height: 0;
+  height: 40px;
+  padding: 0 20px;
+  white-space: nowrap;
 }
 
 /* ---------------- Execucao ---------------- */
@@ -669,7 +685,10 @@
   }
 
   .catalogo__novo {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalogo__novo .btn {
+    width: 100%;
   }
 }

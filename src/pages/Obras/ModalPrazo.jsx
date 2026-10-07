@@ -3,7 +3,6 @@ import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import Seletor from '@/components/Seletor/Seletor'
 import { CampoTexto } from '@/components/Campo/Campo'
-import { AVISO_ANTES_DIAS } from '@/domain/obras'
 import '@/pages/Obras/ModalRoteiro.css'
 
 /**
@@ -108,10 +107,6 @@ export default function ModalPrazo({ aberto, alvo, aoSalvar, aoFechar }) {
           onChange={(e) => setData(e.target.value)}
           autoFocus={!escolhendo}
         />
-        <p className="formrot__dica formrot__dica--colada">
-          Vencido o prazo sem terminar, o card da obra fica amarelo no quadro. Também fica
-          amarelo {AVISO_ANTES_DIAS} dias antes, se ainda estiver longe de terminar.
-        </p>
 
         {erro && (
           <p className="formrot__erro" role="alert">

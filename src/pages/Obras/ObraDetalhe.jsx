@@ -22,12 +22,11 @@ import {
   diasAte,
   estadoDoPrazo,
   nomeDoCard,
-  PAPEL_DA_ETAPA,
   podeEditarCheck,
   rotuloPrioridadeObra,
   tituloDaObra,
   tomPrioridadeObra,
-  urgenciaDoPrazoFinal,
+  urgenciaDoPrazo,
 } from '@/domain/obras'
 import { textoSobre } from '@/utils/cor'
 import { dataBR, dataExtensa, dataHora, hojeISO } from '@/utils/formato'
@@ -228,8 +227,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const [executando, setExecutando] = useState(null)
   /* o periodo de execucao (entrada em campo -> prazo final) */
   const [periodo, setPeriodo] = useState(false)
-  /* tentou marcar check da execucao sem o prazo final */
-  const [faltaPrazoFinal, setFaltaPrazoFinal] = useState(false)
+  /* tentou marcar check da execucao sem o prazo da execucao */
+  const [faltaPrazoExecucao, setFaltaPrazoExecucao] = useState(false)
 
   /* pop-ups da obra */
   const [chat, setChat] = useState(false)
@@ -284,7 +283,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
    *   - check de pergunta (check.simNao) abre o Sim/Nao;
    *   - o resto marca e desmarca no clique, como sempre.
    *
-   * Na etapa de EXECUCAO nada se marca sem o prazo final da obra (o
+   * Na etapa de EXECUCAO nada se marca sem o prazo DA EXECUCAO (o
    * servidor recusa igual): em vez de deixar o check piscar, a tela ja
    * diz o motivo. Desmarcar continua livre.
    */
@@ -297,8 +296,8 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
       setExecutando({ card, check })
       return
     }
-    if (etapa.papel === 'execucao' && !obra.dataConclusao && !obra.checks?.[check.id]) {
-      setFaltaPrazoFinal(true)
+    if (etapa.papel === 'execucao' && !obra.execucaoPrazo && !obra.checks?.[check.id]) {
+      setFaltaPrazoExecucao(true)
       return
     }
     if (check.simNao) {
@@ -775,9 +774,9 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                       <span
                         className="etapa__fixa"
                         title="Etapa fixa do fluxo: não pode ser renomeada, reordenada nem excluída"
+                        aria-label="Etapa fixa"
                       >
                         <Icone.fixa />
-                        {PAPEL_DA_ETAPA[etapa.papel] ?? 'Fixa'}
                       </span>
                     )}
                     {estado === 'concluida' && <Icone.ok />}
@@ -831,16 +830,23 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                     )}
                   </header>
 
+                  {/* o numero da etapa embaixo do nome: "Comercial" em cima,
+                      "1ª Etapa" embaixo — o mesmo par da coluna do quadro */}
+                  {etapa.nome && etapa.nome !== rotuloEtapa(etapa.numero) && (
+                    <p className="etapa__papel">{rotuloEtapa(etapa.numero)}</p>
+                  )}
+
                   {/* a linha de apoio: em que pé a etapa está. Só
                       aparece quando alguém escreveu alguma coisa. */}
                   {etapa.descricao && <p className="etapa__desc">{etapa.descricao}</p>}
 
-                  {/* A EXECUÇÃO: o período (entrada em campo -> prazo
-                      final), obrigatório, e o andamento dos ensaios */}
+                  {/* A EXECUÇÃO: o período dela (entrada em campo -> prazo
+                      da execução), obrigatório, e o andamento dos ensaios */}
                   {ehExecucao && (
                     <BlocoExecucao
                       obra={obra}
                       hoje={hoje}
+                      fechada={estado === 'concluida'}
                       execucao={execucaoDaObra(obra)}
                       podePeriodo={podePrazos}
                       aoDefinir={() => setPeriodo(true)}
@@ -1216,15 +1222,14 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
       <ModalPeriodo aberto={periodo} obra={obra} aoFechar={() => setPeriodo(false)} />
 
       <Modal
-        aberto={faltaPrazoFinal}
-        aoFechar={() => setFaltaPrazoFinal(false)}
-        titulo="Falta o prazo final"
+        aberto={faltaPrazoExecucao}
+        aoFechar={() => setFaltaPrazoExecucao(false)}
+        titulo="Falta o prazo da execução"
         largura={430}
       >
         <div className="formrot">
           <p className="formrot__sistema" role="note">
-            A etapa de execução só anda com o prazo final da obra — a data até a qual a obra e a
-            documentação precisam ficar prontas.{' '}
+            A etapa de execução só anda com o prazo dela definido.{' '}
             {podePrazos
               ? 'Defina o período de execução e marque o check de novo.'
               : 'Peça a quem pode definir prazos para preenchê-lo.'}
@@ -1233,7 +1238,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             <button
               type="button"
               className="formobra__cancelar"
-              onClick={() => setFaltaPrazoFinal(false)}
+              onClick={() => setFaltaPrazoExecucao(false)}
             >
               Fechar
             </button>
@@ -1241,11 +1246,11 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
               <Button
                 type="button"
                 onClick={() => {
-                  setFaltaPrazoFinal(false)
+                  setFaltaPrazoExecucao(false)
                   setPeriodo(true)
                 }}
               >
-                Definir prazo final
+                Definir período
               </Button>
             )}
           </footer>
@@ -1381,22 +1386,26 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 }
 
 /**
- * O bloco da etapa de EXECUCAO: o periodo (entrada em campo -> prazo
- * final) e o andamento dos ensaios.
+ * O bloco da etapa de EXECUCAO: o periodo DELA (entrada em campo ->
+ * prazo da execucao) e o andamento dos ensaios. O prazo final da obra
+ * e outro, e fica na faixa de cima da tela.
  *
- * O prazo final e OBRIGATORIO aqui: sem ele a etapa nao anda (os checks
- * dela nao marcam), e o bloco diz isso em vermelho. Com ele, a faixa
- * pega a mesma cor que o card da obra tem no quadro — do verde ao
- * vermelho conforme o tempo que resta (urgenciaDoPrazoFinal).
+ * O prazo da execucao e OBRIGATORIO aqui: sem ele a etapa nao anda (os
+ * checks dela nao marcam), e o bloco diz isso em vermelho. Com ele, a
+ * faixa pega a mesma cor que o card da obra tem no quadro — do verde ao
+ * vermelho conforme o tempo que resta (urgenciaDoPrazo). Fechada a
+ * etapa, o prazo dela deixa de cobrar: o bloco so registra o periodo.
  */
-function BlocoExecucao({ obra, hoje, execucao, podePeriodo, aoDefinir }) {
+function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir }) {
   const inicio = obra.execucaoInicio ?? obra.dataInicio
-  const prazo = obra.dataConclusao
+  const prazo = obra.execucaoPrazo
   const restam = prazo ? diasAte(prazo, hoje) : null
-  const tom = prazo ? urgenciaDoPrazoFinal(inicio, prazo, hoje) : 'vencido'
+  const tom = fechada ? 'ok' : prazo ? urgenciaDoPrazo(inicio, prazo, hoje) : 'vencido'
 
   const quando =
-    restam === null
+    fechada
+      ? 'concluída'
+      : restam === null
       ? null
       : restam < 0
         ? `atrasada há ${-restam} dia${restam < -1 ? 's' : ''}`
@@ -1412,18 +1421,18 @@ function BlocoExecucao({ obra, hoje, execucao, podePeriodo, aoDefinir }) {
         <Icone.prazo tamanho={14} />
         {prazo ? (
           <span className="execbloco__periodo">
-            Execução: <strong>{dataBR(inicio)}</strong> → prazo final <strong>{dataBR(prazo)}</strong>
+            Execução: <strong>{dataBR(inicio)}</strong> → <strong>{dataBR(prazo)}</strong>
           </span>
         ) : (
           <span className="execbloco__periodo">
-            <strong>Prazo final obrigatório.</strong> Os checks desta etapa ficam parados até ele
-            ser definido.
+            <strong>Prazo da execução obrigatório.</strong> Os checks desta etapa ficam parados até
+            ele ser definido.
           </span>
         )}
         {quando && <em className="execbloco__selo">{quando}</em>}
-        {podePeriodo && (
+        {podePeriodo && !fechada && (
           <button type="button" className="execbloco__botao" onClick={aoDefinir}>
-            {prazo ? 'Alterar' : 'Definir prazo final'}
+            {prazo ? 'Alterar' : 'Definir período'}
           </button>
         )}
       </div>

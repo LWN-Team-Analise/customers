@@ -70,7 +70,6 @@ export default function ModalEnsaios({ aberto, aoFechar }) {
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Ensaios"
-      subtitulo="O catálogo de onde o Planejamento de ensaios escolhe."
       largura={480}
       nivel={1}
     >
@@ -109,10 +108,10 @@ export default function ModalEnsaios({ aberto, aoFechar }) {
                             if (await fazer(() => removerEnsaio(e.id))) setApagando(null)
                           }}
                         >
-                          Sim, excluir
+                          Excluir
                         </button>
                         <button type="button" className="catalogo__botao" onClick={() => setApagando(null)}>
-                          Não
+                          Cancelar
                         </button>
                       </>
                     ) : (
@@ -152,7 +151,6 @@ export default function ModalEnsaios({ aberto, aoFechar }) {
           <form className="catalogo__novo" onSubmit={adicionar}>
             <CampoTexto
               rotulo="Novo ensaio"
-              largo
               placeholder="Ex.: Vazão"
               value={novo}
               onChange={(e) => setNovo(e.target.value)}
@@ -162,11 +160,6 @@ export default function ModalEnsaios({ aberto, aoFechar }) {
             </Button>
           </form>
         )}
-
-        <p className="formrot__dica formrot__dica--colada">
-          Excluir tira o ensaio do catálogo. As obras que já o planejaram continuam com ele e com a
-          execução registrada.
-        </p>
 
         {erro && (
           <p className="formrot__erro" role="alert">

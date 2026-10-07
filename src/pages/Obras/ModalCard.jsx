@@ -181,7 +181,7 @@ export default function ModalCard({ aberto, etapa, card = null, obraId = null, a
                 onClick={() => setConfirmando(true)}
                 disabled={salvando}
               >
-                Excluir card
+                Excluir
               </button>
             ))}
           <button type="button" className="formobra__cancelar" onClick={aoFechar}>

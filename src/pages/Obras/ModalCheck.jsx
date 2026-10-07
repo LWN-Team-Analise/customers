@@ -165,12 +165,6 @@ export default function ModalCheck({
               />
               <span>Obrigatório responder Sim ou Não?</span>
             </label>
-            {simNao && (
-              <p className="formrot__dica formrot__dica--colada">
-                Ao marcar este check abre a pergunta. Sim marca com ✓; Não também marca, mas
-                com um X e "Não" do lado (ex.: Hospedagem — Não).
-              </p>
-            )}
           </div>
         )}
 
@@ -181,7 +175,6 @@ export default function ModalCheck({
             largo
             value={prazo}
             onChange={(e) => setPrazo(e.target.value)}
-            dica="Vencido sem o check feito, o card da obra fica amarelo no quadro."
           />
         )}
 
@@ -232,7 +225,7 @@ export default function ModalCheck({
                 onClick={() => setConfirmando(true)}
                 disabled={salvando}
               >
-                Excluir check
+                Excluir
               </button>
             ))}
           <button type="button" className="formobra__cancelar" onClick={aoFechar}>

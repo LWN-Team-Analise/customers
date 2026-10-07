@@ -242,7 +242,7 @@ export default function ModalEtiquetas({ aberto, obra, somenteLeitura = false, a
                     onClick={() => setConfirmando(true)}
                     disabled={salvando}
                   >
-                    Excluir etiqueta
+                    Excluir
                   </button>
                 ))}
               <button type="button" className="formobra__cancelar" onClick={() => setModo(null)}>

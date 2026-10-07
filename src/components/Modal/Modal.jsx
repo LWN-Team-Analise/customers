@@ -30,6 +30,11 @@ const MIN_A = 320
 const folgaL = () => Math.max(MIN_L, window.innerWidth - 40)
 const folgaA = () => Math.max(MIN_A, window.innerHeight - 40)
 
+/* os pop-ups abertos, do de baixo para o de cima. O Esc fecha so o de
+   CIMA: com um pop-up aberto por cima de outro (o catalogo de ensaios
+   sobre o planejamento), um Esc fechava os dois de uma vez */
+const abertos = []
+
 function lerTamanho(chave) {
   if (!chave) return null
   try {
@@ -119,8 +124,11 @@ export default function Modal({
   useEffect(() => {
     if (!aberto) return undefined
 
+    const eu = {}
+    abertos.push(eu)
+
     const aoTeclar = (evento) => {
-      if (evento.key === 'Escape') fechar.current?.()
+      if (evento.key === 'Escape' && abertos[abertos.length - 1] === eu) fechar.current?.()
     }
 
     const rolagem = document.body.style.overflow
@@ -134,6 +142,8 @@ export default function Modal({
     return () => {
       document.body.style.overflow = rolagem
       document.removeEventListener('keydown', aoTeclar)
+      const i = abertos.indexOf(eu)
+      if (i >= 0) abertos.splice(i, 1)
     }
   }, [aberto])
 

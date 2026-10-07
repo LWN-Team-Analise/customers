@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import { useDados } from '@/context/DadosContext'
-import { diasAte, urgenciaDoPrazoFinal } from '@/domain/obras'
+import { diasAte, urgenciaDoPrazo } from '@/domain/obras'
 import { dataBR, hojeISO } from '@/utils/formato'
 import './ModalEnsaios.css'
 
@@ -23,7 +23,7 @@ const diaDaSemana = (iso) => {
   return SEMANA[new Date(Date.UTC(a, m - 1, d)).getUTCDay()]
 }
 
-/** O selo do prazo final, do verde ao vermelho. */
+/** O selo do prazo da execucao, do verde ao vermelho. */
 function textoDaUrgencia(tom, restam) {
   if (tom === 'vencido') return `atrasada há ${-restam} dia${restam < -1 ? 's' : ''}`
   if (tom === 'vermelho') return restam === 0 ? 'vence hoje' : 'vence amanhã'
@@ -37,7 +37,7 @@ function textoDaUrgencia(tom, restam) {
  *
  * Mostra so os ensaios escolhidos no Planejamento de ensaios. O
  * responsavel escolhe um DIA dentro do periodo de execucao (da entrada
- * em campo ao prazo final — e, se o prazo ja passou, ate hoje) e diz
+ * em campo ao prazo da execucao — e, se ele ja passou, ate hoje) e diz
  * quanto cada ensaio estava feito naquele dia:
  *
  *   06/10  Vazao 50%   Smoke Test 50%
@@ -69,7 +69,8 @@ export default function ModalExecucao({
   const execucao = obra ? execucaoDaObra(obra) : null
   const itens = execucao?.itens ?? []
   const inicio = obra?.execucaoInicio ?? obra?.dataInicio ?? null
-  const prazo = obra?.dataConclusao ?? null
+  /* o prazo DA EXECUCAO (so a 3a etapa), e nao o final da obra */
+  const prazo = obra?.execucaoPrazo ?? null
   const semPrazo = !prazo
 
   /* os dias que dao para registrar: do inicio ate hoje (inclusive os
@@ -150,7 +151,7 @@ export default function ModalExecucao({
   }
 
   const restam = prazo ? diasAte(prazo, hoje) : null
-  const tomPrazo = prazo ? urgenciaDoPrazoFinal(inicio, prazo, hoje) : null
+  const tomPrazo = prazo ? urgenciaDoPrazo(inicio, prazo, hoje) : null
 
   return (
     <Modal
@@ -161,11 +162,11 @@ export default function ModalExecucao({
       largura={760}
     >
       <div className="execucao">
-        {/* ---- o periodo e o prazo final ---- */}
+        {/* ---- o periodo e o prazo da execucao ---- */}
         <div className="execucao__periodo" data-tom={semPrazo ? 'vencido' : tomPrazo}>
           <span className="execucao__rotulo">Período de execução</span>
           {semPrazo ? (
-            <strong>Sem prazo final</strong>
+            <strong>Sem prazo da execução</strong>
           ) : (
             <strong>
               {dataBR(inicio)} → {dataBR(prazo)}
@@ -174,15 +175,14 @@ export default function ModalExecucao({
           {!semPrazo && <em className="execucao__selo">{textoDaUrgencia(tomPrazo, restam)}</em>}
           {podePeriodo && (
             <button type="button" className="execucao__periodobotao" onClick={aoDefinirPeriodo}>
-              {semPrazo ? 'Definir prazo final' : 'Alterar período'}
+              {semPrazo ? 'Definir período' : 'Alterar período'}
             </button>
           )}
         </div>
 
         {semPrazo && (
           <p className="ensaios__aviso" role="alert">
-            O prazo final da obra é obrigatório na execução: sem ele não há período para
-            registrar.{' '}
+            A execução precisa do prazo dela: sem ele não há período para registrar.{' '}
             {podePeriodo
               ? 'Defina o período acima.'
               : 'Peça a quem pode definir prazos para preenchê-lo.'}
@@ -257,7 +257,7 @@ export default function ModalExecucao({
                           futuro
                             ? 'Dia que ainda não chegou'
                             : depoisDoPrazo
-                              ? 'Depois do prazo final'
+                              ? 'Depois do prazo da execução'
                               : registrados.includes(d)
                                 ? 'Tem registro'
                                 : undefined

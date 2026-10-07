@@ -152,7 +152,7 @@ export default function ModalEtapa({ aberto, etapa = null, obraId = null, aoFech
                   onClick={() => setConfirmando(true)}
                   disabled={salvando}
                 >
-                  Excluir {termo}
+                  Excluir
                 </button>
               ))}
             <button type="button" className="formobra__cancelar" onClick={aoFechar}>

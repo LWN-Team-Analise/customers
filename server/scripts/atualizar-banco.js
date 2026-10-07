@@ -35,6 +35,7 @@ const ARQUIVOS = [
   'db/atualizacao-12.sql.txt',
   'db/atualizacao-13.sql.txt',
   'db/atualizacao-14.sql.txt',
+  'db/atualizacao-15.sql.txt',
 ]
 
 /**
@@ -103,6 +104,7 @@ const CONFERENCIA = [
   ['obra_ensaio_progresso', "SELECT to_regclass('public.obra_ensaio_progresso') IS NOT NULL AS ok"],
   ['obra.execucao_inicio', col('obra', 'execucao_inicio')],
   ['gerenciar_ensaios no acesso total', permissaoNoAcessoTotal('gerenciar_ensaios')],
+  ['obra.execucao_prazo', col('obra', 'execucao_prazo')],
 ]
 
 function col(tabela, coluna) {

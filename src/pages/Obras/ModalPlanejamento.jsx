@@ -42,13 +42,17 @@ export default function ModalPlanejamento({
   const [salvando, setSalvando] = useState(false)
   const [catalogo, setCatalogo] = useState(false)
 
+  /* comeca com o que a obra tem so ao ABRIR. Mexer no catalogo
+     (Gerenciar ensaios) recarrega a obra por baixo, e reler a lista ai
+     desfaria o que a pessoa ja tinha arrastado e ainda nao salvou */
   useEffect(() => {
     if (!aberto) return
     setEscolhidos((obra?.ensaios ?? []).map(String))
     setErro('')
     setArrastando(null)
     setSobre(null)
-  }, [aberto, obra])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto, obra?.id])
 
   /* o catalogo menos o que ja esta na obra */
   const disponiveis = useMemo(
@@ -128,8 +132,8 @@ export default function ModalPlanejamento({
       titulo="Planejamento de ensaios"
       subtitulo={
         podeEditar
-          ? 'Arraste os ensaios que esta obra vai executar na 3ª etapa.'
-          : 'Os ensaios que esta obra vai executar na 3ª etapa.'
+          ? 'Arraste os ensaios que esta obra vai executar.'
+          : 'Os ensaios que esta obra vai executar.'
       }
       largura={720}
     >

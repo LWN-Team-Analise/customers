@@ -371,8 +371,11 @@ async function lerTudo(usuarioId) {
       /* o prazo final: a entrega da documentacao */
       dataConclusao: o.data_conclusao,
       /* a entrada em campo — o periodo de execucao vai daqui ate o
-         prazo final. null = ainda nao definida (vale o inicio da obra) */
+         prazo da execucao. null = ainda nao definida (vale o inicio da obra) */
       execucaoInicio: soData(o.execucao_inicio ?? null),
+      /* o prazo da ETAPA DE EXECUCAO (3a) — nao o da obra inteira, que e
+         o dataConclusao. null = ainda nao definido */
+      execucaoPrazo: soData(o.execucao_prazo ?? null),
       criadoEm: o.criado_em,
       criadoPor: o.criado_por === null ? null : String(o.criado_por),
       criadoPorNome: o.criado_por_nome ?? null,
@@ -965,11 +968,18 @@ router.delete('/chat/:id', exigeSessao, async (req, res) => {
 const PRIORIDADES = ['baixa', 'media', 'alta']
 
 /* ------------------------------------------------------------
+   Dois prazos, e cada um manda numa coisa:
+
+     data_inicio     -> data_conclusao   a OBRA inteira (inclusive a
+                                         documentacao e a entrega,
+                                         que vem depois da execucao);
+     execucao_inicio -> execucao_prazo   so a ETAPA DE EXECUCAO (3a).
+
    EMERGENCIA = execucao em menos de 3 dias
 
-   O periodo de execucao vai da entrada em campo (execucao_inicio;
-   sem ela, o inicio da obra) ate o prazo final (data_conclusao, a
-   entrega da documentacao). Quando ele e menor que DIAS_EMERGENCIA,
+   Com o periodo de execucao definido, e ele que conta. Sem ele, conta
+   a obra inteira (do inicio ao prazo final): se a obra toda cabe em
+   menos de 3 dias, a execucao tambem cabe. Menor que DIAS_EMERGENCIA,
    a obra e uma Obra Emergencial — ao nascer, e tambem depois, se
    alguem mexer nas datas e a obra padrao passar a caber em menos de
    3 dias (fica no historico).
@@ -1003,10 +1013,10 @@ function hojeNoBrasil() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 }
 
-/** As datas da obra; banco sem execucao_inicio (sem a atualizacao 14) vem sem ela. */
+/** As datas da obra; banco sem as colunas da execucao (atualizacoes 14/15) vem sem elas. */
 async function datasDaObra(obraId) {
   const { rows } = await query(
-    'SELECT tipo, data_inicio, data_conclusao, execucao_inicio FROM obra WHERE id = $1',
+    'SELECT tipo, data_inicio, data_conclusao, execucao_inicio, execucao_prazo FROM obra WHERE id = $1',
     [obraId],
   ).catch((erro) => {
     if (erro.code !== '42703') throw erro
@@ -1019,7 +1029,13 @@ async function datasDaObra(obraId) {
     inicio: soData(o.data_inicio),
     prazoFinal: soData(o.data_conclusao),
     execucaoInicio: soData(o.execucao_inicio ?? null),
+    execucaoPrazo: soData(o.execucao_prazo ?? null),
   }
+}
+
+/** O periodo que decide a emergencia: o da execucao, se definido; senao, o da obra. */
+function periodoDaRegra({ inicio, prazoFinal, execucaoInicio, execucaoPrazo }) {
+  return execucaoPrazo ? [execucaoInicio ?? inicio, execucaoPrazo] : [inicio, prazoFinal]
 }
 
 /**
@@ -1029,7 +1045,7 @@ async function datasDaObra(obraId) {
 async function aplicarRegraDeEmergencia(req, obraId) {
   const datas = await datasDaObra(obraId)
   if (!datas || datas.tipo !== 'padrao') return false
-  if (!execucaoCurta(datas.execucaoInicio ?? datas.inicio, datas.prazoFinal)) return false
+  if (!execucaoCurta(...periodoDaRegra(datas))) return false
 
   await query(
     `UPDATE obra SET tipo = 'emergencia', prioridade = 'alta', atualizado_por = $1 WHERE id = $2`,
@@ -1053,6 +1069,7 @@ const ROTULO_CAMPO_OBRA = {
   data_inicio: 'início',
   data_conclusao: 'prazo final',
   execucao_inicio: 'início da execução',
+  execucao_prazo: 'prazo da execução',
   tipo: 'tipo',
   prioridade: 'prioridade',
 }
@@ -1067,23 +1084,27 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
   const dataInicio = texto(req.body?.dataInicio) || hojeNoBrasil()
   const dataConclusao = texto(req.body?.dataConclusao) || null
   const execucaoInicio = texto(req.body?.execucaoInicio) || null
+  const execucaoPrazo = texto(req.body?.execucaoPrazo) || null
 
   /* execucao em menos de 3 dias e emergencia, mesmo aberta pelo botao
      de obra padrao: e a regra, nao uma escolha da tela */
-  const curta = execucaoCurta(execucaoInicio ?? dataInicio, dataConclusao)
+  const curta = execucaoCurta(
+    ...periodoDaRegra({ inicio: dataInicio, prazoFinal: dataConclusao, execucaoInicio, execucaoPrazo }),
+  )
   const tipo = req.body?.tipo === 'emergencia' || curta ? 'emergencia' : 'padrao'
   // emergencia e sempre alta; o gatilho do banco garante, aqui so evita ida a toa
   const prioridade = tipo === 'emergencia' ? 'alta' : (req.body?.prioridade ?? 'media')
 
-  for (const data of [dataInicio, dataConclusao, execucaoInicio]) {
+  for (const data of [dataInicio, dataConclusao, execucaoInicio, execucaoPrazo]) {
     if (data && !dataValida(data)) return res.status(400).json({ erro: 'Data inválida.' })
   }
-  if (dataConclusao && dataConclusao < dataInicio) {
-    return res.status(400).json({ erro: 'O prazo final não pode ser antes do início.' })
-  }
-  if (execucaoInicio && dataConclusao && execucaoInicio > dataConclusao) {
-    return res.status(400).json({ erro: 'O início da execução não pode ser depois do prazo final.' })
-  }
+  const erroDeDatas = conferirDatas({
+    inicio: dataInicio,
+    prazoFinal: dataConclusao,
+    execucaoInicio,
+    execucaoPrazo,
+  })
+  if (erroDeDatas) return res.status(400).json({ erro: erroDeDatas })
 
   if (!clienteId) return res.status(400).json({ erro: 'Escolha a empresa.' })
   if (!proposta) return res.status(400).json({ erro: 'Informe o n° da proposta.' })
@@ -1113,15 +1134,16 @@ router.post('/obras', exigeSessao, exige('editar_obras'), async (req, res) => {
       dataConclusao,
       req.dono.sub,
     ]
-    /* a entrada em campo so vai quando foi informada: banco sem a
-       atualizacao 14 continua criando obra normalmente */
-    const { rows } = execucaoInicio
+    /* as datas da execucao so vao quando foram informadas: banco sem as
+       atualizacoes 14/15 continua criando obra normalmente */
+    const { rows } = execucaoInicio || execucaoPrazo
       ? await query(
           `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
-                             data_inicio, data_conclusao, criado_por, atualizado_por, execucao_inicio)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+                             data_inicio, data_conclusao, criado_por, atualizado_por,
+                             execucao_inicio, execucao_prazo)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)
            RETURNING id`,
-          [...valores, execucaoInicio],
+          [...valores, execucaoInicio, execucaoPrazo],
         )
       : await query(
           `INSERT INTO obra (cliente_id, proposta, descricao, tipo, prioridade,
@@ -1167,7 +1189,8 @@ router.patch('/obras/:id', exigeSessao, exige('editar_obras'), obraAberta, async
   if (req.body?.dataInicio !== undefined) por('data_inicio', req.body.dataInicio || null)
   if (req.body?.dataConclusao !== undefined) por('data_conclusao', req.body.dataConclusao || null)
   if (req.body?.execucaoInicio !== undefined) por('execucao_inicio', req.body.execucaoInicio || null)
-  for (const campo of ['dataInicio', 'dataConclusao', 'execucaoInicio']) {
+  if (req.body?.execucaoPrazo !== undefined) por('execucao_prazo', req.body.execucaoPrazo || null)
+  for (const campo of ['dataInicio', 'dataConclusao', 'execucaoInicio', 'execucaoPrazo']) {
     const valor = texto(req.body?.[campo])
     if (valor && !dataValida(valor)) return res.status(400).json({ erro: 'Data inválida.' })
   }
@@ -1462,7 +1485,7 @@ async function podeMarcar(usuarioId, checkId, obraId) {
  *           nem coluna de resposta, e a marcacao segue como sempre;
  *   tipo    'comum', 'planejamento_ensaios' ou 'execucao_ensaios';
  *   papel   o papel da etapa dele. Na de 'execucao' nada se marca
- *           sem o prazo final da obra.
+ *           sem o prazo da execucao.
  */
 async function regraDoCheck(checkId) {
   const sem14 = { tipo: 'comum', papel: null }
@@ -1600,14 +1623,15 @@ router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, re
       return res.status(400).json({ erro: 'Este check pede uma resposta: Sim ou Não.' })
     }
 
-    /* A etapa de EXECUCAO nao anda sem o prazo final da obra: e ele
-       que diz ate quando a obra (e a documentacao) tem de ficar pronta,
-       e e dele que sai a urgencia do card no quadro. */
+    /* A etapa de EXECUCAO nao anda sem o PRAZO DA EXECUCAO: e ele que
+       diz ate quando a 3a etapa tem de fechar, e e dele que sai a
+       urgencia do card no quadro enquanto ela esta aberta. (O prazo
+       final da obra e outro — vale para a obra inteira.) */
     if (regra.papel === 'execucao') {
       const datas = await datasDaObra(req.params.id)
-      if (!datas?.prazoFinal) {
+      if (!datas?.execucaoPrazo) {
         return res.status(409).json({
-          erro: 'A etapa de execução exige o prazo final da obra. Defina o prazo final antes de marcar os checks dela.',
+          erro: 'A etapa de execução exige o prazo da execução. Defina o período de execução antes de marcar os checks dela.',
         })
       }
     }
@@ -1783,39 +1807,61 @@ router.put('/obras/:id/prazos', exigeSessao, exige('definir_prazos'), obraAberta
 })
 
 /* ------------------------------------------------------------
-   Periodo de EXECUCAO: entrada em campo -> prazo final
+   Periodo de EXECUCAO: entrada em campo -> prazo da execucao
 
-   O prazo final (data_conclusao) e a entrega da documentacao, e a
-   etapa de execucao nao anda sem ele. Quem define e quem tem
-   `definir_prazos` — a mesma permissao dos prazos de check e de
-   etapa. Periodo menor que 3 dias transforma a obra padrao em
-   emergencia (aplicarRegraDeEmergencia).
+   E o periodo SO da 3a etapa (execucao_inicio -> execucao_prazo). O
+   prazo final da obra (data_conclusao) NAO muda aqui: a obra continua
+   depois da execucao, com a documentacao e a entrega. A etapa de
+   execucao nao anda sem o prazo dela.
+
+   Quem define e quem tem `definir_prazos` — a mesma permissao dos
+   prazos de check e de etapa. Periodo menor que 3 dias transforma a
+   obra padrao em emergencia (aplicarRegraDeEmergencia).
    ------------------------------------------------------------ */
+
+/**
+ * A ordem das datas, a mesma na criacao e no periodo da execucao.
+ * Devolve o recado do primeiro problema, ou null.
+ */
+function conferirDatas({ inicio, prazoFinal, execucaoInicio, execucaoPrazo }) {
+  if (prazoFinal && inicio && prazoFinal < inicio) {
+    return 'O prazo final não pode ser antes do início.'
+  }
+  if (execucaoInicio && execucaoPrazo && execucaoInicio > execucaoPrazo) {
+    return 'O início da execução não pode ser depois do prazo da execução.'
+  }
+  if (execucaoPrazo && inicio && execucaoPrazo < inicio) {
+    return 'O prazo da execução não pode ser antes do início da obra.'
+  }
+  if (execucaoPrazo && prazoFinal && execucaoPrazo > prazoFinal) {
+    return `O prazo da execução não pode passar do prazo final da obra (${dataLida(prazoFinal)}).`
+  }
+  if (execucaoInicio && prazoFinal && execucaoInicio > prazoFinal) {
+    return 'O início da execução não pode ser depois do prazo final da obra.'
+  }
+  return null
+}
 
 router.put('/obras/:id/execucao', exigeSessao, exige('definir_prazos'), obraAberta, async (req, res) => {
   const inicio = texto(req.body?.inicio) || null
-  const prazoFinal = texto(req.body?.prazoFinal)
+  const prazo = texto(req.body?.prazo)
 
-  if (!prazoFinal) return res.status(400).json({ erro: 'Informe o prazo final da obra.' })
-  for (const data of [inicio, prazoFinal]) {
+  if (!prazo) return res.status(400).json({ erro: 'Informe o prazo da execução.' })
+  for (const data of [inicio, prazo]) {
     if (data && !dataValida(data)) return res.status(400).json({ erro: 'Data inválida.' })
-  }
-  if (inicio && inicio > prazoFinal) {
-    return res.status(400).json({ erro: 'O início da execução não pode ser depois do prazo final.' })
   }
 
   try {
     const antes = await datasDaObra(req.params.id)
     if (!antes) return res.status(404).json({ erro: 'Obra não encontrada.' })
-    if (antes.inicio && prazoFinal < antes.inicio) {
-      return res.status(400).json({ erro: 'O prazo final não pode ser antes do início da obra.' })
-    }
+    const erroDeDatas = conferirDatas({ ...antes, execucaoInicio: inicio, execucaoPrazo: prazo })
+    if (erroDeDatas) return res.status(400).json({ erro: erroDeDatas })
 
     await query(
       `UPDATE obra
-          SET execucao_inicio = $1, data_conclusao = $2, atualizado_por = $3
+          SET execucao_inicio = $1, execucao_prazo = $2, atualizado_por = $3
         WHERE id = $4`,
-      [inicio, prazoFinal, req.dono.sub, req.params.id],
+      [inicio, prazo, req.dono.sub, req.params.id],
     )
     await registrarAtividade(req, {
       acao: 'prazo.execucao',
@@ -1825,14 +1871,14 @@ router.put('/obras/:id/execucao', exigeSessao, exige('definir_prazos'), obraAber
       detalhes: {
         ...(await descreverObra(req.params.id)),
         inicio: dataLida(inicio),
-        prazo_final: dataLida(prazoFinal),
+        prazo_execucao: dataLida(prazo),
       },
     })
     const virouEmergencia = await aplicarRegraDeEmergencia(req, req.params.id)
     return res.json({ ok: true, tipo: virouEmergencia ? 'emergencia' : antes.tipo })
   } catch (e) {
     if (e.code === '42703') {
-      return res.status(501).json({ erro: 'Período de execução ainda não existe no banco (atualização 14).' })
+      return res.status(501).json({ erro: 'Período de execução ainda não existe no banco (atualizações 14 e 15).' })
     }
     return tratar(e, res, 'dados/execucao-periodo')
   }
@@ -1950,7 +1996,8 @@ router.put('/obras/:id/ensaios', exigeSessao, obraAberta, async (req, res) => {
    registrar o dia 07 nao mexe no dia 06.
 
    O dia precisa estar no periodo de execucao — da entrada em campo
-   (ou do inicio da obra) ate hoje — e o prazo final tem de existir.
+   (ou do inicio da obra) ate hoje — e o prazo da execucao tem de
+   existir.
    Quem registra e quem marca o check "Execucao dos ensaios".
    ------------------------------------------------------------ */
 
@@ -1980,9 +2027,9 @@ router.put('/obras/:id/execucao/dia', exigeSessao, obraAberta, async (req, res) 
     }
 
     const datas = await datasDaObra(req.params.id)
-    if (!datas?.prazoFinal) {
+    if (!datas?.execucaoPrazo) {
       return res.status(409).json({
-        erro: 'Defina o prazo final da obra antes de registrar a execução: é ele que fecha o período.',
+        erro: 'Defina o prazo da execução antes de registrar: é ele que fecha o período.',
       })
     }
     const comeco = datas.execucaoInicio ?? datas.inicio
@@ -2052,9 +2099,9 @@ router.put('/obras/:id/execucao/dia', exigeSessao, obraAberta, async (req, res) 
    Separado das obras: e a lista de onde o Planejamento de ensaios
    escolhe. Quem mexe e quem tem `gerenciar_ensaios`.
 
-   Excluir um ensaio que alguma obra ja planejou NAO o apaga: ele sai
-   do catalogo (ativo = false) e continua nas obras que o tinham, com
-   a execucao registrada. Sem uso nenhum, sai de vez.
+   Excluir um ensaio que alguma obra ja planejou (ou executou) NAO o
+   apaga: ele sai do catalogo (ativo = false) e continua nas obras que
+   o tinham, com a execucao registrada. Sem uso nenhum, sai de vez.
    ------------------------------------------------------------ */
 
 const paraEnsaio = (l) => ({
@@ -2101,18 +2148,18 @@ router.patch('/ensaios/:id', exigeSessao, exige('gerenciar_ensaios'), async (req
     const nome = texto(req.body.nome)
     if (!nome) return res.status(400).json({ erro: 'Escreva o nome do ensaio.' })
     valores.push(nome)
-    campos.push(`nome = ${valores.length}`)
+    campos.push(`nome = $${valores.length}`)
   }
   if (req.body?.descricao !== undefined) {
     valores.push(texto(req.body.descricao).slice(0, 600) || null)
-    campos.push(`descricao = ${valores.length}`)
+    campos.push(`descricao = $${valores.length}`)
   }
   if (campos.length === 0) return res.status(400).json({ erro: 'Nada para alterar.' })
   valores.push(req.params.id)
 
   try {
     const { rows } = await query(
-      `UPDATE ensaio SET ${campos.join(', ')} WHERE id = ${valores.length} AND ativo RETURNING *`,
+      `UPDATE ensaio SET ${campos.join(', ')} WHERE id = $${valores.length} AND ativo RETURNING *`,
       valores,
     )
     if (!rows[0]) return res.status(404).json({ erro: 'Ensaio não encontrado.' })
@@ -2133,7 +2180,16 @@ router.patch('/ensaios/:id', exigeSessao, exige('gerenciar_ensaios'), async (req
 
 router.delete('/ensaios/:id', exigeSessao, exige('gerenciar_ensaios'), async (req, res) => {
   try {
-    const usado = await query('SELECT 1 FROM obra_ensaio WHERE ensaio_id = $1 LIMIT 1', [req.params.id])
+    /* "usado" e estar planejado em alguma obra OU ter execucao
+       registrada — a execucao fica guardada mesmo depois de o ensaio
+       sair do planejamento, e apagar o ensaio levaria ela junto */
+    const usado = await query(
+      `SELECT 1 FROM obra_ensaio WHERE ensaio_id = $1
+       UNION ALL
+       SELECT 1 FROM obra_ensaio_progresso WHERE ensaio_id = $1
+       LIMIT 1`,
+      [req.params.id],
+    )
     const { rows } =
       usado.rows.length > 0
         ? await query('UPDATE ensaio SET ativo = false WHERE id = $1 AND ativo RETURNING nome', [

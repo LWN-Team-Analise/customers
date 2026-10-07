@@ -7,6 +7,7 @@ import { CampoArea, CampoPastilhas, CampoSelecao, CampoTexto } from '@/component
 import {
   DIAS_EMERGENCIA,
   execucaoCurta,
+  periodoDaRegra,
   PRIORIDADES,
   prioridadeDaObra,
   prioridadeTravada,
@@ -23,6 +24,7 @@ const VAZIO = {
   dataInicio: '',
   dataConclusao: '',
   execucaoInicio: '',
+  execucaoPrazo: '',
 }
 
 /**
@@ -41,17 +43,19 @@ const VAZIO = {
  *
  * As datas:
  *   Data de inicio      — ja vem preenchida com hoje;
- *   Inicio da execucao  — a entrada em campo (opcional; sem ela, o
- *                         periodo de execucao comeca no inicio da obra);
- *   Prazo final         — a entrega da documentacao. Na obra PADRAO pode
- *                         ficar em branco enquanto ninguem souber (mas a
- *                         etapa de execucao so anda com ele); na
- *                         EMERGENCIA e obrigatorio.
+ *   Prazo final         — a obra INTEIRA, ate a entrega da
+ *                         documentacao. Na obra PADRAO pode ficar em
+ *                         branco enquanto ninguem souber; na EMERGENCIA e
+ *                         obrigatorio;
+ *   Inicio / prazo da execucao — o periodo SO da 3a etapa (opcionais
+ *                         aqui; a etapa de execucao so anda com o prazo
+ *                         dela, que tambem se define la dentro).
  *
- * EXECUCAO EM MENOS DE 3 DIAS E EMERGENCIA: se o periodo de execucao (do
- * inicio da execucao — ou da obra — ate o prazo final) ficar menor que
- * 3 dias, a obra entra como Obra Emergencial mesmo aberta pelo botao de
- * obra padrao. O formulario avisa na hora, e o servidor aplica a regra.
+ * EXECUCAO EM MENOS DE 3 DIAS E EMERGENCIA: com o periodo de execucao
+ * preenchido, conta ele; sem ele, conta a obra inteira (do inicio ao
+ * prazo final). Menor que 3 dias, a obra entra como Obra Emergencial
+ * mesmo aberta pelo botao de obra padrao. O formulario avisa na hora, e
+ * o servidor aplica a regra.
  *
  * Emergencia sem prazo e uma contradicao: se nao ha data ate a qual
  * aquilo precisa estar resolvido, o que existe e uma obra urgente — e
@@ -82,7 +86,7 @@ export default function ModalObra({
   const tipoPedido = editando ? obra.tipo : tipo
   /* a regra dos 3 dias, ao vivo: a obra padrao com execucao curta vira
      emergencia ao salvar */
-  const curta = execucaoCurta(form.execucaoInicio || form.dataInicio, form.dataConclusao)
+  const curta = execucaoCurta(...periodoDaRegra(form))
   const viraEmergencia = tipoPedido === 'padrao' && curta
   const tipoAtual = viraEmergencia ? 'emergencia' : tipoPedido
   const emergencia = tipoAtual === 'emergencia'
@@ -103,6 +107,7 @@ export default function ModalObra({
             dataInicio: obra.dataInicio ?? '',
             dataConclusao: obra.dataConclusao ?? '',
             execucaoInicio: obra.execucaoInicio ?? '',
+            execucaoPrazo: obra.execucaoPrazo ?? '',
           }
         : { ...VAZIO, dataInicio: hojeISO() },
     )
@@ -147,6 +152,12 @@ export default function ModalObra({
     if (form.execucaoInicio && form.dataConclusao && form.execucaoInicio > form.dataConclusao) {
       novosErros.execucaoInicio = 'O início da execução não pode ser depois do prazo final.'
     }
+    if (form.execucaoInicio && form.execucaoPrazo && form.execucaoInicio > form.execucaoPrazo) {
+      novosErros.execucaoPrazo = 'O prazo da execução não pode ser antes do início dela.'
+    }
+    if (form.execucaoPrazo && form.dataConclusao && form.execucaoPrazo > form.dataConclusao) {
+      novosErros.execucaoPrazo = 'O prazo da execução não pode passar do prazo final da obra.'
+    }
 
     if (Object.keys(novosErros).length > 0) {
       setErros(novosErros)
@@ -169,6 +180,7 @@ export default function ModalObra({
       /* o inicio da execucao so vai quando existe (ou deixou de existir):
          banco sem a atualizacao 14 continua salvando o resto */
       if (!form.execucaoInicio && !obra?.execucaoInicio) delete campos.execucaoInicio
+      if (!form.execucaoPrazo && !obra?.execucaoPrazo) delete campos.execucaoPrazo
       await aoSalvar(campos)
       setConferindo(false)
       aoFechar()
@@ -310,11 +322,21 @@ export default function ModalObra({
             rotulo="Início da execução"
             type="date"
             min={form.dataInicio || undefined}
-            max={form.dataConclusao || undefined}
+            max={form.execucaoPrazo || form.dataConclusao || undefined}
             value={form.execucaoInicio}
             onChange={mudar('execucaoInicio')}
             erro={erros.execucaoInicio}
             dica="Entrada em campo (opcional)"
+          />
+          <CampoTexto
+            rotulo="Prazo da execução"
+            type="date"
+            min={form.execucaoInicio || form.dataInicio || undefined}
+            max={form.dataConclusao || undefined}
+            value={form.execucaoPrazo}
+            onChange={mudar('execucaoPrazo')}
+            erro={erros.execucaoPrazo}
+            dica="Só a 3ª etapa (opcional)"
           />
         </div>
 

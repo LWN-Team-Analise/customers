@@ -62,13 +62,6 @@
   place-items: center;
 }
 
-.resposta__dica {
-  margin: 0;
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--text-faint);
-}
-
 .resposta__desmarcar {
   align-self: flex-start;
   padding: 0;

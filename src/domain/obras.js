@@ -302,23 +302,19 @@ export function estadoDaEtapa(roteiro, obra, numero) {
    As etapas do FLUXO
 
    As tres primeiras etapas de fabrica tem um papel fixo (vem do
-   banco, etapa.papel — ver db/atualizacao-14.sql.txt):
+   banco, etapa.papel — ver db/atualizacao-14.sql.txt). E so para o
+   sistema saber onde esta cada coisa; na tela aparece o NOME da
+   etapa (1a Comercial, 2a Planejamento, 3a Execucao, 4a Entrega,
+   5a Encerramento):
 
-     planejamento   1a — Planejamento / Time Tecnico. Mora ali o
-                    "Planejamento de ensaios";
-     intermediaria  2a — a etapa do meio;
-     execucao       3a — Execucao. Exige o prazo final da obra, e e
-                    ali que os ensaios sao executados dia a dia.
+     planejamento   1a — mora ali o "Planejamento de ensaios";
+     intermediaria  2a;
+     execucao       3a — exige o prazo DA EXECUCAO, e e ali que os
+                    ensaios sao executados dia a dia.
 
    Etapa FIXA (etapa.fixa) e de fabrica: nao se renomeia, nao se
    reordena e nao se exclui. So a criada a mao segue editavel.
    ------------------------------------------------------------ */
-
-export const PAPEL_DA_ETAPA = {
-  planejamento: 'Planejamento técnico',
-  intermediaria: 'Intermediária',
-  execucao: 'Execução',
-}
 
 /** A etapa de execucao do roteiro desta obra (ou null). */
 export function etapaDeExecucao(roteiro) {
@@ -335,20 +331,35 @@ export function checkDoSistema(check) {
 }
 
 /* ------------------------------------------------------------
+   Dois prazos, e cada um manda numa coisa:
+
+     dataInicio     -> dataConclusao   a OBRA inteira — inclusive a
+                                       documentacao e a entrega, que
+                                       vem depois da execucao;
+     execucaoInicio -> execucaoPrazo   so a ETAPA DE EXECUCAO (3a).
+
    EMERGENCIA = execucao em menos de 3 dias
 
-   Periodo de execucao: da entrada em campo (execucaoInicio; sem ela,
-   o inicio da obra) ate o prazo final (dataConclusao, a entrega da
-   documentacao). Menos de DIAS_EMERGENCIA dias e Obra Emergencial —
-   o servidor aplica a mesma conta ao gravar (server/routes/dados.js).
+   Com o periodo de execucao definido, e ele que conta. Sem ele,
+   conta a obra inteira: se a obra toda cabe em menos de 3 dias, a
+   execucao tambem cabe. Menos de DIAS_EMERGENCIA dias e Obra
+   Emergencial — o servidor aplica a mesma conta ao gravar
+   (server/routes/dados.js).
    ------------------------------------------------------------ */
 
 export const DIAS_EMERGENCIA = 3
 
-/** A execucao cabe em menos de 3 dias? */
+/** O periodo cabe em menos de 3 dias? */
 export function execucaoCurta(inicio, fim) {
   if (!inicio || !fim) return false
   return diasAte(fim, inicio) < DIAS_EMERGENCIA
+}
+
+/** O periodo que decide a emergencia: o da execucao, se definido; senao, o da obra. */
+export function periodoDaRegra({ dataInicio, dataConclusao, execucaoInicio, execucaoPrazo }) {
+  return execucaoPrazo
+    ? [execucaoInicio || dataInicio, execucaoPrazo]
+    : [dataInicio, dataConclusao]
 }
 
 /* ------------------------------------------------------------
@@ -392,24 +403,27 @@ export function progressoExecucao(obra, nomeDoEnsaio = (id) => id) {
      azul     ('emergencia')  obra de emergencia com os prazos em dia;
      amarelo  ('atraso')      um check ou uma etapa passou do prazo —
                               ou esta para vencer longe de terminar;
-                              ou o prazo final esta chegando;
-     laranja  ('laranja')     prazo final muito perto;
-     vermelho ('vermelho')    prazo final amanha ou hoje;
-     vencido  ('vencido')     o prazo final ja passou — fica marcado
-                              como atrasado ate a obra fechar.
+     laranja  ('laranja')     prazo da execucao muito perto;
+     vermelho ('vermelho')    prazo da execucao amanha ou hoje;
+     vencido  ('vencido')     um dos dois prazos grandes ja passou —
+                              fica marcado como atrasado.
 
    Vale o MAIS urgente de todos os motivos.
 
-   O prazo final pesa de jeitos diferentes conforme a etapa:
-     - antes da EXECUCAO, so avisa quando faltam AVISO_ANTES_DIAS
-       dias ou menos com a obra abaixo de PERTO_DE_TERMINAR por cento
-       (amarelo);
-     - da EXECUCAO em diante ele vira o relogio da obra: a cor anda
-       do verde ao vermelho conforme o tempo que resta do periodo de
-       execucao (urgenciaDoPrazoFinal), e o vermelho chega 1 dia antes
-       do prazo;
-     - na EMERGENCIA o periodo inteiro ja e menor que 3 dias, entao a
-       escala nao diz nada: ela fica azul ate o prazo vencer.
+   Os dois prazos grandes pesam em momentos diferentes:
+
+     PRAZO DA EXECUCAO (execucaoPrazo) — so enquanto a 3a etapa esta
+       ABERTA. Nela, a cor anda do verde ao vermelho conforme o tempo
+       que resta do periodo de execucao (urgenciaDoPrazo), e o vermelho
+       chega 1 dia antes. Fechada a execucao, ele sai da conta: o card
+       volta a cor de sempre.
+     PRAZO FINAL DA OBRA (dataConclusao) — a obra inteira, em qualquer
+       etapa, enquanto sobrar check aberto: vencido e "Atrasada";
+       faltando AVISO_ANTES_DIAS dias com a obra abaixo de
+       PERTO_DE_TERMINAR por cento, amarelo.
+
+   Na EMERGENCIA o periodo ja e menor que 3 dias, entao a escala nao
+   diz nada: ela fica azul ate um prazo vencer.
 
    Check ou etapa ja feitos nao atrasam nada, mesmo com o prazo no
    passado: o prazo serviu.
@@ -433,17 +447,17 @@ export function diasAte(data, hoje) {
 const pct = (feitos, total) => (total === 0 ? 0 : Math.round((feitos / total) * 100))
 
 /**
- * O relogio do prazo final na execucao: 'ok' | 'atraso' (amarelo) |
- * 'laranja' | 'vermelho' | 'vencido'.
+ * O relogio de um prazo com periodo (o da execucao): 'ok' | 'atraso'
+ * (amarelo) | 'laranja' | 'vermelho' | 'vencido'.
  *
- * Mede o que RESTA do periodo de execucao (do inicio ao prazo):
+ * Mede o que RESTA do periodo (do inicio ao prazo):
  *   - mais da metade e mais de 3 dias ........ verde;
  *   - metade ou menos, ou 3 dias ou menos .... amarelo;
  *   - um quarto ou menos, ou 2 dias .......... laranja;
  *   - 1 dia (amanha) ou o proprio dia ........ vermelho;
  *   - passou ................................. vencido.
  */
-export function urgenciaDoPrazoFinal(inicio, prazo, hoje) {
+export function urgenciaDoPrazo(inicio, prazo, hoje) {
   if (!prazo) return null
   const restam = diasAte(prazo, hoje)
   if (restam < 0) return 'vencido'
@@ -456,11 +470,26 @@ export function urgenciaDoPrazoFinal(inicio, prazo, hoje) {
 }
 
 /**
+ * A etapa de execucao ainda pesa na cor desta obra?
+ *
+ * So enquanto ela esta ABERTA — e, na obra padrao, depois de a obra
+ * chegar nela (antes disso a execucao ainda nem comecou). Na emergencia
+ * as etapas abrem todas juntas, entao vale desde o comeco.
+ */
+export function execucaoEmAndamento(roteiro, obra) {
+  const execucao = etapaDeExecucao(roteiro)
+  if (!execucao || !obra) return false
+  const marcados = obra.checks ?? {}
+  if (etapaConcluida(execucao, marcados)) return false
+  return obra.tipo === 'emergencia' || etapaAtual(roteiro, marcados) >= execucao.numero
+}
+
+/**
  * A situacao da obra no quadro.
  *
  * Devolve { tom, motivos }. `tom` e um dos de PESO_DO_TOM e cada motivo
- *   { tom, venceu, alvo: 'obra' | 'etapa' | 'check', prazo, dias,
- *     numero?, titulo?, setores: [chaves] }
+ *   { tom, venceu, alvo: 'obra' | 'execucao' | 'etapa' | 'check',
+ *     prazo, dias, numero?, titulo?, setores: [chaves] }
  * — do mais urgente para o menos. Os `setores` sao quem ainda deve
  * naquele prazo: e o "atraso por causa de um setor" que a tela escreve.
  */
@@ -470,6 +499,7 @@ export function situacaoDaObra(roteiro, obra, hoje) {
 
   const marcados = obra.checks ?? {}
   const prazos = obra.prazos ?? {}
+  const emergencia = obra.tipo === 'emergencia'
   const motivos = []
 
   /* prazo de etapa ou de check: venceu, ou esta para vencer longe de
@@ -483,29 +513,42 @@ export function situacaoDaObra(roteiro, obra, hoje) {
     }
   }
 
-  /* o prazo FINAL da obra: so enquanto sobrar check em aberto */
+  /* o prazo FINAL DA OBRA: a obra inteira, enquanto sobrar check aberto */
   if (obra.dataConclusao && !obraConcluida(roteiro, marcados)) {
     const prazo = obra.dataConclusao
     const dias = diasAte(prazo, hoje)
-    const execucao = etapaDeExecucao(roteiro)
-    const naExecucao =
-      obra.tipo !== 'emergencia' &&
-      execucao !== null &&
-      etapaAtual(roteiro, marcados) >= execucao.numero
-
     let tom = null
     if (dias < 0) tom = 'vencido'
-    else if (naExecucao) {
-      tom = urgenciaDoPrazoFinal(obra.execucaoInicio ?? obra.dataInicio, prazo, hoje)
-    } else if (
-      obra.tipo !== 'emergencia' &&
+    else if (
+      !emergencia &&
       dias <= AVISO_ANTES_DIAS &&
       progressoDaObra(roteiro, marcados) < PERTO_DE_TERMINAR
     ) {
       tom = 'atraso'
     }
+    if (tom) motivos.push({ tom, venceu: dias < 0, alvo: 'obra', prazo, dias, setores: [] })
+  }
+
+  /* o prazo DA EXECUCAO: so enquanto a 3a etapa esta aberta */
+  if (obra.execucaoPrazo && execucaoEmAndamento(roteiro, obra)) {
+    const prazo = obra.execucaoPrazo
+    const dias = diasAte(prazo, hoje)
+    const execucao = etapaDeExecucao(roteiro)
+    const tom = emergencia
+      ? dias < 0
+        ? 'vencido'
+        : null
+      : urgenciaDoPrazo(obra.execucaoInicio ?? obra.dataInicio, prazo, hoje)
     if (tom && tom !== 'ok') {
-      motivos.push({ tom, venceu: dias < 0, alvo: 'obra', prazo, dias, naExecucao, setores: [] })
+      motivos.push({
+        tom,
+        venceu: dias < 0,
+        alvo: 'execucao',
+        prazo,
+        dias,
+        numero: execucao.numero,
+        setores: setoresPendentes(roteiro, marcados, execucao.numero),
+      })
     }
   }
 
