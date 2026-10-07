@@ -298,7 +298,7 @@
 .quadro {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(208px, 1fr);
+  grid-auto-columns: minmax(164px, 1fr);
   gap: 12px;
   align-items: stretch;
   min-width: 0;
@@ -312,7 +312,7 @@
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  padding: 12px;
+  padding: 10px 9px;
   border: 1px solid var(--coluna-borda);
   border-radius: var(--radius-lg);
   background: var(--coluna-bg);
@@ -322,11 +322,16 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 4px 6px;
+  min-width: 0;
 }
 
-/* o nome (ou o papel) da etapa, ao lado do rotulo: "1ª Etapa  Planejamento" */
+/* o nome (ou o papel) da etapa, na linha de baixo do rotulo:
+   "1ª Etapa" em cima, "Planejamento técnico" embaixo */
 .coluna__subtitulo {
+  order: 10;
+  flex: 1 0 100%;
+  padding-left: 2px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,6 +342,8 @@
 }
 
 .coluna__titulo {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 5px 12px;
   border-radius: var(--radius-pill);
   background: var(--tom-bg);
@@ -373,26 +380,6 @@
 
 .coluna__contador {
   flex-shrink: 0;
-}
-
-.coluna__mais {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-left: auto;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-
-.coluna__mais:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-strong);
 }
 
 .coluna__pilha {
@@ -535,7 +522,7 @@
 
 .areaquadro {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 288px;
+  grid-template-columns: minmax(0, 1fr) 250px;
   gap: 12px;
   align-items: start;
 }

@@ -1370,266 +1370,6 @@
   opacity: 0.85;
 }
 
-/* o texto do check ocupa o espaco e empurra a etiqueta do dono
-   para a direita da linha */
-.tarefa {
-  width: 100%;
-}
-
-/* ============================================================
-   Etiquetas na faixa da obra
-   ============================================================ */
-
-.capa__etiquetas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.capa__etiqueta {
-  padding: 3px 11px;
-  border-radius: var(--radius-pill);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-/* ---- etiqueta / anexo / editar, no canto direito da faixa ---- */
-
-.capa__acoes {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-/* sobre a faixa colorida o botao e translucido: a cor da obra
-   continua sendo quem manda ali */
-.capa__acao {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.16);
-  color: inherit;
-  font-size: 0.74rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
-}
-
-.capa__acao:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.capa__acao em {
-  padding: 0 6px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.28);
-  font-style: normal;
-  font-size: 0.66rem;
-  font-weight: 800;
-}
-
-/* ============================================================
-   "Abrir chat", logo a direita dos Membros
-
-   Os dois vivem no mesmo bloco (.infos__fim) e ele e que vai
-   para a direita da faixa: assim o botao nunca cai sozinho
-   para a linha de baixo quando a faixa fica apertada.
-   ============================================================ */
-
-.infos__fim {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  margin-left: auto;
-}
-
-.abrirchat {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  box-shadow: 0 10px 22px -14px var(--accent);
-  transition: filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-
-.abrirchat:hover {
-  filter: brightness(1.08);
-}
-
-.abrirchat:active {
-  transform: scale(0.97);
-}
-
-
-/* ============================================================
-   Carimbo: quem criou, quando, e quem mexeu por ultimo
-   ============================================================ */
-
-.carimbo {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 32px;
-  padding: 11px 20px;
-  border-radius: var(--radius-lg);
-}
-
-.carimbo__item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 0;
-  min-width: 0;
-}
-
-/* a observação da conclusão é texto corrido: ganha a faixa inteira em
-   vez de espremer as outras quatro colunas */
-.carimbo__item--largo {
-  flex-basis: 100%;
-}
-
-.carimbo__nome {
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.carimbo__valor {
-  font-size: 0.8rem;
-  color: var(--text-base);
-}
-
-/* "sem data" na conclusao ainda em aberto */
-.info__vazio {
-  font-style: normal;
-  font-weight: 500;
-  color: var(--text-faint);
-}
-
-/* ============================================================
-   Observacao: lapis + lixeira, e a marca de editada
-   ============================================================ */
-
-.nota__ferramentas {
-  display: flex;
-  gap: 2px;
-}
-
-.nota__editada {
-  margin-left: 7px;
-  font-style: normal;
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-faint);
-}
-
-.nota__editada::before {
-  content: '· ';
-}
-
-@media (max-width: 720px) {
-  .infos__fim {
-    margin-left: 0;
-    flex-wrap: wrap;
-  }
-
-  .capa__acoes {
-    justify-content: flex-start;
-  }
-}
-
-/* a descrição da obra virou opcional; sem ela a capa diz isso em vez de
-   abrir um vazio entre o selo do tipo e os botões */
-.capa__semdesc {
-  font-style: italic;
-  opacity: 0.62;
-}
-
-/* ---- Etiquetas do card ----
-
-   Não confundir com as da obra, que ficam no cabeçalho da tela: são
-   catálogos separados no banco, e nenhuma das duas puxa a outra. Aqui
-   elas ficam entre o título do card e os checks — é onde se lê "este
-   pedaço do roteiro é assim" antes de olhar o que falta nele. */
-.setorcard__etiquetas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0 0 8px;
-  padding: 0;
-  list-style: none;
-}
-
-.setorcard__etiquetas li {
-  padding: 2px 9px;
-  border-radius: var(--radius-pill);
-  color: #fff;
-  font-size: 0.66rem;
-  font-weight: 700;
-  line-height: 1.5;
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-/* ---- Excluir, no cabeçalho da obra concluída ----
-
-   Vermelho, e as outras ações da faixa não são: apagar o registro de
-   uma obra não é vizinha de "ver anexos", e a cor é o que separa as
-   duas antes de a pessoa ler o rótulo. */
-.capa__acao--perigo {
-  border-color: color-mix(in srgb, #ff6b5e 45%, transparent);
-  color: #ffb3ab;
-}
-
-.capa__acao--perigo:hover {
-  background: color-mix(in srgb, #ff6b5e 22%, transparent);
-  border-color: #ff8f84;
-  color: #fff;
-}
-
-/* ============================================================
-   Card de pergunta, informacoes e prazos (atualizacao 13)
-   ============================================================ */
-
-/* o "i" de quem tem informacoes: a dica abre no card inteiro, ele so
-   avisa que ela existe */
-.setorcard__info {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  color: var(--setor-cor);
-  opacity: 0.85;
-}
-
-/* a marca de card que pede Sim ou Nao */
-.setorcard__pergunta {
-  flex-shrink: 0;
-  padding: 1px 7px;
-  border: 1px solid color-mix(in srgb, var(--setor-cor) 55%, transparent);
-  border-radius: var(--radius-pill);
-  color: var(--setor-cor);
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
 /* o texto do check ocupa o espaco; resposta, dono e prazo vao no fim */
 .tarefa__texto {
   min-width: 0;
@@ -1768,20 +1508,26 @@
    Etapas fixas, execucao e os checks do sistema (atualizacao 14)
    ============================================================ */
 
-/* o selo da etapa de fabrica: o cadeado e o papel dela no fluxo */
+/* o cadeado da etapa de fabrica, logo depois do nome */
 .etapa__fixa {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
-  padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--control-bg-hover);
   color: var(--text-muted);
-  font-size: 0.62rem;
+}
+
+/* o numero da etapa ("1ª Etapa"), embaixo do nome */
+.etapa__papel {
+  margin: -4px 0 0;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 /* o bloco da execucao: periodo + prazo final + andamento dos ensaios.

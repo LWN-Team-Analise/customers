@@ -372,7 +372,11 @@
    check, etapa). Fica no comum porque quatro telas usam.
    ============================================================ */
 
+/* nao quebra nem encolhe: o botao de Salvar (width: 100%) e quem cede
+   a largura — antes era o Excluir que era cortado ao meio */
 .formrot__apagar {
+  flex-shrink: 0;
+  white-space: nowrap;
   margin-right: auto;
   padding: 10px 16px;
   border: 1px solid var(--danger-border);

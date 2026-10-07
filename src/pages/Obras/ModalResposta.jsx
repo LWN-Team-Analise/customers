@@ -65,11 +65,6 @@ export default function ModalResposta({
           </button>
         </div>
 
-        <p className="resposta__dica">
-          As duas respostas marcam o check. &quot;Não&quot; aparece com um X e a palavra
-          &quot;Não&quot; do lado.
-        </p>
-
         {marcado && (
           <button
             type="button"

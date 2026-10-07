@@ -124,7 +124,8 @@ export const desmarcarCheck = (obraId, checkId) => del(`/dados/obras/${obraId}/c
 export const definirPrazo = (obraId, campos) => put(`/dados/obras/${obraId}/prazos`, campos)
 
 /* ---------------- Execucao ----------------
-   O periodo: { inicio (entrada em campo, opcional), prazoFinal }. */
+   O periodo SO da 3a etapa: { inicio (entrada em campo, opcional),
+   prazo (o da execucao) }. O prazo final da obra nao muda aqui. */
 
 export const definirExecucao = (obraId, campos) => put(`/dados/obras/${obraId}/execucao`, campos)
 

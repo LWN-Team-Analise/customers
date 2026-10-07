@@ -7,11 +7,11 @@
 
      ok          verde    obra padrao com os prazos em dia
      emergencia  azul     obra de emergencia com os prazos em dia
-     atraso      amarelo  check/etapa vencido, ou prazo final chegando
-     laranja     laranja  prazo final muito perto
-     vermelho    vermelho prazo final amanha ou hoje
-     vencido     vermelho o prazo final ja passou (fio mais grosso e
-                          o selo "Atrasada")
+     atraso      amarelo  check/etapa vencido, ou um prazo chegando
+     laranja     laranja  prazo da execucao muito perto
+     vermelho    vermelho prazo da execucao amanha ou hoje
+     vencido     vermelho o prazo da execucao ou o final da obra ja
+                          passou (fio mais grosso e o selo "Atrasada")
 
    O -acento pinta o fio da esquerda, a linha do motivo e a barra da
    execucao. Os valores de cada tema estao em src/styles/tokens.css.
@@ -104,10 +104,14 @@
 
 /* ---- topo ---- */
 
+/* a foto e o nome numa linha; os setores que devem descem para a
+   linha de baixo — a coluna da etapa e estreita, e ao lado do nome
+   eles espremiam o titulo ate virar reticencias */
 .obracard__topo {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
 }
 
 .obracard__quem {
@@ -123,9 +127,11 @@
   font-weight: 700;
   line-height: 1.2;
   color: var(--text-strong);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .obracard__etapa {
@@ -138,9 +144,8 @@
 .obracard__setores {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 3px;
-  max-width: 90px;
+  flex-basis: 100%;
 }
 
 .obracard__setor {

@@ -8,49 +8,59 @@ import { dataBR } from '@/utils/formato'
 import './ModalRoteiro.css'
 
 /**
- * O PERIODO DE EXECUCAO da obra: da entrada em campo ao prazo final.
+ * O PERIODO DE EXECUCAO: so a 3a etapa, da entrada em campo ao prazo
+ * DELA.
  *
  *   Inicio da execucao — a entrada em campo. Opcional: sem ela, o
  *                        periodo comeca no inicio da obra;
- *   Prazo final        — a entrega da documentacao. OBRIGATORIO: a
- *                        etapa de execucao nao anda sem ele, e e dele
- *                        que sai a cor do card no quadro.
+ *   Prazo da execucao  — ate quando a execucao tem de fechar.
+ *                        OBRIGATORIO: a etapa nao anda sem ele, e e dele
+ *                        que sai a cor do card enquanto ela esta aberta.
+ *
+ * O prazo final da OBRA e outro e nao muda aqui: a obra continua depois
+ * da execucao (documentacao, entrega). O prazo da execucao nao passa
+ * dele.
  *
  * Quem define e quem tem "Pode definir prazo para checks"
- * (definir_prazos). Periodo menor que 3 dias transforma a obra padrao
+ * (definir_prazos). Execucao menor que 3 dias transforma a obra padrao
  * em Obra Emergencial — a tela avisa antes de salvar.
  */
 export default function ModalPeriodo({ aberto, obra, aoFechar }) {
   const { definirExecucao } = useDados()
   const [inicio, setInicio] = useState('')
-  const [prazoFinal, setPrazoFinal] = useState('')
+  const [prazo, setPrazo] = useState('')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
     if (!aberto) return
     setInicio(obra?.execucaoInicio ?? '')
-    setPrazoFinal(obra?.dataConclusao ?? '')
+    setPrazo(obra?.execucaoPrazo ?? '')
     setErro('')
   }, [aberto, obra])
 
   const comeco = inicio || obra?.dataInicio || ''
-  const dias = comeco && prazoFinal ? diasAte(prazoFinal, comeco) : null
-  const viraEmergencia = obra?.tipo === 'padrao' && execucaoCurta(comeco, prazoFinal)
+  const prazoObra = obra?.dataConclusao ?? ''
+  const dias = comeco && prazo ? diasAte(prazo, comeco) : null
+  const viraEmergencia = obra?.tipo === 'padrao' && execucaoCurta(comeco, prazo)
 
   const salvar = async (evento) => {
     evento.preventDefault()
-    if (!prazoFinal) {
-      setErro('O prazo final é obrigatório.')
+    if (!prazo) {
+      setErro('O prazo da execução é obrigatório.')
       return
     }
-    if (inicio && inicio > prazoFinal) {
-      setErro('O início da execução não pode ser depois do prazo final.')
+    if (inicio && inicio > prazo) {
+      setErro('O início da execução não pode ser depois do prazo da execução.')
+      return
+    }
+    if (prazoObra && prazo > prazoObra) {
+      setErro(`O prazo da execução não pode passar do prazo final da obra (${dataBR(prazoObra)}).`)
       return
     }
     setSalvando(true)
     try {
-      await definirExecucao(obra.id, { inicio: inicio || null, prazoFinal })
+      await definirExecucao(obra.id, { inicio: inicio || null, prazo })
       aoFechar()
     } catch (e) {
       setErro(e.message)
@@ -64,7 +74,9 @@ export default function ModalPeriodo({ aberto, obra, aoFechar }) {
       aberto={aberto}
       aoFechar={aoFechar}
       titulo="Período de execução"
-      subtitulo="Da entrada em campo até a entrega da documentação."
+      subtitulo={
+        prazoObra ? `Só a etapa de execução. Prazo final da obra: ${dataBR(prazoObra)}.` : 'Só a etapa de execução.'
+      }
       largura={460}
     >
       <form className="formrot" onSubmit={salvar} noValidate>
@@ -73,26 +85,26 @@ export default function ModalPeriodo({ aberto, obra, aoFechar }) {
             rotulo="Início da execução"
             type="date"
             value={inicio}
-            max={prazoFinal || undefined}
+            min={obra?.dataInicio || undefined}
+            max={prazo || prazoObra || undefined}
             onChange={(e) => setInicio(e.target.value)}
             dica={inicio ? undefined : `Vazio: ${dataBR(obra?.dataInicio) || 'início da obra'}`}
           />
           <CampoTexto
-            rotulo="Prazo final *"
+            rotulo="Prazo da execução *"
             type="date"
             required
-            value={prazoFinal}
-            min={inicio || undefined}
-            onChange={(e) => setPrazoFinal(e.target.value)}
-            autoFocus={!obra?.dataConclusao}
+            value={prazo}
+            min={inicio || obra?.dataInicio || undefined}
+            max={prazoObra || undefined}
+            onChange={(e) => setPrazo(e.target.value)}
+            autoFocus={!obra?.execucaoPrazo}
           />
         </div>
 
         {dias !== null && dias >= 0 && (
           <p className="formrot__dica formrot__dica--colada">
-            {dias === 0 ? 'Execução no mesmo dia.' : `${dias} dia${dias > 1 ? 's' : ''} de execução.`}{' '}
-            Conforme o prazo final se aproxima, o card da obra vai do verde ao vermelho — o
-            vermelho chega 1 dia antes do prazo.
+            {dias === 0 ? 'Execução no mesmo dia.' : `${dias} dia${dias > 1 ? 's' : ''} de execução.`}
           </p>
         )}
 
@@ -113,7 +125,7 @@ export default function ModalPeriodo({ aberto, obra, aoFechar }) {
           <button type="button" className="formobra__cancelar" onClick={aoFechar}>
             Cancelar
           </button>
-          <Button type="submit" loading={salvando} disabled={!prazoFinal}>
+          <Button type="submit" loading={salvando} disabled={!prazo}>
             Salvar período
           </Button>
         </footer>

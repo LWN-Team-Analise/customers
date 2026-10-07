@@ -7,7 +7,6 @@ import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import {
   nomeProprioDaEtapa,
-  PAPEL_DA_ETAPA,
   PRIORIDADES,
   PRIORIDADE_PESO,
   situacaoDaObra,
@@ -303,9 +302,8 @@ export default function Obras() {
         numero: etapa.numero,
         rotulo,
         /* o nome so entra quando ACRESCENTA: uma etapa chamada "3° Etapa"
-           no roteiro daria "3ª Etapa  3° Etapa". Sem nome proprio, a
-           etapa fixa mostra o papel dela no fluxo ("Execução") */
-        nome: nomeProprioDaEtapa(etapa.nome, rotulo) || PAPEL_DA_ETAPA[etapa.papel] || '',
+           no roteiro daria "3ª Etapa  3° Etapa" */
+        nome: nomeProprioDaEtapa(etapa.nome, rotulo),
         obras: [],
       }
     })
@@ -553,16 +551,13 @@ export default function Obras() {
             observacoes do quadro. */}
         <div className="areaquadro">
           <div className="quadro" style={{ '--colunas': colunas.length }}>
-            {colunas.map((coluna, i) => (
+            {colunas.map((coluna) => (
               <Coluna
                 key={coluna.id}
                 titulo={coluna.rotulo}
                 subtitulo={coluna.nome}
                 tom="etapa"
                 total={coluna.obras.length}
-                /* obra padrao nova comeca na primeira etapa: e ali que
-                   o "+" faz sentido */
-                aoAdicionar={i === 0 && podeCriarObra ? () => setModalObra('padrao') : undefined}
               >
                 {coluna.obras.map((obra) => (
                   <CardObra
@@ -583,7 +578,6 @@ export default function Obras() {
               titulo="Obras emergenciais"
               tom="emergencia"
               total={emergencia.length}
-              aoAdicionar={podeCriarObra ? () => setModalObra('emergencia') : undefined}
             >
               {emergencia.map((obra) => (
                 <CardObra
@@ -716,11 +710,14 @@ export default function Obras() {
 }
 
 /**
- * Coluna do quadro: titulo (e o nome da etapa, quando ha), contador,
- * acao e a pilha de cards. Vazia, fica em branco — e o pedido: a etapa
- * sem obra aparece, so que sem nada dentro.
+ * Coluna do quadro: titulo (e o nome da etapa, quando ha), contador e a
+ * pilha de cards. Vazia, fica em branco — a etapa sem obra aparece, so
+ * que sem nada dentro.
+ *
+ * Nao tem "+": obra nova nasce SO pelos botoes "+ Obra padrao" e
+ * "+ Obra emergencia" da barra, e nao de dentro das colunas.
  */
-function Coluna({ titulo, subtitulo, tom, total, aoAdicionar, children }) {
+function Coluna({ titulo, subtitulo, tom, total, children }) {
   return (
     <section className="coluna" data-tom={tom}>
       <header className="coluna__topo">
@@ -729,17 +726,6 @@ function Coluna({ titulo, subtitulo, tom, total, aoAdicionar, children }) {
         </span>
         {subtitulo && <span className="coluna__subtitulo">{subtitulo}</span>}
         <span className="coluna__contador">{total}</span>
-        {aoAdicionar && (
-          <button
-            type="button"
-            className="coluna__mais"
-            onClick={aoAdicionar}
-            title="Adicionar"
-            aria-label="Adicionar"
-          >
-            <Mais />
-          </button>
-        )}
       </header>
 
       <div className="coluna__pilha">{total > 0 && children}</div>
