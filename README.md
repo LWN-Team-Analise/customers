@@ -1350,8 +1350,9 @@ alta, e as duas apareciam iguais no quadro.
 
 A escolha do formulario continua sendo entre as **tres de sempre**, e so na
 obra padrao. Urgente nao e uma quarta opcao a marcar; e o nome que a
-emergencia da a prioridade que ela ja tem. A pastilha leva a cor da propria
-emergencia, e nao o vermelho da alta.
+emergencia da a prioridade que ela ja tem. A palavra leva o **azul** do botao
+"Obra emergencia" (`--pri-urgente`, em src/styles/tokens.css), e nao o
+vermelho da alta.
 
 Quem decide isso sao dois helpers em `src/domain/obras.js` —
 `rotuloPrioridadeObra(obra)` e `tomPrioridadeObra(obra)` —, usados por toda
@@ -1446,10 +1447,19 @@ vencida mais recente para a mais antiga).
 
 A barra de baixo tem **Pagina inicial · Obras · Despesas · Menu**. O Menu
 (hamburguer, na ponta direita) abre o **menu lateral** pela direita: a foto,
-o nome e a avaliacao de quem esta logado; Configuracoes; e as outras abas
-(Clientes, Concluidas, Avaliacoes, Usuarios...). A barra de cima (saudacao,
-sino, foto e busca) e mais baixa que no computador; a letra da busca so fica
-em 16px no iPhone, que da zoom na tela em campo com letra menor.
+o nome e a avaliacao de quem esta logado; as outras abas (Clientes,
+Concluidas, Avaliacoes, Usuarios...), so icone e nome com uma linha fina
+entre elas; e **Configuracoes sozinha no rodape**. Ele desliza com o veu
+escurecendo a tela, e as pecas de dentro chegam em cascata logo atras.
+
+O menu lateral so existe no celular. As classes dele sao `menulado__*`: a
+tela de Obras ja usa `.lateral` (a coluna das emergencias), e quando o menu
+tambem se chamava assim o CSS de um pintava o outro — o menu aparecia aberto
+e sem estilo no computador, e no celular a coluna das emergencias sumia.
+
+A barra de cima (saudacao, sino, foto e busca) e mais baixa que no
+computador; a letra da busca so fica em 16px no iPhone, que da zoom na tela
+em campo com letra menor.
 
 ### O quadro
 
@@ -1498,6 +1508,11 @@ O card mostra a logo da empresa, **o n. da proposta e o nome do cliente**, a
 etapa atual, os setores que ainda devem informacao nela, o motivo da cor, a
 descricao, a barra da execucao dos ensaios, a prioridade com o inicio e o
 prazo final e as fotos de quem mexeu na obra.
+
+**O fio da esquerda e a cor da PRIORIDADE**, e nao a do prazo: verde baixa,
+amarelo media, vermelho alta, azul no "Urgente" da emergencia. A palavra em
+"Prioridade: Alta" sai na mesma cor. O fundo do card continua contando o
+prazo final (verde, amarelo, laranja, vermelho).
 
 O titulo e `"1042/2026 - Acme"`: **o n. da proposta na frente**, porque e por
 ele que a obra e procurada no resto da empresa — quem liga perguntando de uma

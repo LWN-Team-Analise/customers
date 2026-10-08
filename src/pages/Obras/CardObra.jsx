@@ -57,6 +57,9 @@ function textoDoMotivo(m, nomeDoCargo, comSelo = false) {
  *
  * O prazo da EXECUCAO nao entra na cor: so o prazo final da obra.
  *
+ * O FIO DA ESQUERDA e outra coisa: a cor da PRIORIDADE (data-pri), a
+ * mesma da palavra em "Prioridade: Alta".
+ *
  * Quando a cor nao e a de sempre, uma linha diz o PORQUE (o motivo mais
  * urgente; os outros ficam na dica dele).
  *
@@ -134,6 +137,7 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
       type="button"
       className="obracard"
       data-tom={tom}
+      data-pri={tomPrioridadeObra(obra)}
       onClick={aoAbrir}
       title={motivos.length > 1 ? motivos.map((m) => textoDoMotivo(m, nomeDoCargo)).join('\n') : undefined}
     >
@@ -204,9 +208,10 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
 
       <footer className="obracard__base">
         <span className="obracard__meta">
-          {/* a cor vem do data-pri, e e a mesma em toda tela que fala de
-              prioridade: vermelho alta, amarelo media, verde baixa */}
-          <span className="obracard__pri" data-pri={tomPrioridadeObra(obra)}>
+          {/* a cor vem do data-pri do card, e e a mesma do fio da
+              esquerda: vermelho alta, amarelo media, verde baixa, azul
+              no "Urgente" da emergencia */}
+          <span className="obracard__pri">
             Prioridade: <strong>{rotuloPrioridadeObra(obra)}</strong>
           </span>
 

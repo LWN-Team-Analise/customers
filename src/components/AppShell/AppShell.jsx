@@ -83,6 +83,11 @@ const Icone = {
       <path d="m17 15 3-3-3-3M20 12H10" />
     </svg>
   ),
+  fechar: () => (
+    <svg viewBox="0 0 24 24" width="18" height="18" {...traco} strokeWidth="2">
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  ),
   chat: () => (
     <svg viewBox="0 0 24 24" width="21" height="21" {...traco}>
       <path d="M20 15a2 2 0 0 1-2 2H8l-4 3V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
@@ -460,12 +465,18 @@ function Notificacoes() {
  * barra de baixo.
  *
  *   a foto, o nome e a avaliacao de quem esta logado;
- *   Configuracoes;
- *   as abas que nao cabem na barra (Clientes, Concluidas, ...).
+ *   as abas que nao cabem na barra (Clientes, Concluidas, ...);
+ *   Configuracoes, sozinha no rodape.
  *
  * Fecha no X, num toque no veu, no Esc ou ao trocar de tela. Fica
  * MONTADO mesmo fechado (escondido por visibility): desmontando, o
  * fechar seria instantaneo, sem o painel deslizar de volta.
+ *
+ * As classes sao `menulado__*`, e nao `lateral`: a tela de Obras ja tem
+ * um `.lateral` (a coluna das emergencias), e o CSS de uma pintava a
+ * outra — o menu aparecia aberto e sem estilo no computador.
+ *
+ * `--i` e a posicao de cada peca na entrada em cascata (ver o CSS).
  */
 function MenuLateral({ aberto, aoFechar, abas }) {
   const { user } = useAuth()
@@ -482,19 +493,20 @@ function MenuLateral({ aberto, aoFechar, abas }) {
   }, [aberto, aoFechar])
 
   const fora = aberto ? undefined : -1
+  const classe = ({ isActive }) => `menulado__item ${isActive ? 'is-atual' : ''}`.trim()
 
   return (
-    <div className={`lateral ${aberto ? 'is-aberto' : ''}`.trim()} aria-hidden={!aberto}>
-      <button type="button" className="lateral__veu" tabIndex={-1} aria-label="Fechar o menu" onClick={aoFechar} />
-      <aside className="lateral__painel" id="menu-lateral" aria-label="Menu" tabIndex={-1} ref={painel}>
-        <header className="lateral__perfil">
-          <Avatar nome={user?.name} foto={user?.foto} tamanho={50} />
-          <div className="lateral__quem">
+    <div className={`menulado ${aberto ? 'is-aberto' : ''}`.trim()} aria-hidden={!aberto}>
+      <button type="button" className="menulado__veu" tabIndex={-1} aria-label="Fechar o menu" onClick={aoFechar} />
+      <aside className="menulado__painel" id="menu-lateral" aria-label="Menu" tabIndex={-1} ref={painel}>
+        <header className="menulado__perfil" style={{ '--i': 0 }}>
+          <Avatar nome={user?.name} foto={user?.foto} tamanho={52} />
+          <div className="menulado__quem">
             <strong>{user?.name ?? 'Usuário'}</strong>
             {media === null ? (
-              <span className="lateral__nota">Sem avaliação ainda</span>
+              <span className="menulado__nota">Sem avaliação ainda</span>
             ) : (
-              <span className="lateral__nota">
+              <span className="menulado__nota">
                 <Estrelas nota={media} tamanho={13} />
                 <b>{media.toFixed(1)}</b>
                 <em>
@@ -503,35 +515,25 @@ function MenuLateral({ aberto, aoFechar, abas }) {
               </span>
             )}
           </div>
-          <button type="button" className="lateral__fechar" onClick={aoFechar} aria-label="Fechar o menu" tabIndex={fora}>
-            ×
+          <button type="button" className="menulado__fechar" onClick={aoFechar} aria-label="Fechar o menu" tabIndex={fora}>
+            <Icone.fechar />
           </button>
         </header>
 
-        <nav className="lateral__lista" aria-label="Mais telas">
-          <NavLink
-            to="/app/configuracoes"
-            className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
-            onClick={aoFechar}
-            tabIndex={fora}
-          >
-            <span className="rail__glifo">
-              <Icone.config />
-            </span>
-            Configurações
-          </NavLink>
-          {abas.map((item) => {
+        <nav className="menulado__lista" aria-label="Mais telas">
+          {abas.map((item, i) => {
             const Glifo = Icone[item.id]
             return (
               <NavLink
                 key={item.id}
                 to={item.rota}
                 end={item.exato}
-                className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
+                className={classe}
                 onClick={aoFechar}
                 tabIndex={fora}
+                style={{ '--i': i + 1 }}
               >
-                <span className="rail__glifo">
+                <span className="menulado__glifo">
                   <Glifo />
                 </span>
                 {item.rotulo}
@@ -539,6 +541,15 @@ function MenuLateral({ aberto, aoFechar, abas }) {
             )
           })}
         </nav>
+
+        <footer className="menulado__rodape" style={{ '--i': abas.length + 1 }}>
+          <NavLink to="/app/configuracoes" className={classe} onClick={aoFechar} tabIndex={fora}>
+            <span className="menulado__glifo">
+              <Icone.config />
+            </span>
+            Configurações
+          </NavLink>
+        </footer>
       </aside>
     </div>
   )
