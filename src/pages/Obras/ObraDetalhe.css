@@ -540,7 +540,7 @@
   transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
 
-.tarefa:hover:not(:disabled) {
+.tarefa:hover:not([aria-disabled='true']) {
   background: var(--control-bg-hover);
 }
 
@@ -551,7 +551,7 @@
    de novo. Agora o cursor avisa antes do clique, o hover não responde e
    a caixinha fica riscada em diagonal: a leitura é "aqui não é comigo",
    e não "não funcionou". */
-.tarefa:disabled {
+.tarefa[aria-disabled='true'] {
   cursor: not-allowed;
 }
 
@@ -1004,13 +1004,33 @@
   outline-offset: -2px;
 }
 
-/* o pegador: e por ele que o check se arrasta */
-.tarefa__pegador {
-  cursor: grab;
+/* O check que se arrasta: o proprio check e a alca. Sem selecionar
+   texto nem abrir o menu do toque ao segurar no celular. */
+.setorcard__tarefas li.is-arrastavel {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
-.tarefa__pegador:active {
-  cursor: grabbing;
+/* a copia que segue o ponteiro */
+.tarefa-fantasma {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--accent);
+  opacity: 0.96;
+}
+
+.tarefa-fantasma .tarefa__acoes {
+  display: none;
+}
+
+/* durante o arraste a tela inteira mostra a mao fechada */
+body.arrastando-check,
+body.arrastando-check * {
+  cursor: grabbing !important;
 }
 
 /* durante o arraste: o check pego fica apagado, e a linha diz onde ele
@@ -1028,7 +1048,7 @@
 }
 
 /* no modelo da obra o check nao se marca, mas tambem nao e "de outro" */
-.tarefa.is-modelo:disabled {
+.tarefa.is-modelo[aria-disabled='true'] {
   opacity: 1;
   cursor: default;
 }
@@ -1447,8 +1467,19 @@
 }
 
 /* o texto do check ocupa o espaco; resposta, dono e prazo vao no fim */
+/* O texto toma o que sobra da linha e QUEBRA nela; as etiquetas
+   (Sim/Nao, gases, prazo, dono) descem para a linha de baixo quando nao
+   cabem do lado. Antes o texto encolhia abaixo da largura da palavra e
+   vazava por cima delas — e a borda do card cortava o que sobrava. */
+.tarefa {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
 .tarefa__texto {
+  flex: 1 1 7em;
   min-width: 0;
+  overflow-wrap: break-word;
 }
 
 /* a resposta escrita do lado do check: "Hospedagem  Nao". Sem o risco

@@ -111,12 +111,21 @@ export async function lerRoteiro() {
     query(`SELECT cc.card_id, c.chave, cc.ordem
              FROM etapa_card_cargo cc JOIN cargo c ON c.id = cc.cargo_id
             ORDER BY cc.ordem`),
-    comReserva(
-      `SELECT id, card_id, ordem, titulo, sim_nao, informacoes, tipo, vigente_de, vigente_ate
+    /* tres degraus: com os checks proprios das obras (18), so com o
+       tipo do check (13/14), ou como sempre foi */
+    query(
+      `SELECT id, card_id, ordem, titulo, sim_nao, informacoes, tipo, obra_id, origem_id,
+              vigente_de, vigente_ate
          FROM etapa_check ORDER BY ordem, id`,
-      `SELECT id, card_id, ordem, titulo, vigente_de, vigente_ate
-         FROM etapa_check ORDER BY ordem, id`,
-    ),
+    ).catch((erro) => {
+      if (erro.code !== '42703') throw erro
+      return comReserva(
+        `SELECT id, card_id, ordem, titulo, sim_nao, informacoes, tipo, vigente_de, vigente_ate
+           FROM etapa_check ORDER BY ordem, id`,
+        `SELECT id, card_id, ordem, titulo, vigente_de, vigente_ate
+           FROM etapa_check ORDER BY ordem, id`,
+      )
+    }),
     query(`SELECT kc.check_id, c.chave, kc.ordem
              FROM etapa_check_cargo kc JOIN cargo c ON c.id = kc.cargo_id
             ORDER BY kc.ordem`),
@@ -169,6 +178,10 @@ export async function lerRoteiro() {
       /* 'comum', ou um do sistema: 'planejamento_ensaios' e
          'execucao_ensaios' (atualizacao 14), 'material_gases' (17) */
       tipo: l.tipo ?? 'comum',
+      /* check PROPRIO de uma obra (atualizacao 18): so ela o enxerga.
+         null = check do roteiro */
+      obraId: l.obra_id ? String(l.obra_id) : null,
+      origemId: l.origem_id ? String(l.origem_id) : null,
       vigenteDe: l.vigente_de,
       vigenteAte: l.vigente_ate,
     })
@@ -479,6 +492,17 @@ router.delete('/cards/:id', exigeSessao, exige('editar_cards'), async (req, res)
 /* ------------------------------------------------------------
    Checks
 
+   ONDE a mudanca vale depende de onde ela e feita:
+
+     dentro de uma obra (`obraId` na chamada) — SO naquela obra. Na
+       primeira mudanca de check dentro dela, a obra ganha uma copia
+       dos checks que enxerga (garantirChecksProprios) e dali em diante
+       mexe so na copia: nem as proximas obras nem as que ja passaram
+       sentem nada;
+     no modelo da obra (o "Editar" do quadro, sem `obraId`) — nas
+       obras criadas DAQUI EM DIANTE. As que ja existem continuam como
+       estavam (o check visto por alguma delas vira versao nova).
+
    Tudo o que diz como o check se COMPORTA mora nele:
      sim_nao      "Obrigatorio responder Sim ou Nao?";
      informacoes  a dica ao passar o mouse;
@@ -531,23 +555,99 @@ async function gravarCargosDoCheck(checkId, chaves) {
 }
 
 /* ------------------------------------------------------------
-   Check ja MARCADO nao muda para tras
-
-   Editar um check (nome, pergunta, dica, quem marca) ou leva-lo para
-   outro card muda o que as obras enxergam. Enquanto nenhuma obra o
-   marcou, a mudanca e feita no proprio check e vale em toda obra.
-
-   Depois que alguma obra o marcou, ele e VERSIONADO: o de antes sai
-   agora (vigente_ate = agora) e um novo, ja com a mudanca, entra no
-   mesmo instante (vigente_de = agora). As obras que ja existem
-   continuam com o de antes — com as marcas e os prazos dele — e so as
-   criadas dali em diante pegam o novo.
+   Os checks PROPRIOS de uma obra (atualizacao 18)
    ------------------------------------------------------------ */
 
-/** Em quantas obras o check ja foi marcado. */
-async function obrasQueMarcaram(checkId) {
-  const { rows } = await query('SELECT count(*)::int AS n FROM obra_check WHERE check_id = $1', [checkId])
-  return rows[0]?.n ?? 0
+/**
+ * Na primeira mudanca de check dentro da obra, ela ganha a copia dos
+ * checks que enxerga — com os donos de cada um — e as marcas e os prazos
+ * dela passam para as copias. Uma instrucao so: ou tudo, ou nada.
+ * Obra que ja tem os checks proprios passa direto.
+ */
+async function garantirChecksProprios(obraId) {
+  await query(
+    `WITH o AS (
+       SELECT id, criado_em FROM obra WHERE id = $1 AND NOT checks_proprios FOR UPDATE
+     ),
+     base AS (
+       SELECT ck.*
+         FROM o
+         JOIN etapa_check ck ON ck.obra_id IS NULL
+                            AND ck.vigente_de <= o.criado_em
+                            AND (ck.vigente_ate IS NULL OR o.criado_em < ck.vigente_ate)
+         JOIN etapa_card kd  ON kd.id = ck.card_id
+                            AND kd.vigente_de <= o.criado_em
+                            AND (kd.vigente_ate IS NULL OR o.criado_em < kd.vigente_ate)
+         JOIN etapa et       ON et.id = kd.etapa_id
+                            AND et.vigente_de <= o.criado_em
+                            AND (et.vigente_ate IS NULL OR o.criado_em < et.vigente_ate)
+     ),
+     novos AS (
+       INSERT INTO etapa_check (card_id, ordem, titulo, sim_nao, informacoes, tipo,
+                                vigente_de, obra_id, origem_id)
+       SELECT b.card_id, b.ordem, b.titulo, b.sim_nao, b.informacoes, b.tipo,
+              o.criado_em, o.id, b.id
+         FROM base b CROSS JOIN o
+       RETURNING id, origem_id
+     ),
+     donos AS (
+       INSERT INTO etapa_check_cargo (check_id, cargo_id, ordem)
+       SELECT n.id, kc.cargo_id, kc.ordem
+         FROM novos n JOIN etapa_check_cargo kc ON kc.check_id = n.origem_id
+     ),
+     marcas AS (
+       UPDATE obra_check m SET check_id = n.id
+         FROM novos n
+        WHERE m.obra_id = $1 AND m.check_id = n.origem_id
+     ),
+     prazos AS (
+       UPDATE obra_prazo_check p SET check_id = n.id
+         FROM novos n
+        WHERE p.obra_id = $1 AND p.check_id = n.origem_id
+     )
+     UPDATE obra SET checks_proprios = true WHERE id = (SELECT id FROM o)`,
+    [obraId],
+  )
+}
+
+/** A copia, nesta obra, do check que a tela mandou (o id do roteiro ou o da propria copia). */
+async function checkDaObra(obraId, checkId) {
+  const { rows } = await query(
+    `SELECT id, card_id, titulo, sim_nao, informacoes, tipo, vigente_ate
+       FROM etapa_check
+      WHERE obra_id = $1 AND (id = $2 OR origem_id = $2)
+      ORDER BY (id = $2) DESC, id DESC
+      LIMIT 1`,
+    [obraId, checkId],
+  )
+  return rows[0] ?? null
+}
+
+/* ------------------------------------------------------------
+   O MODELO: check que alguma obra ja enxerga nao muda para tras
+
+   Mudar no modelo um check (nome, Sim/Nao, informacoes, quem marca,
+   lugar) vale para as obras criadas daqui em diante. Se alguma obra
+   que existe hoje — e que ainda le o roteiro, sem checks proprios —
+   ja enxerga o check, ele e VERSIONADO: o de antes sai agora
+   (vigente_ate = agora) e um novo, com a mudanca, entra no mesmo
+   instante. Check que nenhuma obra enxerga ainda (criado agora no
+   modelo) muda no proprio lugar.
+   ------------------------------------------------------------ */
+
+/** Alguma obra que existe hoje (e le o roteiro) enxerga este check? */
+async function vistoPorObras(checkId) {
+  const { rows } = await query(
+    `SELECT EXISTS (
+       SELECT 1 FROM etapa_check ck JOIN obra o
+           ON o.criado_em >= ck.vigente_de
+          AND (ck.vigente_ate IS NULL OR o.criado_em < ck.vigente_ate)
+          AND NOT o.checks_proprios
+        WHERE ck.id = $1
+     ) AS visto`,
+    [checkId],
+  )
+  return rows[0]?.visto === true
 }
 
 /** As chaves dos cargos donos do check (vazio = segue o card). */
@@ -570,8 +670,8 @@ async function cargosExistem(chaves) {
 }
 
 /**
- * Fecha o check agora e abre a versao nova, com `mudancas` por cima do
- * que ele tinha. Devolve o id da versao nova.
+ * Fecha o check do roteiro agora e abre a versao nova, com `mudancas`
+ * por cima do que ele tinha. Devolve o id da versao nova.
  *
  * O de antes fecha PRIMEIRO: os checks do sistema tem indice unico por
  * tipo entre os que valem. Se a versao nova nao entrar, o de antes
@@ -615,24 +715,42 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
     const card = await query('SELECT id FROM etapa_card WHERE id = $1', [req.params.id])
     if (!card.rows[0]) return res.status(404).json({ erro: 'Card não encontrado.' })
 
-    const desde = await momento(obraDaChamada(req))
+    const obraId = obraDaChamada(req)
+    const desde = await momento(obraId)
     const simNao = req.body?.simNao === true
     const informacoes = informacoesDoCorpo(req.body?.informacoes)
-    /* sem a atualizacao 13 o check nasce comum e sem dica — mas nasce */
-    const { rows } = await query(
-      `INSERT INTO etapa_check (card_id, ordem, titulo, sim_nao, informacoes, vigente_de)
-       VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check WHERE card_id = $1), -1) + 1, $2, $3, $4, $5)
-       RETURNING id, ordem, titulo, vigente_de`,
-      [req.params.id, titulo, simNao, informacoes, desde],
-    ).catch((erro) => {
-      if (erro.code !== '42703') throw erro
-      return query(
-        `INSERT INTO etapa_check (card_id, ordem, titulo, vigente_de)
-         VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check WHERE card_id = $1), -1) + 1, $2, $3)
+
+    let rows
+    if (obraId) {
+      /* dentro da obra: o check nasce SO nela */
+      await garantirChecksProprios(obraId)
+      ;({ rows } = await query(
+        `INSERT INTO etapa_check (card_id, ordem, titulo, sim_nao, informacoes, vigente_de, obra_id)
+         VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check
+                                WHERE card_id = $1 AND obra_id = $6), -1) + 1,
+                 $2, $3, $4, $5, $6)
          RETURNING id, ordem, titulo, vigente_de`,
-        [req.params.id, titulo, desde],
-      )
-    })
+        [req.params.id, titulo, simNao, informacoes, desde, obraId],
+      ))
+    } else {
+      /* no modelo: vale para as obras criadas daqui em diante. Sem as
+         atualizacoes 13/18 o check nasce comum e sem dica — mas nasce */
+      ;({ rows } = await query(
+        `INSERT INTO etapa_check (card_id, ordem, titulo, sim_nao, informacoes, vigente_de)
+         VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check
+                                WHERE card_id = $1 AND obra_id IS NULL), -1) + 1, $2, $3, $4, $5)
+         RETURNING id, ordem, titulo, vigente_de`,
+        [req.params.id, titulo, simNao, informacoes, desde],
+      ).catch((erro) => {
+        if (erro.code !== '42703') throw erro
+        return query(
+          `INSERT INTO etapa_check (card_id, ordem, titulo, vigente_de)
+           VALUES ($1, coalesce((SELECT max(ordem) FROM etapa_check WHERE card_id = $1), -1) + 1, $2, $3)
+           RETURNING id, ordem, titulo, vigente_de`,
+          [req.params.id, titulo, desde],
+        )
+      }))
+    }
 
     if (req.body?.cargos !== undefined) {
       const posto = await gravarCargosDoCheck(rows[0].id, req.body.cargos)
@@ -642,7 +760,7 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
       }
     }
 
-    await registrarRoteiro(req, 'check.criado', 'Check criado no roteiro', {
+    await registrarRoteiro(req, 'check.criado', obraId ? 'Check criado nesta obra' : 'Check criado no roteiro', {
       ...(await nomesDoCard(req.params.id)),
       check: titulo,
     })
@@ -655,6 +773,7 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
         simNao,
         informacoes: informacoes ?? '',
         tipo: 'comum',
+        obraId: obraId ? String(obraId) : null,
         vigenteDe: rows[0].vigente_de,
         vigenteAte: null,
       },
@@ -666,15 +785,20 @@ router.post('/cards/:id/checks', exigeSessao, exige('editar_checks'), async (req
 
 router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res) => {
   try {
-    const tipo = await tipoDoCheck(req.params.id)
-    if (!tipo) return res.status(404).json({ erro: 'Check não encontrado.' })
+    const obraId = obraDaChamada(req)
+    if (obraId) await garantirChecksProprios(obraId)
 
-    const { rows: lidos } = await query(
-      'SELECT card_id, titulo, sim_nao, informacoes, vigente_ate FROM etapa_check WHERE id = $1',
-      [req.params.id],
-    )
+    /* o check que muda: dentro da obra, a copia dela; no modelo, o do roteiro */
+    const { rows: lidos } = obraId
+      ? { rows: [await checkDaObra(obraId, req.params.id)].filter(Boolean) }
+      : await query(
+          'SELECT id, card_id, titulo, sim_nao, informacoes, tipo, vigente_ate FROM etapa_check WHERE id = $1',
+          [req.params.id],
+        )
     const atual = lidos[0]
-    const cargosAtuais = await cargosDoCheck(req.params.id)
+    if (!atual) return res.status(404).json({ erro: 'Check não encontrado.' })
+    const tipo = atual.tipo ?? 'comum'
+    const cargosAtuais = await cargosDoCheck(atual.id)
 
     /* o check como ele fica: o que veio na chamada por cima do que ele tem */
     const novo = {
@@ -707,31 +831,30 @@ router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res
       novo.simNao !== (atual.sim_nao === true) ||
       novo.informacoes !== (atual.informacoes ?? null) ||
       novo.cargos.join('|') !== cargosAtuais.join('|')
-    if (!mudou) return res.json({ ok: true, id: String(req.params.id), versionado: false })
+    if (!mudou) return res.json({ ok: true, id: String(atual.id), versionado: false })
 
-    /* ja marcado em alguma obra (e ainda valendo): a mudanca e uma
-       versao nova, so para as obras criadas daqui em diante */
-    const marcadas = atual.vigente_ate ? 0 : await obrasQueMarcaram(req.params.id)
-    let id = String(req.params.id)
-    if (marcadas > 0) {
-      id = await versionarCheck(req.params.id, novo)
+    /* no modelo, check que alguma obra ja enxerga vira versao nova */
+    const versionar = !obraId && !atual.vigente_ate && (await vistoPorObras(atual.id))
+    let id = String(atual.id)
+    if (versionar) {
+      id = await versionarCheck(atual.id, novo)
     } else {
       await query('UPDATE etapa_check SET titulo = $1, sim_nao = $2, informacoes = $3 WHERE id = $4', [
         novo.titulo,
         novo.simNao,
         novo.informacoes,
-        req.params.id,
+        atual.id,
       ])
-      await gravarCargosDoCheck(req.params.id, novo.cargos)
+      await gravarCargosDoCheck(atual.id, novo.cargos)
     }
 
     await registrarRoteiro(
       req,
       'check.editado',
-      marcadas > 0 ? 'Check do roteiro editado (vale para as próximas obras)' : 'Check do roteiro editado',
+      obraId ? 'Check editado nesta obra' : 'Check do roteiro editado (vale para as próximas obras)',
       { ...(await nomesDoCard(atual.card_id)), check: novo.titulo },
     )
-    return res.json({ ok: true, id, versionado: marcadas > 0, obras: marcadas })
+    return res.json({ ok: true, id, versionado: versionar })
   } catch (erro) {
     return tratar(erro, res, 'roteiro/check-editar')
   }
@@ -741,14 +864,15 @@ router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res
    A ORDEM dos checks — arrastar para cima, para baixo, ou para
    outro card (de qualquer setor, de qualquer etapa)
 
-   PUT /roteiro/cards/:id/checks/ordem  { checkIds: [...] }
+   PUT /roteiro/cards/:id/checks/ordem  { checkIds: [...], obraId? }
 
    `checkIds` e a fila inteira do card de destino, na ordem nova — e
    pode trazer um check que estava em outro card (o que foi arrastado
-   para ca). Mudar a ordem dentro do card vale na hora, em toda obra.
-   Levar para outro card segue a regra de cima: sem marca, o check
-   muda de card; ja marcado em alguma obra, vira versao nova no card
-   novo, so para as obras criadas daqui em diante.
+   para ca).
+
+   Dentro de uma obra mexe so nos checks proprios dela. No modelo, o
+   check que alguma obra ja enxerga e muda de lugar vira versao nova
+   (so as obras criadas daqui em diante o veem no lugar novo).
 
    Os checks do sistema mudam de ordem e de card, mas nao saem da
    etapa deles: e por ela que o fluxo dos ensaios os encontra.
@@ -757,23 +881,39 @@ router.patch('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res
 router.put('/cards/:id/checks/ordem', exigeSessao, exige('editar_checks'), async (req, res) => {
   const pedidos = [...new Set((req.body?.checkIds ?? []).map((id) => String(id)))]
   if (pedidos.length === 0) return res.status(400).json({ erro: 'Diga a ordem dos checks.' })
+  const obraId = obraDaChamada(req)
 
   try {
-    const { rows: cards } = await query(
-      'SELECT id, etapa_id FROM etapa_card WHERE id = $1 AND vigente_ate IS NULL',
-      [req.params.id],
-    )
+    const { rows: cards } = await query('SELECT id, etapa_id FROM etapa_card WHERE id = $1', [req.params.id])
     const destino = cards[0]
     if (!destino) return res.status(404).json({ erro: 'Card não encontrado.' })
 
+    /* dentro da obra, os ids viram os das copias dela */
+    let ids = pedidos
+    if (obraId) {
+      await garantirChecksProprios(obraId)
+      const locais = []
+      for (const id of pedidos) {
+        const copia = await checkDaObra(obraId, id)
+        if (!copia || copia.vigente_ate) {
+          return res.status(404).json({ erro: 'Check não encontrado (ele pode ter saído desta obra).' })
+        }
+        locais.push(String(copia.id))
+      }
+      ids = locais
+    }
+
     const { rows: checks } = await query(
-      `SELECT ck.id, ck.card_id, ck.titulo, ck.tipo, ck.vigente_ate, kd.etapa_id
+      `SELECT ck.id, ck.card_id, ck.ordem, ck.titulo, ck.tipo, ck.obra_id, ck.vigente_ate, kd.etapa_id
          FROM etapa_check ck JOIN etapa_card kd ON kd.id = ck.card_id
         WHERE ck.id = ANY($1::bigint[])`,
-      [pedidos],
+      [ids],
     )
-    if (checks.length !== pedidos.length || checks.some((c) => c.vigente_ate)) {
+    if (checks.length !== ids.length || checks.some((c) => c.vigente_ate)) {
       return res.status(404).json({ erro: 'Check não encontrado (ele pode ter saído do roteiro).' })
+    }
+    if (!obraId && checks.some((c) => c.obra_id)) {
+      return res.status(400).json({ erro: 'Check de uma obra só se mexe dentro dela.' })
     }
     const sistemaForaDaEtapa = checks.find(
       (c) => c.tipo !== 'comum' && String(c.etapa_id) !== String(destino.etapa_id),
@@ -786,24 +926,21 @@ router.put('/cards/:id/checks/ordem', exigeSessao, exige('editar_checks'), async
 
     const fila = []
     const versionados = []
-    for (const id of pedidos) {
+    for (const [ordem, id] of ids.entries()) {
       const check = checks.find((c) => String(c.id) === id)
-      if (String(check.card_id) === String(destino.id)) {
+      const mudaDeCard = String(check.card_id) !== String(destino.id)
+      if (!mudaDeCard && check.ordem === ordem) {
         fila.push(id)
         continue
       }
-      const marcadas = await obrasQueMarcaram(id)
-      if (marcadas > 0) {
-        const novoId = await versionarCheck(id, { cardId: destino.id })
-        versionados.push({ de: id, para: novoId, titulo: check.titulo, obras: marcadas })
+      if (!obraId && (await vistoPorObras(id))) {
+        const novoId = await versionarCheck(id, { cardId: destino.id, ordem })
+        versionados.push({ de: id, para: novoId, titulo: check.titulo })
         fila.push(novoId)
       } else {
-        await query('UPDATE etapa_check SET card_id = $1 WHERE id = $2', [destino.id, id])
+        await query('UPDATE etapa_check SET card_id = $1, ordem = $2 WHERE id = $3', [destino.id, ordem, id])
         fila.push(id)
       }
-    }
-    for (const [ordem, id] of fila.entries()) {
-      await query('UPDATE etapa_check SET ordem = $1 WHERE id = $2', [ordem, id])
     }
 
     const movidos = checks.filter((c) => String(c.card_id) !== String(destino.id))
@@ -824,9 +961,24 @@ router.put('/cards/:id/checks/ordem', exigeSessao, exige('editar_checks'), async
 
 router.delete('/checks/:id', exigeSessao, exige('editar_checks'), async (req, res) => {
   try {
+    const obraId = obraDaChamada(req)
+    if (obraId) {
+      /* dentro da obra: sai SO dela */
+      await garantirChecksProprios(obraId)
+      const copia = await checkDaObra(obraId, req.params.id)
+      if (!copia || copia.vigente_ate) return res.status(404).json({ erro: 'Check não encontrado.' })
+      if (copia.tipo && copia.tipo !== 'comum') return res.status(409).json({ erro: CHECK_DO_SISTEMA })
+      await query('UPDATE etapa_check SET vigente_ate = now() WHERE id = $1', [copia.id])
+      await registrarRoteiro(req, 'check.excluido', 'Check removido desta obra', {
+        ...(await nomesDoCard(copia.card_id)),
+        check: copia.titulo,
+      })
+      return res.status(204).end()
+    }
+
     const tipo = await tipoDoCheck(req.params.id)
     if (tipo && tipo !== 'comum') return res.status(409).json({ erro: CHECK_DO_SISTEMA })
-    const ate = await momento(obraDaChamada(req))
+    const ate = await momento(null)
     const { rows } = await query(
       `UPDATE etapa_check SET vigente_ate = $1 WHERE id = $2 AND vigente_ate IS NULL
        RETURNING card_id, titulo`,

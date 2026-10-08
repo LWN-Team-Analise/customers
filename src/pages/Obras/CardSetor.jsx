@@ -34,8 +34,8 @@ import { Icone } from './IconesObra'
  * As informacoes do card (card.informacoes) aparecem ao passar o mouse
  * no card.
  *
- * Com `arraste` (useArrasteDeChecks), cada check ganha o pegador para
- * mudar de ordem ou de card. Com `modelo`, o card e o do MODELO da obra
+ * Com `arraste` (useArrasteDeChecks), o proprio check se arrasta para
+ * mudar de ordem ou de card — sem pegador. Com `modelo`, o card e o do MODELO da obra
  * (ModalModeloObra): sem obra, sem placar e sem marcar — so editar.
  */
 export default function CardSetor({
@@ -184,8 +184,9 @@ export default function CardSetor({
         className={`setorcard__tarefas ${
           arraste?.alvo?.cardId === card.id && arraste.alvo.antesDe === null ? 'is-alvo-fim' : ''
         }`.trim()}
-        onDragOver={arraste ? arraste.sobreCard(card) : undefined}
-        onDrop={arraste ? arraste.soltarEm(card, etapa) : undefined}
+        /* onde o arraste solta (ver arrasteChecks.js) */
+        data-card={card.id}
+        data-etapa={etapa?.id}
       >
         {card.checks.map((check) => {
           const marca = obra.checks[check.id]
@@ -221,6 +222,7 @@ export default function CardSetor({
           /* so o check que ainda vale tem ordem: o que ja saiu do roteiro
              (e uma obra antiga ainda mostra) nao se arrasta */
           const arrastavel = Boolean(arraste) && podeChecks && !check.vigenteAte
+          const travadoAqui = modelo || travado || (!meu && !abreSemPermissao)
           return (
             <Dica
               as="li"
@@ -228,22 +230,26 @@ export default function CardSetor({
               texto={dicaDoCheck}
               titulo={check.titulo}
               data-check={check.id}
+              data-vivo={check.vigenteAte ? undefined : ''}
               className={[
+                arrastavel ? 'is-arrastavel' : '',
                 arraste?.arrastando?.checkId === check.id ? 'is-arrastando' : '',
                 arraste?.alvo?.cardId === card.id && arraste.alvo.antesDe === check.id ? 'is-alvo' : '',
               ]
                 .filter(Boolean)
                 .join(' ') || undefined}
-              onDragOver={arraste ? arraste.sobreCheck(check, card) : undefined}
-              onDrop={arraste ? arraste.soltarEm(card, etapa) : undefined}
+              onPointerDown={arrastavel ? arraste.pegar(check, card, etapa) : undefined}
             >
+              {/* `aria-disabled`, e nao `disabled`: botao desabilitado engole o
+                  ponteiro, e o check travado (de outro setor, etapa fechada)
+                  tambem precisa ser arrastado por quem edita o roteiro */}
               <button
                 type="button"
                 className={`tarefa ${feito ? 'is-feita' : ''} ${resposta === false ? 'is-nao' : ''} ${
                   !modelo && !meu && !abreSemPermissao ? 'is-deoutro' : ''
                 } ${doSistema ? 'is-sistema' : ''} ${modelo ? 'is-modelo' : ''}`.trim()}
-                onClick={() => aoMarcar(check)}
-                disabled={modelo || travado || (!meu && !abreSemPermissao)}
+                onClick={() => !travadoAqui && aoMarcar(check)}
+                aria-disabled={travadoAqui || undefined}
                 title={
                   modelo || travado || dicaDoCheck
                     ? undefined
@@ -318,26 +324,6 @@ export default function CardSetor({
 
               {((podePrazos && !feito) || podeChecks) && (
                 <span className="tarefa__acoes">
-                  {arrastavel && (
-                    <span
-                      className="tarefa__editar tarefa__pegador"
-                      draggable
-                      onDragStart={arraste.comecar(check, card, etapa)}
-                      onDragEnd={arraste.terminar}
-                      title="Arrastar para mudar a ordem ou o card"
-                      aria-label={`Arrastar o check ${check.titulo}`}
-                      role="img"
-                    >
-                      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
-                        <circle cx="9" cy="6" r="1.6" />
-                        <circle cx="15" cy="6" r="1.6" />
-                        <circle cx="9" cy="12" r="1.6" />
-                        <circle cx="15" cy="12" r="1.6" />
-                        <circle cx="9" cy="18" r="1.6" />
-                        <circle cx="15" cy="18" r="1.6" />
-                      </svg>
-                    </span>
-                  )}
                   {podePrazos && !feito && (
                     <button
                       type="button"

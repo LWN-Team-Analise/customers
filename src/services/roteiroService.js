@@ -72,16 +72,17 @@ export async function criarCheck(cardId, campos) {
 }
 
 /**
- * Devolve { ok, id, versionado, obras }. Check que alguma obra ja marcou
- * nao muda para tras: vira versao nova (`id` novo, `versionado: true`),
- * so para as obras criadas dali em diante.
+ * Devolve { ok, id, versionado }. Com `campos.obraId` a mudanca vale so
+ * naquela obra (e `id` e o da copia dela). Sem obraId e o modelo: o check
+ * que alguma obra ja enxerga vira versao nova (`id` novo,
+ * `versionado: true`), so para as obras criadas dali em diante.
  */
 export const editarCheck = (id, campos) => patch(`/roteiro/checks/${id}`, campos)
 
 /**
  * A fila inteira de um card, na ordem nova — pode trazer um check que
- * estava em outro card (o arrastado para ca). Devolve
- * { ok, checkIds, versionados: [{ de, para, titulo, obras }] }.
+ * estava em outro card (o arrastado para ca). Com `obraId`, so naquela
+ * obra; sem, no modelo. Devolve { ok, checkIds, versionados }.
  */
 export const ordenarChecks = (cardId, checkIds, obraId) =>
   put(`/roteiro/cards/${cardId}/checks/ordem`, { checkIds, obraId })

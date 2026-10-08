@@ -30,9 +30,10 @@ import './ModalRoteiro.css'
  * mudam de nome, nao viram pergunta e nao se excluem: sao eles que
  * sustentam o fluxo dos ensaios.
  *
- * Como o card, o check vale DESTA obra em diante: criar aqui o coloca
- * nesta obra e nas proximas, excluir o tira desta e das proximas. As
- * obras anteriores ficam como estavam, com o que ja marcaram.
+ * Com `obraId` (aberto de dentro de uma obra), criar, editar e excluir
+ * o check vale SO para aquela obra — nem para as proximas, nem para as
+ * que ja passaram. Sem `obraId` (o modelo da obra, botao "Editar" do
+ * quadro), vale para as obras criadas daqui em diante.
  */
 export default function ModalCheck({
   aberto,
@@ -44,7 +45,6 @@ export default function ModalCheck({
   aoFechar,
 }) {
   const {
-    obras,
     cargos,
     adicionarCheck,
     atualizarCheck,
@@ -68,9 +68,6 @@ export default function ModalCheck({
   const doCard = (card?.cargos ?? []).map(nomeDoCargo).join(' e ')
   /* o prazo e por obra: fora de uma obra nao ha onde gravar */
   const podePrazo = Boolean(obraId) && pode('definir_prazos')
-  /* check ja marcado em alguma obra nao muda para tras: a edicao vira
-     versao nova, so para as obras criadas daqui em diante */
-  const marcadoEm = editando ? obras.filter((o) => o.checks?.[check.id]).length : 0
 
   useEffect(() => {
     if (!aberto) return
@@ -204,12 +201,10 @@ export default function ModalCheck({
           onChange={(e) => setInformacoes(e.target.value)}
         />
 
-        {marcadoEm > 0 && (
-          <p className="formrot__dica">
-            Já marcado em {marcadoEm} obra{marcadoEm > 1 ? 's' : ''}: a mudança vale só para as obras
-            criadas a partir de agora.
-          </p>
-        )}
+        {/* dentro de uma obra, mexer no check vale SO para ela; no modelo
+            da obra o subtitulo do pop-up de fora ja diz que vale para as
+            proximas */}
+        {obraId && <p className="formrot__dica">Vale só para esta obra.</p>}
 
         {erro && (
           <p className="formrot__erro" role="alert">
@@ -249,8 +244,9 @@ export default function ModalCheck({
 
         {confirmando && (
           <p className="formrot__aviso" role="alert">
-            O check sai desta obra e das próximas. As obras anteriores continuam com ele e
-            com o que já foi marcado.
+            {obraId
+              ? 'O check sai só desta obra.'
+              : 'O check sai das próximas obras. As que já existem continuam com ele.'}
           </p>
         )}
       </form>

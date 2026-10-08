@@ -146,8 +146,17 @@ const dentroDaJanela = (peca, quando) => {
  * O roteiro como ele estava (e continua) para uma obra criada em
  * `nascimento`. Sem data, devolve o roteiro que vale hoje.
  */
-export function roteiroVigente(roteiro, nascimento) {
+export function roteiroVigente(roteiro, nascimento, obra = null) {
   const quando = nascimento ?? new Date().toISOString()
+  /* Obra com checks PROPRIOS (obra.checksProprios, atualizacao 18) le so
+     as copias dela: mexer num check dentro de uma obra vale so para
+     aquela obra. As outras leem so os checks do roteiro — o check de uma
+     obra nao aparece em nenhuma outra. */
+  const proprios = Boolean(obra?.checksProprios)
+  const doCheck = (check) =>
+    proprios
+      ? String(check.obraId) === String(obra.id) && !check.vigenteAte
+      : !check.obraId && dentroDaJanela(check, quando)
 
   return (roteiro ?? [])
     .filter((etapa) => dentroDaJanela(etapa, quando))
@@ -159,7 +168,7 @@ export function roteiroVigente(roteiro, nascimento) {
         .filter((card) => dentroDaJanela(card, quando))
         .map((card) => ({
           ...card,
-          checks: (card.checks ?? []).filter((check) => dentroDaJanela(check, quando)),
+          checks: (card.checks ?? []).filter(doCheck),
         })),
     }))
 }

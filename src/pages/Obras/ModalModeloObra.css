@@ -51,3 +51,11 @@
   font-style: italic;
   color: var(--text-muted);
 }
+
+/* no celular, uma etapa por vez (e a ponta da proxima, que diz que ha
+   mais para o lado) — como na tela da obra */
+@media (max-width: 720px) {
+  .modelo__trilho {
+    grid-auto-columns: minmax(232px, 86%);
+  }
+}

@@ -78,14 +78,10 @@
   /* quanto o icone aceso sobe no celular; o valor de verdade e medido
      (ver `ergue` no AppShell.jsx), este so vale ate a primeira medida */
   --ergue: 14px;
-  /* o mesmo, para o botao do meio (medido a parte: ver `ergueMais`) */
-  --ergue-mais: 19px;
-  /* quanto o centro da bolha do celular fica abaixo da borda da barra.
-     O do icone aceso e mais fundo: ele so da um degrau de ~6px para
-     fora. O do botao do meio, 8px. As curvas das duas bolhas no CSS
-     mobile sao calculadas para ESTES valores. */
+  /* quanto o centro da bolha do celular fica abaixo da borda da barra:
+     o icone aceso so da um degrau de ~6px para fora. As curvas da bolha
+     no CSS mobile sao calculadas para ESTE valor. */
   --afunda: 15px;
-  --afunda-mais: 8px;
 
   position: fixed;
   left: 10px;
@@ -110,16 +106,15 @@
 
 /* A camada liquida e a bolha sao do celular. No computador a bolha e
    vertical e o anel deslizante ja da conta. */
-.rail__indicador,
-.rail__encaixe {
+.rail__indicador {
   display: none;
 }
 
-/* O hamburguer e a gaveta so existem no celular. Aqui em cima a bolha
-   e vertical e cabe o menu inteiro — guardar item atras de um botao
-   seria esconder o que ja estava a vista. */
+/* O Menu (hamburguer) e o menu lateral so existem no celular. Aqui em
+   cima a bolha e vertical e cabe o menu inteiro — guardar item atras de
+   um botao seria esconder o que ja estava a vista. */
 .rail__somobile,
-.rail__gaveta {
+.lateral {
   display: none;
 }
 
@@ -644,17 +639,17 @@
     min-width: 0;
   }
 
-  /* as que foram para a gaveta somem da barra */
+  /* as que foram para o menu lateral somem da barra */
   .rail__lista > li[data-principal="nao"] {
     display: none;
   }
 
   /* ---- a ordem na barra ----
-     inicio · obras · [ mais ] · concluidas · clientes
+     inicio · obras · despesas · menu
 
-     O HTML segue a ordem do menu (e e ela que o teclado e o leitor de
-     tela leem); aqui so a ORDEM VISUAL muda, para o botao redondo cair
-     no meio, onde o polegar chega sem esticar. */
+     O Menu fica na PONTA DIREITA, com cara de item igual aos outros:
+     e o lugar onde todo aplicativo poe o "mais", e e onde o polegar
+     da mao direita chega sem esticar. */
   .rail__lista > li[data-id='inicio'] {
     order: 1;
   }
@@ -663,29 +658,22 @@
     order: 2;
   }
 
-  .rail__somobile {
+  .rail__lista > li[data-id='despesas'] {
     order: 3;
   }
 
-  .rail__lista > li[data-id='concluidas'] {
+  .rail__somobile {
+    display: block;
     order: 4;
   }
 
-  .rail__lista > li[data-id='clientes'] {
-    order: 5;
+  /* o Menu e um <button>, os outros sao links: a mesma letra e o mesmo
+     cursor para os quatro */
+  .rail__menu {
+    font: inherit;
+    cursor: pointer;
   }
 
-  /* ---- o botao "Mais" ----
-     Ele nao e mais um item igual aos outros: e um circulo que sobe da
-     barra, com a cor do sistema e um halo em volta. Dois motivos, e o
-     segundo pesa mais que o primeiro:
-
-       1. ele nao leva a uma tela — abre o resto do menu, que e um gesto
-          de outra natureza;
-       2. num rodape de quatro itens iguais, o quarto se perde. Elevado
-          e aceso, ele e a primeira coisa que o polegar acha.
-
-     A largura e fixa para o circulo nao esticar junto com os vizinhos. */
   /* ============================================================
      O INDICADOR
 
@@ -712,28 +700,19 @@
     overflow: visible;
   }
 
-  /* ---- a geometria das bolhas ----
+  /* ---- a geometria da bolha ----
      O circulo tem 56px e o centro dele fica ABAIXO da borda de cima
-     da barra — `--afunda` (15px) no indicador, `--afunda-mais` (8px)
-     no encaixe do botao do meio. O indicador aflora so 13px, e o icone
+     da barra — `--afunda` (15px). O indicador aflora so 13px, e o icone
      aceso dentro dele so ~6px: um degrau, e nao um icone flutuando
-     longe da barra. O encaixe aflora 20px, e e ele que prende o botao
-     do meio na BARRA.
+     longe da barra.
 
-     As duas curvas que ligam cada circulo a linha reta da barra sao
-     um `radial-gradient` recortado numa caixa pequena: transparente
-     dentro de um circulo de 12px, cor da barra fora dele. As medidas
-     saem da tangencia desse circulo com a barra e com a bolha
-     (distancia entre centros = 28 + 12 = 40):
-
-                    afunda 15px          afunda 8px
-       centro       1,51px fora do       6,64px fora do
-                    circulo              circulo
-       caixa        8,85 x 3,9px         10,39 x 6px
-
-     Se um `--afunda` mudar, os numeros dele mudam junto. */
-  .rail__indicador,
-  .rail__encaixe {
+     As duas curvas que ligam o circulo a linha reta da barra sao um
+     `radial-gradient` recortado numa caixa pequena: transparente dentro
+     de um circulo de 12px, cor da barra fora dele. As medidas saem da
+     tangencia desse circulo com a barra e com a bolha (distancia entre
+     centros = 28 + 12 = 40): centro 1,51px fora do circulo, caixa de
+     8,85 x 3,9px. Se o `--afunda` mudar, os numeros mudam junto. */
+  .rail__indicador {
     display: block;
     position: absolute;
     left: 0;
@@ -749,14 +728,8 @@
     top: calc(var(--afunda) - 28px);
   }
 
-  .rail__encaixe {
-    top: calc(var(--afunda-mais) - 28px);
-  }
-
   .rail__indicador::before,
-  .rail__indicador::after,
-  .rail__encaixe::before,
-  .rail__encaixe::after {
+  .rail__indicador::after {
     content: '';
     position: absolute;
   }
@@ -786,31 +759,6 @@
     );
   }
 
-  .rail__encaixe::before,
-  .rail__encaixe::after {
-    top: 14px;
-    width: 10.39px;
-    height: 6px;
-  }
-
-  .rail__encaixe::before {
-    left: -6.64px;
-    background: radial-gradient(
-      circle 12px at 0 -6px,
-      transparent 11.5px,
-      var(--barra-cor) 12px
-    );
-  }
-
-  .rail__encaixe::after {
-    right: -6.64px;
-    background: radial-gradient(
-      circle 12px at 100% -6px,
-      transparent 11.5px,
-      var(--barra-cor) 12px
-    );
-  }
-
   /* O que viaja. `--ind-x` e o centro do icone aceso medido na caixa
      da propria barra (ver `posicaoDentro` no AppShell.jsx) — e nao
      uma conta de indice vezes largura: vale em qualquer tela e com
@@ -834,13 +782,6 @@
     transition: opacity 0.22s var(--ease-out);
   }
 
-  /* o do botao do meio nao viaja: o botao nao sai do lugar. Tambem e
-     medido, porque o meio da BARRA so e o meio dos itens quando o
-     cargo tem as quatro abas principais. */
-  .rail__encaixe {
-    transform: translate3d(calc(var(--encaixe-x) - 28px), 0, 0);
-  }
-
   /* o anel deslizante do computador sai de cena */
   .rail__marca {
     display: none;
@@ -849,7 +790,6 @@
   /* O destaque cinza que o iPhone pinta no toque cobria a caixa
      inteira do botao — era o "quadrado cinza" embaixo do hamburguer. */
   .rail__btn,
-  .rail__mais,
   .rail__item {
     -webkit-tap-highlight-color: transparent;
   }
@@ -941,135 +881,7 @@
     opacity: 1;
   }
 
-  /* ---- o botao do meio ----
-     O botao E o circulo de 42px, e nada alem dele: a area de toque e
-     a que se ve. A vaga em volta (o `li`) nao tem clique.
-
-     Ele sobe com `translate` ate o centro dele cair no centro do
-     proprio encaixe — a mesma altura do icone aceso das outras abas,
-     porque as duas contas descontam o mesmo `--afunda`. O toque usa
-     `scale`, que soma com a subida: o botao nao sai do lugar nem ao
-     apertar nem ao abrir a gaveta. */
-  .rail__somobile {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    flex: 0 0 62px !important;
-  }
-
-  .rail__mais {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    place-items: center;
-    width: 42px;
-    height: 42px;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #fff;
-    cursor: pointer;
-    translate: 0 calc(var(--ergue-mais) * -1);
-    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--accent) 80%, transparent);
-    transition: scale var(--dur-fast) var(--ease-out);
-  }
-
-  .rail__mais:active {
-    scale: 0.94;
-  }
-
-  /* ---- a gaveta ----
-     Ela se abre a partir do ponto logo acima do botao do meio: o corpo
-     cresce dali, com `clip-path`, ate o tamanho inteiro. Fechando, o
-     caminho e o inverso: ele se recolhe de volta para esse ponto.
-
-     O botao NAO se liga ao corpo: ele fica preso a barra pela propria
-     bolha (o encaixe), e o corpo abre por cima, separado. Um pescoco
-     entre os dois fazia o botao parecer puxado para dentro do menu.
-
-     Nada aqui recebe toque, a nao ser o corpo quando aberto. A caixa
-     que posiciona e a sombra sao `pointer-events: none` — e por isso
-     que o espaco em volta do botao nao abre nem fecha nada.
-
-     z-index 0: abaixo da lista (que e 1), onde mora o botao, e acima
-     do encaixe, que vem antes no HTML. */
-  .rail__gaveta {
-    position: absolute;
-    /* 10px de folga acima da bolha do botao, que aflora 20px da barra */
-    bottom: calc(100% + 30px);
-    left: 0;
-    right: 0;
-    z-index: 0;
-    display: block;
-    visibility: hidden;
-    pointer-events: none;
-    transition: visibility 0s linear 0.36s;
-  }
-
-  .rail__gaveta.is-aberta {
-    visibility: visible;
-    transition: visibility 0s;
-  }
-
-  /* A sombra fica numa peca de fora porque `filter` e aplicado ANTES
-     do `clip-path` da propria peca: na mesma, a sombra seria cortada.
-     Aqui ela acompanha o recorte do corpo quadro a quadro. */
-  .rail__gaveta-sombra {
-    filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.2));
-  }
-
-  .rail__gaveta-corpo {
-    display: grid;
-    gap: 2px;
-    padding: 6px;
-    border-radius: 18px;
-    background: var(--barra-cor);
-    box-shadow: inset 0 0 0 1px var(--vidro-borda);
-    pointer-events: none;
-
-    /* Fechado: uma fresta de 1px e 26px de largura, logo acima do
-       botao. Aberto: o retangulo inteiro. As quatro medidas do
-       `inset()` se interpolam, entao o corpo cresce para cima e para
-       os lados A PARTIR desse ponto, com os cantos se arredondando no
-       caminho. */
-    clip-path: inset(
-      calc(100% - 1px) calc(100% - var(--encaixe-x) - 13px) 0 calc(var(--encaixe-x) - 13px)
-        round 13px
-    );
-    transition: clip-path 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.04s;
-  }
-
-  .rail__gaveta.is-aberta .rail__gaveta-corpo {
-    pointer-events: auto;
-    clip-path: inset(0 0 0 0 round 18px);
-    transition: clip-path 0.46s var(--curva-viagem) 0.04s;
-  }
-
-  /* os itens assentam enquanto o corpo termina de abrir — de baixo
-     para cima, na ordem em que o olho sobe do botao */
-  .rail__gaveta .rail__item {
-    opacity: 0;
-    transform: translate3d(0, 6px, 0);
-    transition:
-      opacity 0.12s var(--ease-out),
-      transform 0.12s var(--ease-out);
-  }
-
-  .rail__gaveta.is-aberta .rail__item {
-    opacity: 1;
-    transform: none;
-    transition:
-      opacity 0.26s var(--ease-out),
-      transform 0.36s var(--curva-viagem);
-  }
-
-  .rail__gaveta.is-aberta .rail__item:nth-last-child(1) { transition-delay: 0.2s; }
-  .rail__gaveta.is-aberta .rail__item:nth-last-child(2) { transition-delay: 0.25s; }
-  .rail__gaveta.is-aberta .rail__item:nth-last-child(3) { transition-delay: 0.3s; }
-  .rail__gaveta.is-aberta .rail__item:nth-last-child(4) { transition-delay: 0.35s; }
-
-  /* com a gaveta aberta o botao flutuante do chat sai de cima dela */
+  /* com o menu lateral aberto o botao flutuante do chat sai de cena */
   .shell.tem-gaveta .bolhachat {
     opacity: 0;
     visibility: hidden;
@@ -1083,12 +895,9 @@
     .rail__indicador,
     .rail__glifo,
     .rail__btn.is-atual .rail__glifo,
-    .rail__gaveta,
-    .rail__gaveta.is-aberta,
-    .rail__gaveta-corpo,
-    .rail__gaveta.is-aberta .rail__gaveta-corpo,
-    .rail__gaveta .rail__item,
-    .rail__gaveta.is-aberta .rail__item {
+    .lateral,
+    .lateral__veu,
+    .lateral__painel {
       transition-duration: 0.01s;
       transition-delay: 0s;
     }
@@ -1104,12 +913,10 @@
      regra podia ficar aqui dentro, mas assim ela acompanha o icone
      caso ele apareca em outro lugar um dia. */
 
-  /* aqui o item deita: icone a esquerda, nome ao lado. Na barra o
-     nome fica embaixo porque a largura e de um dedo; na gaveta sobra
-     linha inteira, e linha inteira se le mais rapido. */
-  /* Cada item com superficie propria. Sem ela eram letras soltas sobre
-     o vidro da gaveta, e o que estivesse na tela atras atravessava o
-     nome da tela — dependendo da pagina, ilegivel. */
+  /* No menu lateral o item deita: icone a esquerda, nome ao lado. Na
+     barra o nome fica embaixo porque a largura e de um dedo; aqui sobra
+     linha inteira, e linha inteira se le mais rapido. Cada item com
+     superficie propria. */
   .rail__item {
     display: flex;
     align-items: center;
@@ -1199,11 +1006,32 @@
 
      O recuo agora e margem, e so da PRIMEIRA linha (o sino). A busca
      usa a largura toda. */
+  /* Mais baixa no celular: saudacao, sino, avatar e busca menores. Do
+     jeito que era, a barra tomava quase um quarto da altura da tela. */
   .topbar {
-    top: 14px;
+    top: 10px;
     flex-wrap: wrap;
+    gap: 6px 8px;
     border-radius: var(--radius-lg);
-    padding: 12px;
+    padding: 7px 9px;
+  }
+
+  .topbar__saudacao {
+    font-size: 0.78rem;
+  }
+
+  .topbar__sino {
+    width: 34px;
+    height: 34px;
+  }
+
+  .topbar__sino svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .euzinho__botao {
+    padding: 2px;
   }
 
   /* Sem o recuo: o avatar agora e um item DA barra, e nao uma peca
@@ -1636,11 +1464,33 @@
 
 @media (max-width: 720px) {
   .omni {
-    padding: 8px 14px;
+    gap: 8px;
+    padding: 4px 12px;
+  }
+
+  .omni__orb {
+    width: 20px;
+    height: 20px;
   }
 
   .omni__campo {
-    font-size: 16px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .omni__campo::placeholder {
+    font-size: 14px;
+  }
+}
+
+/* SO no iPhone a letra digitada continua em 16px: abaixo disso o Safari
+   da zoom na pagina ao tocar no campo (ver acima). O texto de dica, que
+   e o que fica a vista, e menor em todo aparelho. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 720px) {
+    .omni__campo {
+      font-size: 16px;
+    }
   }
 }
 
@@ -1741,4 +1591,125 @@
 
 [aria-expanded='true'] .ham__bar--3 {
   transform: translateY(-6px) rotate(-45deg);
+}
+
+/* ------------------------------------------------------------
+   O MENU LATERAL (celular)
+
+   Abre pela direita a partir do Menu da barra de baixo. O veu
+   escurece a tela e fecha ao toque; o painel desliza. Fica montado
+   mesmo fechado, escondido por visibility, para o fechar tambem
+   deslizar.
+   ------------------------------------------------------------ */
+@media (max-width: 860px) {
+  .lateral {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    visibility: hidden;
+    pointer-events: none;
+    transition: visibility 0s linear 0.3s;
+  }
+
+  .lateral.is-aberto {
+    visibility: visible;
+    pointer-events: auto;
+    transition: visibility 0s;
+  }
+
+  .lateral__veu {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: var(--modal-veu);
+    opacity: 0;
+    transition: opacity 0.25s var(--ease-out);
+  }
+
+  .lateral.is-aberto .lateral__veu {
+    opacity: 1;
+  }
+
+  .lateral__painel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: min(310px, 84vw);
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) 14px calc(env(safe-area-inset-bottom, 0px) + 16px);
+    border-left: 1px solid var(--vidro-borda);
+    border-radius: 22px 0 0 22px;
+    background: var(--barra-cor);
+    box-shadow: -18px 0 40px -18px rgba(0, 0, 0, 0.45);
+    overflow-y: auto;
+    outline: none;
+    transform: translate3d(100%, 0, 0);
+    transition: transform 0.3s var(--curva-viagem);
+  }
+
+  .lateral.is-aberto .lateral__painel {
+    transform: none;
+  }
+
+  .lateral__perfil {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 2px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .lateral__quem {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .lateral__quem strong {
+    color: var(--text-strong);
+    font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lateral__nota {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+  }
+
+  .lateral__nota b {
+    color: var(--text-strong);
+  }
+
+  .lateral__nota em {
+    font-style: normal;
+  }
+
+  .lateral__fechar {
+    align-self: flex-start;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--control-bg-hover);
+    color: var(--text-base);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .lateral__lista {
+    display: grid;
+    gap: 6px;
+  }
 }

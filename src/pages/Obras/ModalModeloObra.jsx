@@ -8,7 +8,7 @@ import { Icone } from './IconesObra'
 import ModalCard from './ModalCard'
 import ModalCheck from './ModalCheck'
 import ModalEtapa from './ModalEtapa'
-import { textoDaVersao, useArrasteDeChecks } from './arrasteChecks'
+import { useArrasteDeChecks } from './arrasteChecks'
 import './ObraDetalhe.css'
 import './ModalModeloObra.css'
 
@@ -32,15 +32,13 @@ const nada = () => {}
  * precisar entrar numa obra (antes o jeito era abrir uma obra de
  * emergencia, que libera todas as etapas).
  *
- * Tudo aqui vai sem \`obraId\`: o corte e "de agora em diante".
- *   - criar e excluir valem para as obras criadas a partir de agora;
- *   - editar ou levar para outro card um check que alguma obra JA
- *     marcou vira versao nova — as obras que ja existem continuam com
- *     ele como estava;
- *   - check que ninguem marcou ainda muda no proprio lugar.
+ * Tudo aqui vai sem `obraId`: vale para as obras criadas a partir de
+ * agora. As que ja existem continuam como estavam — o check que alguma
+ * delas ja enxerga vira versao nova (o servidor cuida disso). E o
+ * contrario do que se faz DENTRO de uma obra, que vale so para ela.
  *
- * Os checks nao se marcam aqui (nao ha obra); o pegador de cada um
- * muda a ordem e o card, como dentro da obra.
+ * Os checks nao se marcam aqui (nao ha obra); arrastar um check muda a
+ * ordem e o card, como dentro da obra.
  */
 export default function ModalModeloObra({ aberto, aoFechar }) {
   const { user } = useAuth()
@@ -64,10 +62,7 @@ export default function ModalModeloObra({ aberto, aoFechar }) {
   const [aviso, setAviso] = useState(null)
 
   const arraste = useArrasteDeChecks({
-    ordenar: async (cardId, checkIds) => {
-      const r = await ordenarChecks(cardId, checkIds, null)
-      if (r?.versionados?.length > 0) setAviso(textoDaVersao(r.versionados))
-    },
+    ordenar: (cardId, checkIds) => ordenarChecks(cardId, checkIds, null),
     aoRecusar: setAviso,
   })
 
