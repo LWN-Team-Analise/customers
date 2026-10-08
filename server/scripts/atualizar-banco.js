@@ -38,6 +38,7 @@ const ARQUIVOS = [
   'db/atualizacao-15.sql.txt',
   'db/atualizacao-16.sql.txt',
   'db/atualizacao-17.sql.txt',
+  'db/atualizacao-18.sql.txt',
 ]
 
 /**
@@ -112,6 +113,8 @@ const CONFERENCIA = [
     "SELECT NOT EXISTS (SELECT 1 FROM etapa WHERE fixa AND vigente_ate IS NULL AND nome IN ('Comercial', 'Planejamento', 'Execução', 'Entrega', 'Encerramento')) AS ok",
   ],
   ['ensaio.classificacao', col('ensaio', 'classificacao')],
+  ['etapa_check.obra_id', col('etapa_check', 'obra_id')],
+  ['obra.checks_proprios', col('obra', 'checks_proprios')],
   [
     'check Material de gases',
     "SELECT EXISTS (SELECT 1 FROM etapa_check WHERE tipo = 'material_gases' AND vigente_ate IS NULL) AS ok",

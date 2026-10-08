@@ -370,6 +370,9 @@ async function lerTudo(usuarioId) {
       /* o prazo da ETAPA DE EXECUCAO (3a) — nao o da obra inteira, que e
          o dataConclusao. null = ainda nao definido */
       execucaoPrazo: soData(o.execucao_prazo ?? null),
+      /* a obra ja tem os checks PROPRIOS (atualizacao 18): le so eles,
+         e nao mais o roteiro */
+      checksProprios: o.checks_proprios === true,
       criadoEm: o.criado_em,
       criadoPor: o.criado_por === null ? null : String(o.criado_por),
       criadoPorNome: o.criado_por_nome ?? null,
@@ -1276,14 +1279,26 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
        dentro dela.
 
        O check "Material de gases" (tipo material_gases) so conta na
-       obra que tem ensaio de GASES planejado; nas outras e opcional. */
-    const contar = (comGases) =>
+       obra que tem ensaio de GASES planejado; nas outras e opcional.
+
+       Obra com checks PROPRIOS (atualizacao 18) conta os dela, e nao os
+       do roteiro. Os tres degraus: 18, 14/17, e a conta de sempre. */
+    const contar = (nivel) =>
       query(
         `SELECT count(*)                                  AS total,
                 count(*) FILTER (WHERE m.obra_id IS NULL) AS abertos
            FROM obra o
-           JOIN etapa_check ec ON ec.vigente_de <= o.criado_em
-                              AND (ec.vigente_ate IS NULL OR o.criado_em < ec.vigente_ate)
+           JOIN etapa_check ec ON ${
+             nivel >= 2
+               ? `CASE WHEN o.checks_proprios
+                       THEN ec.obra_id = o.id AND ec.vigente_ate IS NULL
+                       ELSE ec.obra_id IS NULL
+                            AND ec.vigente_de <= o.criado_em
+                            AND (ec.vigente_ate IS NULL OR o.criado_em < ec.vigente_ate)
+                  END`
+               : `ec.vigente_de <= o.criado_em
+                  AND (ec.vigente_ate IS NULL OR o.criado_em < ec.vigente_ate)`
+           }
            JOIN etapa_card kd  ON kd.id = ec.card_id
                               AND kd.vigente_de <= o.criado_em
                               AND (kd.vigente_ate IS NULL OR o.criado_em < kd.vigente_ate)
@@ -1292,7 +1307,7 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
                               AND (et.vigente_ate IS NULL OR o.criado_em < et.vigente_ate)
            LEFT JOIN obra_check m ON m.obra_id = o.id AND m.check_id = ec.id
           WHERE o.id = $1
-          ${comGases
+          ${nivel >= 1
             ? `AND (ec.tipo <> 'material_gases'
                    OR EXISTS (SELECT 1 FROM obra_ensaio oe
                                 JOIN ensaio en ON en.id = oe.ensaio_id
@@ -1300,9 +1315,12 @@ router.post('/obras/:id/concluir', exigeSessao, exige('editar_obras'), async (re
             : ''}`,
         [req.params.id],
       )
-    /* banco sem as atualizacoes 14/17: a conta de antes, com todo check */
-    const conta = await contar(true).catch((erro) =>
-      ['42703', '42P01'].includes(erro.code) ? contar(false) : Promise.reject(erro),
+    /* banco sem as atualizacoes: o degrau de baixo */
+    const semColuna = (erro) => ['42703', '42P01'].includes(erro.code)
+    const conta = await contar(2).catch((erro) =>
+      semColuna(erro)
+        ? contar(1).catch((e) => (semColuna(e) ? contar(0) : Promise.reject(e)))
+        : Promise.reject(erro),
     )
 
     const { total, abertos } = conta.rows[0] ?? { total: 0, abertos: 0 }
@@ -1467,12 +1485,34 @@ async function andamentoDosEnsaios(obraId) {
   }))
 }
 
-/** O check do sistema de um tipo, o que vale hoje (ou null). */
-async function checkDoSistema(tipo) {
+/**
+ * O check do sistema de um tipo QUE ESTA OBRA ENXERGA (ou null): a copia
+ * dela, se a obra tem checks proprios; senao o do roteiro que valia
+ * quando ela nasceu — que nao e, necessariamente, o que vale hoje (o
+ * modelo pode ter versionado o check depois).
+ */
+async function checkDoSistema(obraId, tipo) {
   const { rows } = await query(
-    'SELECT id FROM etapa_check WHERE tipo = $1 AND vigente_ate IS NULL ORDER BY id LIMIT 1',
-    [tipo],
-  ).catch((erro) => (erro.code === '42703' ? { rows: [] } : Promise.reject(erro)))
+    `SELECT ck.id
+       FROM obra o
+       JOIN etapa_check ck ON ck.tipo = $2
+                          AND CASE WHEN o.checks_proprios
+                                   THEN ck.obra_id = o.id AND ck.vigente_ate IS NULL
+                                   ELSE ck.obra_id IS NULL
+                                        AND ck.vigente_de <= o.criado_em
+                                        AND (ck.vigente_ate IS NULL OR o.criado_em < ck.vigente_ate)
+                              END
+      WHERE o.id = $1
+      ORDER BY ck.id DESC
+      LIMIT 1`,
+    [obraId, tipo],
+  ).catch((erro) => {
+    if (erro.code !== '42703') throw erro
+    /* banco sem a atualizacao 18: o que vale hoje */
+    return query('SELECT id FROM etapa_check WHERE tipo = $1 AND vigente_ate IS NULL ORDER BY id LIMIT 1', [
+      tipo,
+    ]).catch((e) => (e.code === '42703' ? { rows: [] } : Promise.reject(e)))
+  })
   return rows[0] ? String(rows[0].id) : null
 }
 
@@ -1833,7 +1873,7 @@ router.put('/obras/:id/ensaios', exigeSessao, obraAberta, async (req, res) => {
   const concluir = req.body?.concluir === true
 
   try {
-    const checkId = await checkDoSistema('planejamento_ensaios')
+    const checkId = await checkDoSistema(req.params.id, 'planejamento_ensaios')
     if (!checkId) {
       return res.status(501).json({ erro: 'O roteiro não tem o check "Planejamento de ensaios" (atualização 14).' })
     }
@@ -1945,7 +1985,7 @@ router.put('/obras/:id/execucao/dia', exigeSessao, obraAberta, async (req, res) 
   }
 
   try {
-    const checkId = await checkDoSistema('execucao_ensaios')
+    const checkId = await checkDoSistema(req.params.id, 'execucao_ensaios')
     if (!checkId) {
       return res.status(501).json({ erro: 'O roteiro não tem o check "Execução dos ensaios" (atualização 14).' })
     }

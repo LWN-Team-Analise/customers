@@ -456,9 +456,19 @@
     width: 100%;
   }
 
+  /* os dois de criar dividem o que sobra; o "Editar" fica do tamanho do
+     proprio texto. Os tres em partes iguais cortavam o "+ Obra
+     emergência" para dar ao Editar uma largura de que ele nao precisa. */
   .barra__criar .acao {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
+    justify-content: center;
+    padding-inline: 12px;
+  }
+
+  .barra__criar .acao--modelo {
+    flex: 0 0 auto;
+    padding-inline: 12px;
   }
 
   /* Os filtros de PASTILHA tomam a linha inteira; so os dois de

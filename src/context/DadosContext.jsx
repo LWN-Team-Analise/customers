@@ -855,7 +855,7 @@ export function DadosProvider({ children }) {
   const roteiroDaObra = useCallback(
     (obra) =>
       aplicarRegraDosGases(
-        roteiroVigente(roteiroBruto, obra?.criadoEm),
+        roteiroVigente(roteiroBruto, obra?.criadoEm, obra),
         ensaiosDeGases(obra, ensaioPorId),
       ),
     [roteiroBruto, ensaioPorId],

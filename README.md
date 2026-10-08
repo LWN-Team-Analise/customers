@@ -144,7 +144,7 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-11.sql.txt`, `db/atualizacao-12.sql.txt`,
 > `db/atualizacao-13.sql.txt`, `db/atualizacao-14.sql.txt`,
 > `db/atualizacao-15.sql.txt`, `db/atualizacao-16.sql.txt` e, por ultimo,
-> `db/atualizacao-17.sql.txt`.
+> `db/atualizacao-17.sql.txt` e `db/atualizacao-18.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -203,6 +203,7 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-15.sql.txt` | prazo da execucao separado do prazo da obra                      |
 | `db/atualizacao-16.sql.txt` | etapas de volta a "1° Etapa"...; fim da regra dos 3 dias         |
 | `db/atualizacao-17.sql.txt` | ensaio HVAC/GASES; check "Material de gases" do sistema          |
+| `db/atualizacao-18.sql.txt` | checks proprios de cada obra (mexer dentro da obra vale so nela) |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
@@ -1441,6 +1442,15 @@ Quem separa as duas listas e o `DadosContext`: `observacoesQuadro` (o que vale
 hoje, e o que o painel mostra) e `historicoObservacoes` (o que venceu, da
 vencida mais recente para a mais antiga).
 
+### No celular
+
+A barra de baixo tem **Pagina inicial · Obras · Despesas · Menu**. O Menu
+(hamburguer, na ponta direita) abre o **menu lateral** pela direita: a foto,
+o nome e a avaliacao de quem esta logado; Configuracoes; e as outras abas
+(Clientes, Concluidas, Avaliacoes, Usuarios...). A barra de cima (saudacao,
+sino, foto e busca) e mais baixa que no computador; a letra da busca so fica
+em 16px no iPhone, que da zoom na tela em campo com letra menor.
+
 ### O quadro
 
 Uma coluna por etapa, **lado a lado**, ocupando a largura — 1ª Etapa,
@@ -1550,24 +1560,34 @@ saiu do roteiro em maio, a obra de junho ve a antiga 3a como a sua 2a.
 Renomear uma etapa ou um card continua valendo para todas: e a mesma peca, so
 mudou o rotulo.
 
-**Check ja marcado nao muda para tras.** Editar um check (nome, Sim/Nao,
-informacoes, quem marca) ou leva-lo para outro card:
+**Onde a mudanca de um check vale** depende de onde ela e feita:
 
-- ninguem marcou ainda: a mudanca e feita no proprio check e vale em toda obra;
-- alguma obra ja marcou: o check vira **versao nova** (o de antes fecha agora,
-  o novo abre agora). As obras que ja existem continuam com o de antes — com
-  as marcas e os prazos dele — e so as criadas dali em diante pegam o novo. O
-  pop-up do check avisa ("Ja marcado em N obras...") antes de salvar.
+- **dentro de uma obra** — criar, editar, excluir ou arrastar um check vale
+  **so naquela obra**: nem nas proximas, nem nas que ja passaram. Na primeira
+  mudanca de check dentro dela, a obra ganha uma copia dos checks que enxerga
+  (`etapa_check.obra_id`, com `origem_id` apontando o check do roteiro), as
+  marcas e os prazos dela passam para as copias e `obra.checks_proprios` vira
+  true (atualizacao 18). Dali em diante ela le so as copias dela;
+- **no Modelo da obra** (o "Editar" do quadro) — vale para as obras criadas
+  **a partir de agora**. O check que alguma obra que existe hoje ja enxerga
+  vira versao nova (o de antes fecha agora, o novo abre agora); o que nenhuma
+  obra enxerga (criado agora no modelo) muda no proprio lugar.
 
-**Arrastar checks.** Pelo pegador (o primeiro botao que aparece ao passar o
-mouse no check) o check sobe, desce ou vai para outro card — de qualquer
-setor, de qualquer etapa — dentro da obra ou no Modelo da obra
-(`PUT /roteiro/cards/:id/checks/ordem`, `src/pages/Obras/arrasteChecks.js`).
-Mudar a ordem vale na hora; mudar de card segue a regra de cima. Os checks do
-sistema mudam de ordem e de card, mas nao saem da etapa deles.
+Os cards e as etapas continuam sendo do roteiro: criar um card dentro de uma
+obra vale para ela e para as proximas, como antes.
 
-Os botoes do check (pegador, prazo, lapis) so ocupam lugar com o mouse em
-cima: fechados nao tem largura, e o texto do check usa a linha inteira.
+**Arrastar checks.** O proprio check e a alca — nao ha pegador. Com o mouse,
+apertar e mover; no celular, segurar o check parado um instante (ele vibra) e
+arrastar. O check sobe, desce ou vai para outro card, de qualquer setor e de
+qualquer etapa; perto da borda a tela rola sozinha
+(`src/pages/Obras/arrasteChecks.js`, `PUT /roteiro/cards/:id/checks/ordem`).
+Soltar sem ter movido continua sendo o clique de marcar. Os checks do sistema
+mudam de ordem e de card, mas nao saem da etapa deles.
+
+Os botoes do check (prazo, lapis) so ocupam lugar com o mouse em cima:
+fechados nao tem largura. O texto do check quebra linha, e as etiquetas
+(Sim/Nao, gases, prazo, dono) descem para a linha de baixo quando nao cabem
+do lado — nada fica cortado nem por cima do texto.
 
 ### Etapas fixas, prazos e ensaios
 

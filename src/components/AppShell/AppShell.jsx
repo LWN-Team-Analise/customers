@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
@@ -8,6 +8,7 @@ import Busca from '@/components/Busca/Busca'
 import ChatSite from '@/components/ChatSite/ChatSite'
 import IlhaAviso from '@/components/IlhaAviso/IlhaAviso'
 import Confirma from '@/components/Confirma/Confirma'
+import Estrelas from '@/components/Estrelas/Estrelas'
 import { ehAplicativo } from '@/utils/dispositivo'
 import { primeiroNome, saudacao } from '@/utils/pessoa'
 import { dataHora } from '@/utils/formato'
@@ -160,28 +161,19 @@ const MENU = [
 ]
 
 /* ------------------------------------------------------------
-   As tres que ficam na barra do celular
+   As que ficam na barra do celular
 
    No computador a bolha e vertical e cabe o menu inteiro. No
    celular ela deita no rodape, e seis itens ali so cabiam rolando
    de lado — uma barra que rola e uma barra onde ninguem acha o
    quarto item, porque nada indica que ha um quarto item.
 
-   Entao ficam quatro, que sao as telas do dia a dia, e o resto
-   entra na gaveta do botao do meio. A gaveta abre ACIMA da barra,
-   colada nela: e a continuacao do mesmo menu, e nao um pop-up que
-   tapa a tela e precisa ser fechado.
-
-   A ORDEM na barra nao e a do menu: ela e
-
-       inicio · obras · [ mais ] · concluidas · clientes
-
-   com o botao redondo no meio, onde o polegar chega sem esticar. Quem
-   poe cada um no seu lugar e o `order` do CSS, a partir do `data-id`
-   de cada item — o HTML continua na ordem do menu, que e a que o
-   teclado e o leitor de tela seguem.
+   Entao ficam as tres do dia a dia — Pagina inicial, Obras e
+   Despesas — e, na ponta direita, o Menu (o hamburguer), que abre
+   o MENU LATERAL pela direita com o resto: a foto, o nome e a
+   avaliacao de quem esta logado, Configuracoes e as outras abas.
    ------------------------------------------------------------ */
-const PRINCIPAIS = ['inicio', 'obras', 'concluidas', 'clientes']
+const PRINCIPAIS = ['inicio', 'obras', 'despesas']
 
 /* ------------------------------------------------------------
    Onde o indicador estava na tela anterior
@@ -199,7 +191,7 @@ const PRINCIPAIS = ['inicio', 'obras', 'concluidas', 'clientes']
    nova comeca onde a antiga terminou e so entao anda ate o novo
    item, que e o que se ve como deslizar.
    ------------------------------------------------------------ */
-let ultimaMarca = { x: 0, y: 0, l: 0, a: 0, ix: 0, ex: 0, ergue: 0, ergueMais: 0, pronta: false }
+let ultimaMarca = { x: 0, y: 0, l: 0, a: 0, ix: 0, ergue: 0, pronta: false }
 
 /* O item que estava ACESO na tela anterior. A tela nova nasce com ele
    aceso e so na moldura seguinte passa a acender o dela: e isso que da
@@ -323,7 +315,7 @@ function MenuUsuario({ naBarra = false }) {
         aria-label="Conta e configurações"
         title={user?.name ?? 'Conta'}
       >
-        <Avatar nome={user?.name} foto={user?.foto} tamanho={40} />
+        <Avatar nome={user?.name} foto={user?.foto} tamanho={naBarra ? 32 : 40} />
       </button>
 
       <Confirma
@@ -459,6 +451,95 @@ function Notificacoes() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * O MENU LATERAL do celular: abre pela direita, a partir do Menu da
+ * barra de baixo.
+ *
+ *   a foto, o nome e a avaliacao de quem esta logado;
+ *   Configuracoes;
+ *   as abas que nao cabem na barra (Clientes, Concluidas, ...).
+ *
+ * Fecha no X, num toque no veu, no Esc ou ao trocar de tela. Fica
+ * MONTADO mesmo fechado (escondido por visibility): desmontando, o
+ * fechar seria instantaneo, sem o painel deslizar de volta.
+ */
+function MenuLateral({ aberto, aoFechar, abas }) {
+  const { user } = useAuth()
+  const { mediaDoUsuario } = useDados()
+  const { media, obrasAvaliadas } = mediaDoUsuario(user?.id)
+  const painel = useRef(null)
+
+  useEffect(() => {
+    if (!aberto) return undefined
+    painel.current?.focus()
+    const tecla = (e) => e.key === 'Escape' && aoFechar()
+    document.addEventListener('keydown', tecla)
+    return () => document.removeEventListener('keydown', tecla)
+  }, [aberto, aoFechar])
+
+  const fora = aberto ? undefined : -1
+
+  return (
+    <div className={`lateral ${aberto ? 'is-aberto' : ''}`.trim()} aria-hidden={!aberto}>
+      <button type="button" className="lateral__veu" tabIndex={-1} aria-label="Fechar o menu" onClick={aoFechar} />
+      <aside className="lateral__painel" id="menu-lateral" aria-label="Menu" tabIndex={-1} ref={painel}>
+        <header className="lateral__perfil">
+          <Avatar nome={user?.name} foto={user?.foto} tamanho={50} />
+          <div className="lateral__quem">
+            <strong>{user?.name ?? 'Usuário'}</strong>
+            {media === null ? (
+              <span className="lateral__nota">Sem avaliação ainda</span>
+            ) : (
+              <span className="lateral__nota">
+                <Estrelas nota={media} tamanho={13} />
+                <b>{media.toFixed(1)}</b>
+                <em>
+                  {obrasAvaliadas} obra{obrasAvaliadas === 1 ? '' : 's'}
+                </em>
+              </span>
+            )}
+          </div>
+          <button type="button" className="lateral__fechar" onClick={aoFechar} aria-label="Fechar o menu" tabIndex={fora}>
+            ×
+          </button>
+        </header>
+
+        <nav className="lateral__lista" aria-label="Mais telas">
+          <NavLink
+            to="/app/configuracoes"
+            className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
+            onClick={aoFechar}
+            tabIndex={fora}
+          >
+            <span className="rail__glifo">
+              <Icone.config />
+            </span>
+            Configurações
+          </NavLink>
+          {abas.map((item) => {
+            const Glifo = Icone[item.id]
+            return (
+              <NavLink
+                key={item.id}
+                to={item.rota}
+                end={item.exato}
+                className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
+                onClick={aoFechar}
+                tabIndex={fora}
+              >
+                <span className="rail__glifo">
+                  <Glifo />
+                </span>
+                {item.rotulo}
+              </NavLink>
+            )
+          })}
+        </nav>
+      </aside>
     </div>
   )
 }
@@ -734,7 +815,7 @@ export default function AppShell({
     [pode],
   )
 
-  /* as que saem da barra no celular e vao para a gaveta */
+  /* as que saem da barra no celular e vao para o menu lateral */
   const escondidas = useMemo(() => abas.filter((i) => !PRINCIPAIS.includes(i.id)), [abas])
 
   /* A ilha do aviso de senha. So no modo APLICATIVO — ver o comentario
@@ -757,8 +838,9 @@ export default function AppShell({
   const lista = useRef(null)
   const local = useLocation()
   const [marca, setMarca] = useState(ultimaMarca)
-  /* a gaveta do hamburguer (so existe no celular; ver AppShell.css) */
+  /* o menu lateral do hamburguer (so existe no celular; ver AppShell.css) */
   const [gaveta, setGaveta] = useState(false)
+  const fecharGaveta = useCallback(() => setGaveta(false), [])
 
   /* O item da tela aberta, e o item que esta ACESO. Sao dois porque a
      tela nova nasce com o aceso da anterior (ver `ultimoMostrado`) e so
@@ -803,21 +885,6 @@ export default function AppShell({
     setGaveta(false)
   }, [local.pathname])
 
-  /* a gaveta fecha no Esc e num toque fora da barra, como todo menu */
-  useEffect(() => {
-    if (!gaveta) return undefined
-    const fora = (e) => {
-      if (!barra.current?.contains(e.target)) setGaveta(false)
-    }
-    const tecla = (e) => e.key === 'Escape' && setGaveta(false)
-    document.addEventListener('pointerdown', fora)
-    document.addEventListener('keydown', tecla)
-    return () => {
-      document.removeEventListener('pointerdown', fora)
-      document.removeEventListener('keydown', tecla)
-    }
-  }, [gaveta])
-
   /* a lista do computador volta rolada onde a anterior estava */
   useLayoutEffect(() => {
     const caixa = lista.current
@@ -849,24 +916,12 @@ export default function AppShell({
         ? caixa.querySelector(`li[data-id="${mostrado}"] > .rail__btn`)
         : null
       const glifo = btn?.querySelector('.rail__glifo')
-      const botaoMais = caixa.querySelector('.rail__mais')
 
       /* O quanto o centro do circulo fica ABAIXO da borda de cima da
          barra. Mora no CSS (`--afunda`), junto do desenho das curvas
          que dependem dele; aqui so e lido. */
       const estilo = getComputedStyle(nav)
       const afunda = parseFloat(estilo.getPropertyValue('--afunda')) || 0
-      /* o botao do meio tem a sua: ele fica um pouco mais para fora
-         que o icone aceso, que so da um degrau pequeno */
-      const afundaMais = parseFloat(estilo.getPropertyValue('--afunda-mais')) || 0
-
-      /* O botao do meio fica parado, mas o lugar dele depende de
-         quantas abas o cargo tem: e medido, e nao `left: 50%`. */
-      const mais = botaoMais && botaoMais.offsetParent !== null ? posicaoDentro(botaoMais, nav) : null
-      const ex = mais ? mais.x + botaoMais.offsetWidth / 2 : ultimaMarca.ex
-      const ergueMais = mais
-        ? mais.y + botaoMais.offsetHeight / 2 - afundaMais
-        : ultimaMarca.ergueMais
 
       /* `offsetParent` nulo = o botao esta escondido. Acontece no
          celular quando a tela aberta e uma das que foram para a
@@ -874,7 +929,7 @@ export default function AppShell({
          encolher para o canto 0,0. */
       const noGlifo = glifo && btn.offsetParent !== null ? posicaoDentro(glifo, nav) : null
       if (!noGlifo) {
-        aplicar({ ...ultimaMarca, ex, ergueMais, pronta: false })
+        aplicar({ ...ultimaMarca, pronta: false })
         return
       }
 
@@ -898,12 +953,10 @@ export default function AppShell({
         l: btn.offsetWidth,
         a: btn.offsetHeight,
         ix,
-        ex,
         /* quanto o icone precisa subir para o centro dele cair no
            centro do indicador — que fica `afunda` px abaixo da borda
            de cima da barra, e nao em cima dela: so um pouco para fora */
         ergue: cy - afunda,
-        ergueMais,
         pronta: true,
       })
     }
@@ -936,17 +989,15 @@ export default function AppShell({
         /* as medidas do item atual moram na BARRA, e nao so na marca:
            o indicador do celular le as mesmas para saber onde pousar.
            `--marca-*` e o botao inteiro, medido na lista (anel do
-           computador); `--ind-x`, `--encaixe-x` e `--ergue` sao o centro
-           do icone, medido na propria barra (indicador do celular). */
+           computador); `--ind-x` e `--ergue` sao o centro do icone,
+           medido na propria barra (indicador do celular). */
         style={{
           '--marca-x': `${marca.x}px`,
           '--marca-y': `${marca.y}px`,
           '--marca-l': `${marca.l}px`,
           '--marca-a': `${marca.a}px`,
           '--ind-x': `${marca.ix}px`,
-          '--encaixe-x': `${marca.ex}px`,
           ...(marca.ergue ? { '--ergue': `${marca.ergue}px` } : null),
-          ...(marca.ergueMais ? { '--ergue-mais': `${marca.ergueMais}px` } : null),
         }}
       >
         {/* ---------------- o indicador (so no celular) ----------------
@@ -964,9 +1015,6 @@ export default function AppShell({
           className={`rail__indicador ${marca.pronta ? 'is-pronta' : ''}`.trim()}
           aria-hidden="true"
         />
-
-        {/* o mesmo encaixe, parado, para o botao do meio */}
-        {escondidas.length > 0 && <span className="rail__encaixe" aria-hidden="true" />}
 
         <ul className="rail__lista" ref={lista}>
           {/* Uma peca so, que MUDA DE LUGAR — e o que faz o anel deslizar de
@@ -1008,81 +1056,29 @@ export default function AppShell({
             )
           })}
 
-          {/* O hamburguer. So aparece no celular, e so quando ha o que
-              guardar: com duas abas liberadas pelo cargo, as duas cabem
-              na barra e um botao "Mais" que abre o vazio seria pior que
-              botao nenhum. */}
-          {escondidas.length > 0 && (
-            <li className="rail__somobile">
-              {/* O botao E o circulo, e nada alem dele: a area de toque e
-                  exatamente o que se ve. A vaga (o `li`) em volta nao
-                  tem clique nenhum, e o encaixe e a caixa da gaveta sao
-                  pecas de desenho, sem `pointer-events`. */}
-              <button
-                type="button"
-                className="rail__mais"
-                onClick={() => setGaveta((v) => !v)}
-                aria-expanded={gaveta}
-                aria-controls="rail-gaveta"
-                aria-label="Mais telas"
-                title="Mais telas"
-              >
+          {/* O Menu (hamburguer). So aparece no celular, na PONTA
+              DIREITA da barra, com cara de item como os outros. Abre o
+              menu lateral: Configuracoes e as abas que nao cabem aqui. */}
+          <li className="rail__somobile">
+            <button
+              type="button"
+              className="rail__btn rail__menu"
+              onClick={() => setGaveta((v) => !v)}
+              aria-expanded={gaveta}
+              aria-controls="menu-lateral"
+              title="Menu"
+            >
+              <span className="rail__glifo">
                 <Icone.hamburguer />
-              </button>
-            </li>
-          )}
+              </span>
+              <span className="rail__rotulo">Menu</span>
+            </button>
+          </li>
         </ul>
 
-        {/* A gaveta: o resto do menu, saindo do botao do meio. Nao e
-            pop-up — nao escurece a tela nem toma o foco; e o mesmo
-            menu, continuando para cima.
-
-            Tres pecas, cada uma com um papel so:
-              .rail__gaveta         a caixa que posiciona (sem clique)
-              .rail__gaveta-sombra  a sombra, que segue o recorte do corpo
-              .rail__gaveta-corpo   a superficie e os itens (o unico que
-                                    recebe toque, e so aberto)
-
-            O corpo abre por `clip-path`, a partir do ponto logo acima do
-            botao: ele cresce dali, em vez de aparecer por opacidade. O
-            botao continua preso a BARRA pela propria bolha, e nao ao
-            corpo — nao ha peca ligando os dois.
-
-            Ela fica MONTADA mesmo fechada, escondida por `visibility`.
-            Desmontando, o fechar era instantaneo: a peca sumia do DOM
-            antes de qualquer transicao rodar. */}
-        {escondidas.length > 0 && (
-          <div
-            className={`rail__gaveta ${gaveta ? 'is-aberta' : ''}`.trim()}
-            id="rail-gaveta"
-            aria-hidden={!gaveta}
-          >
-            <div className="rail__gaveta-sombra">
-              <div className="rail__gaveta-corpo">
-                {escondidas.map((item) => {
-                  const Glifo = Icone[item.id]
-                  return (
-                    <NavLink
-                      key={item.id}
-                      to={item.rota}
-                      end={item.exato}
-                      className={({ isActive }) => `rail__item ${isActive ? 'is-atual' : ''}`.trim()}
-                      onClick={() => setGaveta(false)}
-                      /* fechada, ela sai tambem do caminho do Tab */
-                      tabIndex={gaveta ? undefined : -1}
-                    >
-                      <span className="rail__glifo">
-                        <Glifo />
-                      </span>
-                      {item.rotulo}
-                    </NavLink>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )}
       </nav>
+
+      <MenuLateral aberto={gaveta} aoFechar={fecharGaveta} abas={escondidas} />
 
       <MenuUsuario />
 

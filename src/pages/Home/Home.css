@@ -1138,22 +1138,27 @@
     border-top: 0;
   }
 
-  .grade__tabela td {
+  /* Tudo a ESQUERDA: o rotulo numa coluna de largura fixa e o valor
+     logo depois dele. Com o valor empurrado para a direita, a obra (e
+     ate o titulo da tarefa) caia na ponta oposta do cartao, longe do
+     rotulo dela. */
+  /* `:nth-child(n)` so para empatar com as regras de coluna la de cima
+     (que tem um :nth-child cada) e ganhar por vir depois: sem isso a
+     celula continuava `block` e o rotulo nao tinha largura */
+  .grade__tabela td:nth-child(n) {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 14px;
+    justify-content: flex-start;
+    gap: 10px;
     padding: 4px 0;
     border-top: 0;
-    text-align: right;
+    text-align: left;
   }
 
-  .grade__tabela td::before {
+  .grade__tabela td[data-rotulo]::before {
     content: attr(data-rotulo);
     flex: none;
-    /* segura o rotulo a esquerda e manda TODO o valor para a direita,
-       mesmo quando ele vem em duas partes ("3ª" + "montagem") */
-    margin-right: auto;
+    width: 76px;
     font-size: 0.64rem;
     font-weight: 700;
     letter-spacing: 0.05em;

@@ -416,9 +416,7 @@ export default function Obras() {
                     onChange={(e) => setAteData(e.target.value)}
                     aria-label="Mostrar obras com conclusão até esta data"
                   />
-                  <span className="filtro__dataleg">
-                    {ateData ? dataExtensa(ateData) : 'todas as datas'}
-                  </span>
+                  {ateData && <span className="filtro__dataleg">{dataExtensa(ateData)}</span>}
                 </div>
               </div>
 

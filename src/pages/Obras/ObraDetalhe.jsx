@@ -41,7 +41,7 @@ import ModalEtiquetas from './ModalEtiquetas'
 import ModalAnexos from './ModalAnexos'
 import ModalObra from './ModalObra'
 import CardSetor from './CardSetor'
-import { textoDaVersao, useArrasteDeChecks } from './arrasteChecks'
+import { useArrasteDeChecks } from './arrasteChecks'
 import { Icone } from './IconesObra'
 import './ObraDetalhe.css'
 
@@ -146,14 +146,12 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
 
   const obra = obraPorId(id)
 
-  /* o recado de uma mudanca no roteiro que nao aparece nesta obra (o
-     check arrastado ja tinha sido marcado em alguma obra) */
+  /* o recado de um arraste recusado (check do sistema fora da etapa) */
   const [avisoRoteiro, setAvisoRoteiro] = useState(null)
+  /* arrastar um check aqui dentro mexe SO nesta obra (os checks
+     proprios dela — ver db/atualizacao-18.sql.txt) */
   const arraste = useArrasteDeChecks({
-    ordenar: async (cardId, checkIds) => {
-      const r = await ordenarChecks(cardId, checkIds, obra?.id)
-      if (r?.versionados?.length > 0) setAvisoRoteiro(textoDaVersao(r.versionados, true))
-    },
+    ordenar: (cardId, checkIds) => ordenarChecks(cardId, checkIds, obra?.id),
     aoRecusar: setAvisoRoteiro,
   })
 

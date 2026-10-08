@@ -9,6 +9,10 @@
   inset: 0;
   z-index: 90;
   display: grid;
+  /* A coluna e a TELA, e nao o conteudo: sem isso um pop-up com algo
+     largo dentro (as cinco etapas do modelo da obra) crescia ate a
+     largura do conteudo e vazava para fora do celular, sem rolar. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: var(--modal-topo) 20px 20px;
   background: var(--modal-veu);
