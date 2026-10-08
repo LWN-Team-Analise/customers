@@ -99,6 +99,28 @@ input {
   color: inherit;
 }
 
+/* ---------------- Campos de data ----------------
+   No iPhone o <input type="date"> e um botao do sistema: ele ignora a
+   largura do campo e cresce ate caber a data por extenso ("8 de out.
+   de 2026"), atravessando o card, a tela e o pop-up. Sem a aparencia
+   nativa ele volta a obedecer a largura de quem o usa. No Chrome nada
+   muda: o icone do calendario e o dd/mm/aaaa continuam la.
+
+   O valor, que o iPhone centraliza, volta para a esquerda, como nos
+   outros campos; e o campo vazio deixa de murchar (sem placeholder,
+   ele perdia a altura da linha). */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+
+input[type='date']::-webkit-date-and-time-value {
+  min-height: 1.3em;
+  text-align: left;
+}
+
 a {
   color: var(--link);
   text-decoration: none;
