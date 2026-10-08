@@ -63,10 +63,11 @@ function textoDoMotivo(m, nomeDoCargo, comSelo = false) {
  * Quando a cor nao e a de sempre, uma linha diz o PORQUE (o motivo mais
  * urgente; os outros ficam na dica dele).
  *
- *   foto da empresa · proposta - nome · etapa atual   [téc] [gq]
+ *   foto da empresa · proposta - nome · etapa atual   fotos de quem mexeu
+ *   [téc] [gq]
  *   motivo da cor
  *   descricao · execucao dos ensaios
- *   prioridade + datas                    fotos de quem mexeu
+ *   prioridade + datas                    "Concluído em"
  *
  * O titulo e "1042/2026 - Acme": o n. da proposta na frente, porque e
  * por ele que a obra e procurada. Obra antiga, sem proposta cadastrada,
@@ -142,7 +143,7 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
       title={motivos.length > 1 ? motivos.map((m) => textoDoMotivo(m, nomeDoCargo)).join('\n') : undefined}
     >
       <header className="obracard__topo">
-        <Avatar nome={cliente?.nome} foto={cliente?.logo} tamanho={26} quadrado />
+        <Avatar nome={cliente?.nome} foto={cliente?.logo} tamanho={26} quadrado className="obracard__logo" />
         <span className="obracard__quem">
           <strong className="obracard__empresa">{tituloDaObra(obra, cliente)}</strong>
           {/* "3ª — execução". O nome so entra quando acrescenta: uma
@@ -154,6 +155,13 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
               : [`${etapa.numero}ª`, nomeDaEtapa.toLowerCase()].filter(Boolean).join(' — ')}
           </span>
         </span>
+
+        {/* quem mexeu na obra: no canto de CIMA, a direita */}
+        {pessoas.length > 0 && (
+          <span className="obracard__rostos">
+            <PilhaAvatares pessoas={pessoas} tamanho={24} limite={3} />
+          </span>
+        )}
 
         {pendentes.length > 0 && (
           <span className="obracard__setores" title="Setores que ainda devem informação">
@@ -245,14 +253,11 @@ export default function CardObra({ obra, cliente, pessoas = [], situacao, aoAbri
           </span>
         </span>
 
-        <span className="obracard__fim">
-          {pessoas.length > 0 && <PilhaAvatares pessoas={pessoas} tamanho={24} limite={3} />}
-          {prontaEm && (
-            <span className="obracard__pronta">
-              Concluído em: <strong>{dataHora(prontaEm)}</strong>
-            </span>
-          )}
-        </span>
+        {prontaEm && (
+          <span className="obracard__pronta">
+            Concluído em: <strong>{dataHora(prontaEm)}</strong>
+          </span>
+        )}
       </footer>
     </button>
   )

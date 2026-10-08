@@ -37,6 +37,9 @@
   font: inherit;
   cursor: pointer;
   box-shadow: none;
+  /* o topo muda de arranjo pela LARGURA DO CARD (ver .obracard__topo),
+     que muda com a coluna, e nao so com a tela */
+  container-type: inline-size;
   /* o avatar usa isso para o anel combinar com o card */
   --avatar-anel: var(--surface);
   --tom-bg: var(--quadro-ok-bg);
@@ -124,22 +127,54 @@
 
 /* ---- topo ---- */
 
-/* a foto e o nome numa linha; os setores que devem descem para a
-   linha de baixo — a coluna da etapa e estreita, e ao lado do nome
-   eles espremiam o titulo ate virar reticencias */
+/* a logo, o nome e, no canto de cima a direita, as fotos de quem mexeu
+   na obra; os setores que devem descem para a linha de baixo — a coluna
+   da etapa e estreita, e ao lado do nome eles espremiam o titulo ate
+   virar reticencias */
 .obracard__topo {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'logo quem rostos'
+    'setores setores setores';
+  align-items: start;
   gap: 6px 8px;
 }
 
+.obracard__logo {
+  grid-area: logo;
+}
+
 .obracard__quem {
+  grid-area: quem;
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-  flex: 1;
+}
+
+.obracard__rostos {
+  grid-area: rostos;
+  display: flex;
+}
+
+/* Card estreito (duas colunas no celular, cinco numa tela de 1280): o
+   nome desce para a linha inteira, e a logo e as fotos ficam sozinhas na
+   primeira, uma em cada ponta. Com as tres coisas lado a lado, sobravam
+   ~50px para o nome. A medida e a de DENTRO do card (sem o recheio):
+   179px sao uns 210px de card. */
+@container (max-width: 179px) {
+  .obracard__topo {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'logo rostos'
+      'quem quem'
+      'setores setores';
+  }
+
+  .obracard__rostos {
+    justify-self: end;
+  }
 }
 
 .obracard__empresa {
@@ -162,10 +197,10 @@
 
 /* os setores que ainda devem: contorno e texto na cor suave do setor */
 .obracard__setores {
+  grid-area: setores;
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
-  flex-basis: 100%;
 }
 
 .obracard__setor {
@@ -278,9 +313,9 @@
 
 /* ---- base ---- */
 
-/* Em card estreito o canto da direita (rostos + "Concluído em") desce
-   para a linha de baixo, em vez de passar por cima das datas: antes ele
-   nao encolhia nem quebrava, e o texto saia do card. */
+/* Em card estreito o "Concluído em" desce para a linha de baixo, em vez
+   de passar por cima das datas: antes ele nao encolhia nem quebrava, e o
+   texto saia do card. */
 .obracard__base {
   display: flex;
   flex-wrap: wrap;
@@ -290,19 +325,11 @@
   margin-top: auto;
 }
 
-/* canto inferior DIREITO: os avatares e, embaixo deles, o carimbo de
-   "acabou" */
-.obracard__fim {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+/* canto inferior DIREITO: o carimbo de "acabou", em verde de "feito" —
+   e a linha que faz alguem lembrar de fechar a obra */
+.obracard__pronta {
   min-width: 0;
   margin-left: auto;
-}
-
-/* verde de "feito": e a linha que faz alguem lembrar de fechar a obra */
-.obracard__pronta {
   font-size: 0.66rem;
   font-weight: 600;
   line-height: 1.3;
