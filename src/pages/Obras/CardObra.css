@@ -13,8 +13,11 @@
      vencido     vermelho o prazo final ja passou (fio mais grosso e
                           o selo "Atrasada")
 
-   O -acento pinta o fio da esquerda, a linha do motivo e a barra da
-   execucao. Os valores de cada tema estao em src/styles/tokens.css.
+   O -acento pinta a linha do motivo e a barra da execucao. O FIO DA
+   ESQUERDA nao: ele e a cor da PRIORIDADE (data-pri), a mesma da
+   palavra em "Prioridade: Alta" — verde baixa, amarelo media,
+   vermelho alta e o azul da emergencia no "Urgente". Os valores de
+   cada tema estao em src/styles/tokens.css.
    ============================================================ */
 
 .obracard {
@@ -39,20 +42,37 @@
   --tom-bg: var(--quadro-ok-bg);
   --tom-borda: var(--quadro-ok-borda);
   --tom-acento: var(--quadro-ok-acento);
+  --pri-cor: var(--tom-acento);
   --fio: 3px;
   transition: transform var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
 
-/* o fio da esquerda, na cor de acento do tom */
+/* o fio da esquerda, na cor da prioridade */
 .obracard::before {
   content: '';
   position: absolute;
   inset: 0 auto 0 0;
   z-index: -1;
   width: var(--fio);
-  background: var(--tom-acento);
+  background: var(--pri-cor);
+}
+
+.obracard[data-pri='alta'] {
+  --pri-cor: var(--pri-alta);
+}
+
+.obracard[data-pri='urgente'] {
+  --pri-cor: var(--pri-urgente);
+}
+
+.obracard[data-pri='media'] {
+  --pri-cor: var(--pri-media);
+}
+
+.obracard[data-pri='baixa'] {
+  --pri-cor: var(--pri-baixa);
 }
 
 .obracard:hover {
@@ -342,27 +362,13 @@
   box-shadow: 0 0 0 1.5px var(--surface);
 }
 
+/* a palavra na cor da prioridade (o --pri-cor vem do data-pri do
+   card), puxada um pouco para a cor do texto: o amarelo puro some
+   sobre o fundo claro */
 .obracard__pri strong {
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: var(--text-strong);
-}
-
-.obracard__pri[data-pri='alta'] {
-  --pri-cor: var(--pri-alta);
-}
-
-/* "Urgente": a prioridade da emergencia */
-.obracard__pri[data-pri='urgente'] {
-  --pri-cor: var(--pri-alta);
-}
-
-.obracard__pri[data-pri='media'] {
-  --pri-cor: var(--pri-media);
-}
-
-.obracard__pri[data-pri='baixa'] {
-  --pri-cor: var(--pri-baixa);
+  color: color-mix(in srgb, var(--pri-cor) 82%, var(--text-strong));
 }
 
 /* ---- "prazo final: sem data" com o (!) ----

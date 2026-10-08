@@ -120,13 +120,13 @@
   --tom-fg: var(--pri-alta-fg);
 }
 
-/* "Urgente" é a prioridade da emergência. Ela leva a cor da PRÓPRIA
-   emergência, e não o vermelho da alta: no quadro as duas apareciam
-   iguais, e é justamente a diferença entre elas que a palavra nova
-   existe para marcar. */
+/* "Urgente" é a prioridade da emergência. Ela leva o azul do botão
+   "Obra emergência", e não o vermelho da alta: no quadro as duas
+   apareciam iguais, e é justamente a diferença entre elas que a
+   palavra existe para marcar. */
 .pastilha[data-tom='urgente'] {
-  --tom-bg: var(--obra-emerg);
-  --tom-fg: var(--obra-emerg-fg);
+  --tom-bg: var(--pri-urgente);
+  --tom-fg: var(--pri-urgente-fg);
 }
 
 .pastilha[data-tom='media'] {

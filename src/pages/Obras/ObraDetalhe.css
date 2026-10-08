@@ -198,9 +198,9 @@
 }
 
 .info__valor--pri[data-pri='alta'] { --pri-bg: var(--pri-alta); --pri-fg: var(--pri-alta-fg); }
-/* "Urgente" leva a cor da emergência, não a da alta: as duas apareciam
-   iguais no quadro, e é a diferença entre elas que a palavra marca */
-.info__valor--pri[data-pri='urgente'] { --pri-bg: var(--obra-emerg); --pri-fg: var(--obra-emerg-fg); }
+/* "Urgente" leva o azul da emergência (o do botão "Obra emergência"),
+   não a cor da alta: é a diferença entre as duas que a palavra marca */
+.info__valor--pri[data-pri='urgente'] { --pri-bg: var(--pri-urgente); --pri-fg: var(--pri-urgente-fg); }
 .info__valor--pri[data-pri='media'] { --pri-bg: var(--pri-media); --pri-fg: var(--pri-media-fg); }
 .info__valor--pri[data-pri='baixa'] { --pri-bg: var(--pri-baixa); --pri-fg: var(--pri-baixa-fg); }
 

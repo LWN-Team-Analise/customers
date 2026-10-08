@@ -272,7 +272,7 @@
   color: var(--tom-fg);
 }
 
-.tpri[data-pri='urgente'] { --tom-bg: var(--obra-emerg); --tom-fg: var(--obra-emerg-fg); }
+.tpri[data-pri='urgente'] { --tom-bg: var(--pri-urgente); --tom-fg: var(--pri-urgente-fg); }
 .tpri[data-pri='alta'] { --tom-bg: var(--pri-alta); --tom-fg: #fff; }
 .tpri[data-pri='media'] { --tom-bg: var(--pri-media); --tom-fg: #fff; }
 .tpri[data-pri='baixa'] { --tom-bg: var(--pri-baixa); --tom-fg: #fff; }
