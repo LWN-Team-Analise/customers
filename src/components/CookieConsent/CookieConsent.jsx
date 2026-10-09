@@ -41,7 +41,6 @@ export default function CookieConsent() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(record))
     } catch {
-      /* storage bloqueado: vale so para esta sessao */
     }
     setConsent(record)
   }
