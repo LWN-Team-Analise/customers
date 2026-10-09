@@ -17,6 +17,23 @@ export function carregarTudo() {
 }
 
 /**
+ * Tudo o que a tela guarda numa chamada so: { quadro, equipe, roteiro }
+ * (server/carga.js). `imagens: false` e a carga leve — sem logos,
+ * capas e fotos, so a versao de cada uma.
+ */
+export function carregarCarga({ imagens = true } = {}) {
+  return get(`/carga${imagens ? '' : '?imagens=0'}`)
+}
+
+/** As logos/capas e as fotos que a tela ainda nao tem. */
+export function carregarImagens({ clientes = [], usuarios = [] }) {
+  const partes = []
+  if (clientes.length) partes.push(`clientes=${clientes.join(',')}`)
+  if (usuarios.length) partes.push(`usuarios=${usuarios.join(',')}`)
+  return get(`/carga/imagens?${partes.join('&')}`)
+}
+
+/**
  * So as logos dos clientes que TEM logo — e a unica leitura que roda
  * sem sessao, porque quem consome e a esfera da tela de login.
  */

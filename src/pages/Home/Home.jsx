@@ -190,10 +190,11 @@ function SeletorMes({ mes, aoMudar, foraDoPainel }) {
 /* A ordem e a leitura do quadro: primeiro o que esta acontecendo, depois
    o que ainda espera a vez, por fim o que ja saiu.
 
-   "Em andamento" sao as etapas ABERTAS — o que da para tocar hoje.
-   "Não iniciado" sao as etapas futuras, travadas esperando outro cargo
-   fechar a dele; e por isso que a coluna vem depois, e nao antes: ela
-   nao pede acao de ninguem, so explica quem esta segurando a fila. */
+   "Em andamento" e a etapa ATUAL da obra — o que da para tocar hoje.
+   "Não iniciado" e a PROXIMA etapa de cada setor, travada esperando
+   outros setores fecharem as deles; o card diz quais (ver useTarefas).
+   E por isso que a coluna vem depois, e nao antes: ela nao pede acao de
+   ninguem, so explica quem esta segurando a fila. */
 const COLUNAS = [
   { id: 'andamento', rotulo: 'Em andamento', Glifo: Icone.relogio },
   { id: 'espera', rotulo: 'Não iniciado', Glifo: Icone.cadeado },
@@ -916,6 +917,28 @@ function Quadro({ tarefas, hoje, mes, nomeDoCargo, corDoCargo, pessoaPorId, aoAb
                       corDoCargo={corDoCargo}
                     />
                   </p>
+
+                  {/* "Não iniciado": quem segura a fila — as etapas antes
+                      desta que ainda nao fecharam e os setores que ainda
+                      devem check em cada uma (ver useTarefas) */}
+                  {t.status === 'espera' && t.aguardando.length > 0 && (
+                    <div className="tcard__espera">
+                      <span className="tcard__esperatit">
+                        <Icone.relogio />
+                        Aguardando a conclusão de
+                      </span>
+                      {t.aguardando.map((e) => (
+                        <span key={e.numero} className="tcard__esperaetapa">
+                          <strong>{e.nome || `${e.numero}ª Etapa`}</strong>
+                          <Setores
+                            cargos={e.setores}
+                            nomeDoCargo={nomeDoCargo}
+                            corDoCargo={corDoCargo}
+                          />
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   <p className="tcard__pe">
                     <span

@@ -71,6 +71,39 @@ export class SemServidor extends Error {
   }
 }
 
+/* ------------------------------------------------------------
+   A carga que volta JUNTO da gravacao (server/carga.js)
+
+   Enquanto uma gravacao do contexto roda (`comCarga`), toda chamada
+   que grava sai com `X-Carga: leve`, e a resposta volta com os dados
+   ja relidos em `__carga`. Gravar e reler viram UMA ida ao servidor —
+   antes eram seis: a gravacao e mais cinco leituras.
+
+   Cada chamada leva um numero, na ordem em que saiu. Fica guardada a
+   carga da chamada mais nova que voltou; a gravacao usa essa carga se
+   ela veio de uma chamada feita depois que ela comecou.
+   ------------------------------------------------------------ */
+let pedindoCarga = 0
+let numeroDaChamada = 0
+let cargaRecebida = null
+
+/**
+ * Roda `acao` pedindo a carga junto. Devolve { resposta, carga }; a
+ * carga e null quando nao veio (rota que responde 204, erro na leitura
+ * dela...) — ai quem chamou rele do jeito de sempre.
+ */
+export async function comCarga(acao) {
+  const desde = numeroDaChamada + 1
+  pedindoCarga += 1
+  try {
+    const resposta = await acao()
+    const veio = cargaRecebida && cargaRecebida.numero >= desde ? cargaRecebida.carga : null
+    return { resposta, carga: veio }
+  } finally {
+    pedindoCarga -= 1
+  }
+}
+
 /**
  * Chama a API. Devolve o corpo (ou {} em 204).
  * Lanca SemServidor quando nem deu para falar com o servidor, e Error
@@ -78,6 +111,9 @@ export class SemServidor extends Error {
  */
 export async function chamar(caminho, opcoes = {}) {
   const token = tokenAtual()
+  const numero = (numeroDaChamada += 1)
+  const metodo = (opcoes.method ?? 'GET').toUpperCase()
+  const querCarga = pedindoCarga > 0 && metodo !== 'GET'
 
   let resposta
   try {
@@ -86,6 +122,7 @@ export async function chamar(caminho, opcoes = {}) {
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(querCarga ? { 'X-Carga': 'leve' } : {}),
         ...opcoes.headers,
       },
       body: opcoes.corpo === undefined ? opcoes.body : JSON.stringify(opcoes.corpo),
@@ -114,6 +151,12 @@ export async function chamar(caminho, opcoes = {}) {
        formulario acende o campo certo em vez de so mostrar o recado */
     if (corpo?.campo) falha.campo = corpo.campo
     throw falha
+  }
+
+  if (corpo && typeof corpo === 'object' && '__carga' in corpo) {
+    const { __carga: carga, ...resto } = corpo
+    if (!cargaRecebida || numero > cargaRecebida.numero) cargaRecebida = { numero, carga }
+    return resto
   }
 
   return corpo ?? {}

@@ -620,6 +620,46 @@
   border-top: 1px solid var(--line);
 }
 
+/* o "Não iniciado" diz quem segura a fila: cada etapa que ainda nao
+   fechou, com os setores que ainda devem check nela */
+.tcard__espera {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text-strong) 5%, transparent);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.tcard__esperatit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.tcard__esperatit svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.tcard__esperaetapa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.tcard__esperaetapa strong {
+  font-weight: 700;
+  color: var(--text-base);
+}
+
 .tcard__etapa {
   font-size: 0.71rem;
   font-weight: 700;
