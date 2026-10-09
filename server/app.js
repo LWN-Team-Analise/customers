@@ -8,6 +8,7 @@ import roteiroRouter from './routes/roteiro.js'
 import botRouter from './routes/bot.js'
 import despesasRouter from './routes/despesas.js'
 import atividadesRouter from './routes/atividades.js'
+import cargaRouter, { cargaJunto } from './carga.js'
 import { logger } from './logger.js'
 
 /**
@@ -43,6 +44,11 @@ app.get('/api/health', async (_req, res) => {
   }
 })
 
+/* a gravacao que pede (X-Carga: leve) volta com a carga junto — ver
+   server/carga.js. Fica antes das rotas para valer em todas elas. */
+app.use(cargaJunto)
+
+app.use('/api/carga', cargaRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/equipe', equipeRouter)
 app.use('/api/dados', dadosRouter)

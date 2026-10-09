@@ -416,8 +416,11 @@ router.delete('/titulos/:id', exigeSessao, exige('editar_cargo_titulo'), async (
    A tabela do banco continua se chamando `cargo` de proposito:
    renomea-la derrubaria as chaves estrangeiras de meia duzia de
    outras tabelas sem mudar nada do que o sistema faz. */
-const CONSULTA_USUARIOS = `
-  SELECT u.id, u.name, u.email, u.telefone, u.cpf, u.foto, u.data_nascimento,
+/* `foto_versao` e a impressao digital da foto: a carga LEVE (server/carga.js)
+   manda so ela, e a tela reaproveita a foto que ja tem quando bate. */
+const consultaUsuarios = (comFoto) => `
+  SELECT u.id, u.name, u.email, u.telefone, u.cpf, ${comFoto ? 'u.foto, ' : ''}u.data_nascimento,
+         md5(coalesce(u.foto, '')) AS foto_versao,
          u.senha_temporaria, u.cargo_titulo, u.cargo_titulo_id, u.recorte_foto,
          u.outlook, u.outlook_email,
          c.id AS cargo_id, c.chave AS cargo_chave, c.nome AS cargo_nome,
@@ -431,6 +434,8 @@ const CONSULTA_USUARIOS = `
    WHERE u.ativo
 `
 
+const CONSULTA_USUARIOS = consultaUsuarios(true)
+
 const paraUsuario = (l) => ({
   id: String(l.id),
   nome: l.name,
@@ -438,7 +443,10 @@ const paraUsuario = (l) => ({
   telefone: l.telefone,
   cpf: l.cpf,
   nascimento: l.data_nascimento,
-  foto: l.foto,
+  /* sem a coluna (carga leve) a chave nem vai: a tela entende que a
+     foto e a mesma de antes quando a `fotoVersao` bate */
+  ...('foto' in l ? { foto: l.foto } : {}),
+  fotoVersao: l.foto_versao ?? null,
   /* O enquadramento vem; a imagem INTEIRA nao. Ela so serve para
      reabrir o editor, e uma copia dela por pessoa em toda carga da
      equipe pesaria a lista inteira por causa de um clique que quase
@@ -493,6 +501,27 @@ function recortarPessoal(usuario, meu, meuId) {
     cpf: gestor ? usuario.cpf : null,
     nascimento: gestor ? usuario.nascimento : null,
     telefone: abreUsuarios ? usuario.telefone : null,
+  }
+}
+
+/**
+ * Os cargos, os titulos e a equipe de uma vez — o pedaco "equipe" da
+ * carga (server/carga.js). `imagens: false` deixa as fotos de fora.
+ */
+export async function lerEquipe(usuarioId, { imagens = true } = {}) {
+  const [cargos, titulos, usuarios, meu] = await Promise.all([
+    query('SELECT * FROM cargo ORDER BY ordem, nome'),
+    query('SELECT * FROM cargo_titulo ORDER BY ordem, nome').catch((erro) => {
+      if (erro.code === '42P01') return { rows: [] }
+      throw erro
+    }),
+    query(`${consultaUsuarios(imagens)} ORDER BY c.ordem NULLS LAST, u.name`),
+    meuCargo(usuarioId),
+  ])
+  return {
+    cargos: cargos.rows.map(paraCargo),
+    titulos: titulos.rows.map(paraTitulo),
+    usuarios: usuarios.rows.map(paraUsuario).map((u) => recortarPessoal(u, meu, usuarioId)),
   }
 }
 

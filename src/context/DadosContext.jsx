@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import * as dados from '@/services/dadosService'
 import * as equipeApi from '@/services/equipeService'
 import * as roteiroApi from '@/services/roteiroService'
+import { comCarga } from '@/services/api'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { corAdaptada, corSuave, textoSobre } from '@/utils/cor'
@@ -38,6 +39,21 @@ const DadosContext = createContext(null)
    um campo vazio. */
 const TERMOS_PADRAO = { termo_etapa: 'Etapa', termo_etapas: 'Etapas' }
 
+/** Uma carga do servidor ({ quadro, equipe, roteiro }) no formato do estado. */
+const doServidor = (c, clientes, usuarios) => ({
+  clientes,
+  setores: c.quadro?.setores ?? [],
+  obras: c.quadro?.obras ?? [],
+  observacoesQuadro: c.quadro?.observacoesQuadro ?? [],
+  etiquetas: c.quadro?.etiquetas ?? [],
+  ensaios: c.quadro?.ensaios ?? [],
+  termos: { ...TERMOS_PADRAO, ...(c.quadro?.termos ?? {}) },
+  cargos: c.equipe?.cargos ?? [],
+  titulos: c.equipe?.titulos ?? [],
+  equipe: usuarios,
+  roteiro: c.roteiro ?? [],
+})
+
 const INICIAL = {
   clientes: [],
   setores: [],
@@ -65,40 +81,103 @@ export function DadosProvider({ children }) {
 
   const limparErro = useCallback(() => setErro(''), [])
 
-  /** Le tudo de novo do banco. E o que roda depois de cada mudanca estrutural. */
-  const recarregar = useCallback(async () => {
-    const minha = (carga.current += 1)
+  /* o estado de agora, para a carga reaproveitar as imagens que ja estao
+     na tela sem esperar o proximo render */
+  const estadoAgora = useRef(estado)
+  estadoAgora.current = estado
+
+  /* a primeira carga de cada sessao traz as imagens; as outras sao leves */
+  const jaTemImagens = useRef(false)
+
+  /**
+   * Busca as logos/capas e as fotos que faltam e poe cada uma no lugar
+   * — so se a versao ainda for a mesma (se mudou de novo no caminho, a
+   * proxima carga busca a nova). Falhando, a tela segue com as iniciais.
+   */
+  const buscarImagens = useCallback(async (faltam) => {
     try {
-      const [quadro, equipe, roteiro] = await Promise.all([
-        dados.carregarTudo(),
-        equipeApi.carregarEquipe(),
-        roteiroApi.carregarRoteiro(),
-      ])
-      if (minha !== carga.current) return
-      setEstado({
-        clientes: quadro.clientes ?? [],
-        setores: quadro.setores ?? [],
-        obras: quadro.obras ?? [],
-        observacoesQuadro: quadro.observacoesQuadro ?? [],
-        etiquetas: quadro.etiquetas ?? [],
-        ensaios: quadro.ensaios ?? [],
-        termos: { ...TERMOS_PADRAO, ...(quadro.termos ?? {}) },
-        cargos: equipe.cargos ?? [],
-        titulos: equipe.titulos ?? [],
-        equipe: equipe.usuarios ?? [],
-        roteiro: roteiro ?? [],
-      })
-      setErro('')
-    } catch (e) {
-      if (minha !== carga.current) return
-      setErro(e.message)
-    } finally {
-      if (minha === carga.current) setCarregando(false)
+      const veio = await dados.carregarImagens(faltam)
+      const logos = new Map((veio.clientes ?? []).map((x) => [x.id, x]))
+      const fotos = new Map((veio.usuarios ?? []).map((x) => [x.id, x]))
+      setEstado((atual) => ({
+        ...atual,
+        clientes: atual.clientes.map((cli) => {
+          const l = logos.get(cli.id)
+          return l && l.imagemVersao === cli.imagemVersao ? { ...cli, logo: l.logo, capa: l.capa } : cli
+        }),
+        equipe: atual.equipe.map((u) => {
+          const f = fotos.get(u.id)
+          return f && f.fotoVersao === u.fotoVersao ? { ...u, foto: f.foto } : u
+        }),
+      }))
+    } catch {
+      /* sem a imagem a tela mostra as iniciais; a proxima carga tenta de novo */
     }
   }, [])
 
+  /**
+   * Poe uma carga ({ quadro, equipe, roteiro }, server/carga.js) na tela.
+   *
+   * A carga LEVE vem sem as imagens, so com a versao delas: o cliente e
+   * a pessoa cuja versao bate com a de agora continuam com a logo e a
+   * foto que ja tinham. Os que mudaram (ou sao novos) ficam sem imagem
+   * por um instante e sao buscados em seguida, numa chamada so.
+   */
+  const aplicarCarga = useCallback(
+    (c) => {
+      const agora = estadoAgora.current
+      const clienteDe = new Map(agora.clientes.map((x) => [x.id, x]))
+      const pessoaDe = new Map(agora.equipe.map((x) => [x.id, x]))
+      const faltam = { clientes: [], usuarios: [] }
+
+      const clientes = (c.quadro?.clientes ?? []).map((cli) => {
+        if ('logo' in cli) return cli
+        const antes = clienteDe.get(cli.id)
+        if (antes && 'logo' in antes && antes.imagemVersao === cli.imagemVersao) {
+          return { ...cli, logo: antes.logo, capa: antes.capa }
+        }
+        faltam.clientes.push(cli.id)
+        return cli
+      })
+      const usuarios = (c.equipe?.usuarios ?? []).map((u) => {
+        if ('foto' in u) return u
+        const antes = pessoaDe.get(u.id)
+        if (antes && 'foto' in antes && antes.fotoVersao === u.fotoVersao) return { ...u, foto: antes.foto }
+        faltam.usuarios.push(u.id)
+        return u
+      })
+
+      /* uma releitura que ainda esteja no caminho ja nao vale: esta e mais nova */
+      carga.current += 1
+      setEstado(doServidor(c, clientes, usuarios))
+      setErro('')
+      setCarregando(false)
+      if (faltam.clientes.length || faltam.usuarios.length) buscarImagens(faltam)
+    },
+    [buscarImagens],
+  )
+
+  /**
+   * Le tudo de novo do banco, numa chamada so (GET /api/carga). A
+   * primeira leitura da sessao traz as imagens; as outras sao leves.
+   */
+  const recarregar = useCallback(async () => {
+    const minha = (carga.current += 1)
+    try {
+      const c = await dados.carregarCarga({ imagens: !jaTemImagens.current })
+      if (minha !== carga.current) return
+      jaTemImagens.current = true
+      aplicarCarga(c)
+    } catch (e) {
+      if (minha !== carga.current) return
+      setErro(e.message)
+      setCarregando(false)
+    }
+  }, [aplicarCarga])
+
   useEffect(() => {
     if (!isAuthenticated) {
+      jaTemImagens.current = false
       setEstado(INICIAL)
       setCarregando(false)
       return
@@ -108,14 +187,20 @@ export function DadosProvider({ children }) {
   }, [isAuthenticated, recarregar])
 
   /**
-   * Grava no banco e recarrega. Se der errado, o recado sobe para a tela
-   * e o estado volta a ser o do banco — nunca fica um meio-termo.
+   * Grava no banco e poe na tela o que ficou gravado. Se der errado, o
+   * recado sobe para a tela e o estado volta a ser o do banco — nunca
+   * fica um meio-termo.
+   *
+   * A releitura vem JUNTO da resposta da gravacao (`comCarga`, ver
+   * src/services/api.js): uma ida ao servidor, e nao seis. So quando
+   * ela nao vem (rota que responde sem corpo) e que a tela rele a parte.
    */
   const gravar = useCallback(
     async (acao) => {
       try {
-        const resposta = await acao()
-        await recarregar()
+        const { resposta, carga: veio } = await comCarga(acao)
+        if (veio) aplicarCarga(veio)
+        else await recarregar()
         return resposta
       } catch (e) {
         setErro(e.message)
@@ -123,7 +208,7 @@ export function DadosProvider({ children }) {
         throw e
       }
     },
-    [recarregar],
+    [recarregar, aplicarCarga],
   )
 
   /* ============================================================
@@ -311,7 +396,7 @@ export function DadosProvider({ children }) {
       }
 
       /* o roteiro que ESTA obra enxerga — o mesmo que a tela desenhou */
-      const meuRoteiro = roteiroVigente(estado.roteiro, obra.criadoEm)
+      const meuRoteiro = roteiroVigente(estado.roteiro, obra.criadoEm, obra)
       const card = meuRoteiro
         .flatMap((e) => e.cards)
         .find((c) => c.checks.some((k) => String(k.id) === String(checkId)))
@@ -336,17 +421,19 @@ export function DadosProvider({ children }) {
       }))
 
       try {
-        if (marcando) await dados.marcarCheck(obraId, checkId)
-        else await dados.desmarcarCheck(obraId, checkId)
-        /* o banco calcula membros e conclusao por gatilho: le de volta
-           para os avatares e a tela de Concluidas ficarem certos */
-        await recarregar()
+        /* o banco calcula membros e conclusao por gatilho: a carga que
+           volta junto deixa os avatares e a tela de Concluidas certos */
+        const { carga: veio } = await comCarga(() =>
+          marcando ? dados.marcarCheck(obraId, checkId) : dados.desmarcarCheck(obraId, checkId),
+        )
+        if (veio) aplicarCarga(veio)
+        else await recarregar()
       } catch (e) {
         setErro(e.message)
         await recarregar()
       }
     },
-    [estado.obras, estado.roteiro, user, recarregar],
+    [estado.obras, estado.roteiro, user, recarregar, aplicarCarga],
   )
 
   /**
@@ -386,14 +473,15 @@ export function DadosProvider({ children }) {
       }))
 
       try {
-        await dados.marcarCheck(obraId, checkId, resposta)
-        await recarregar()
+        const { carga: veio } = await comCarga(() => dados.marcarCheck(obraId, checkId, resposta))
+        if (veio) aplicarCarga(veio)
+        else await recarregar()
       } catch (e) {
         setErro(e.message)
         await recarregar()
       }
     },
-    [estado.obras, user, recarregar],
+    [estado.obras, user, recarregar, aplicarCarga],
   )
 
   /** Prazo de uma etapa ({ etapaId }) ou de um check ({ checkId }); prazo vazio tira. */

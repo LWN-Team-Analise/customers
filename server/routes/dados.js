@@ -107,7 +107,12 @@ function soData(valor) {
 const paraCliente = (l) => ({
   id: String(l.id),
   nome: l.nome,
-  logo: l.logo,
+  /* Na carga LEVE (server/carga.js) a logo e a capa nao vem: so a
+     `imagemVersao`, a impressao digital das duas. A tela reaproveita as
+     que ja tem quando ela bate — sao ~1 MB que deixam de viajar a cada
+     gravacao. Sem as colunas, as chaves nem aparecem. */
+  ...('logo' in l ? { logo: l.logo, capa: l.capa ?? null } : {}),
+  imagemVersao: l.imagem_versao ?? null,
   /* A MESMA imagem, em dois enquadramentos: `logo` e o quadrado do
      card, `capa` e a faixa larga do header da obra.
 
@@ -120,7 +125,6 @@ const paraCliente = (l) => ({
      tela nem desenha. Quem precisa dela busca em /clientes/:id/imagem,
      no clique. */
   recorteLogo: l.recorte_logo ?? null,
-  capa: l.capa ?? null,
   recorteCapa: l.recorte_capa ?? null,
   /* o setor e opcional: cliente antigo, ou ainda nao classificado, vem
      com null e a tela mostra "sem setor" */
@@ -162,7 +166,27 @@ async function lerTermos() {
   }
 }
 
-async function lerTudo(usuarioId) {
+/* As colunas do cliente que a tela usa. A logo_original fica de fora
+   sempre (ver paraCliente); a logo e a capa, so na carga leve. */
+const COLUNAS_CLIENTE = `id, nome, recorte_logo, recorte_capa, setor_id, endereco, bairro,
+  cidade, estado, cep, criado_em,
+  md5(coalesce(logo, '') || '|' || coalesce(capa, '')) AS imagem_versao`
+
+function lerClientes(imagens) {
+  return query(
+    `SELECT ${COLUNAS_CLIENTE}${imagens ? ', logo, capa' : ''} FROM cliente ORDER BY lower(nome)`,
+  ).catch((erro) => {
+    /* banco antigo, sem alguma das colunas: tudo, com as imagens */
+    if (erro.code !== '42703') throw erro
+    return query('SELECT * FROM cliente ORDER BY lower(nome)')
+  })
+}
+
+/**
+ * O quadro inteiro. `imagens: false` e a carga leve: os clientes vem
+ * sem a logo e a capa (so a versao delas).
+ */
+export async function lerTudo(usuarioId, { imagens = true } = {}) {
   const [
     clientes,
     setores,
@@ -185,7 +209,7 @@ async function lerTudo(usuarioId) {
     obraEnsaios,
     progressos,
   ] = await Promise.all([
-    query('SELECT * FROM cliente ORDER BY lower(nome)'),
+    lerClientes(imagens),
     /* os setores vem junto: sao poucos e a tela de Clientes precisa
        deles para pintar a etiqueta de cada card */
     query('SELECT * FROM setor_cliente ORDER BY lower(nome)').catch(() => ({ rows: [] })),

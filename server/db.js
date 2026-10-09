@@ -25,7 +25,12 @@ types.setTypeParser(20, (valor) => Number(valor))
    mundo. Em serverless nao ha processo comum: cada chamada acorda uma
    copia da funcao e cada copia abre o proprio pool — dez copias com
    dez conexoes cada estouram o limite do banco sem precisar de dez
-   pessoas usando o sistema. Por isso `max` cai para 1 na Vercel.
+   pessoas usando o sistema. Por isso `max` cai para 4 na Vercel.
+
+   Quatro, e nao uma: com uma so, as ~30 leituras da carga
+   (server/carga.js) — que o codigo pede todas juntas — iam para o banco
+   uma atras da outra, cada uma esperando a ida e volta da anterior.
+   Com quatro elas andam de quatro em quatro.
    ------------------------------------------------------------ */
 
 const url = process.env.DATABASE_URL?.trim()
@@ -41,7 +46,7 @@ export const pool = new Pool(
     ? {
         connectionString: url,
         ssl: ehLocal(url) ? false : { rejectUnauthorized: true },
-        max: naVercel ? 1 : 10,
+        max: naVercel ? 4 : 10,
         idleTimeoutMillis: 30_000,
         /* o compute do Neon dorme quando ninguem usa e leva alguns
            segundos para acordar: com os 5s de antes, a primeira

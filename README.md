@@ -1208,16 +1208,33 @@ obra acabou. E o nome de quem esta devendo aparece ali porque, sem ele, a unica
 saida era abrir a obra e conferir card por card.
 
 Quem monta a lista e `src/pages/Home/useTarefas.js`. O **estado** de cada
-tarefa sai de duas perguntas, nesta ordem:
+tarefa sai destas perguntas, nesta ordem:
 
 ```
-marcado?                 -> Concluida
-a etapa dele ja abriu?   -> Em andamento   (da para fazer agora)
-ainda nao abriu          -> Nao iniciado   (a etapa anterior segura)
+marcado?                          -> Concluida
+a etapa dele e a ATUAL da obra?   -> Em andamento   (da para fazer agora)
+e a PROXIMA etapa do setor dele?  -> Nao iniciado   (outros setores seguram)
+etapa mais adiante que essa       -> ainda nao aparece
 ```
 
-Obra de emergencia nunca tem "Nao iniciado": ali todas as etapas abrem de
-uma vez. Obra ENCERRADA fica de fora inteira — ela e registro, e um
+A "proxima etapa do setor" e a primeira, da atual em diante, em que o setor
+ainda tem check por marcar. E ela que diz em que pe a obra esta para aquele
+setor. A Excelencia, que esta na 2ª e na 5ª etapa:
+
+```
+1ª aberta            a 2ª dela em "Nao iniciado" (a 5ª ainda nao aparece)
+2ª aberta            a 2ª em "Em andamento"
+fez a parte da 2ª    a 5ª volta para "Nao iniciado", esperando os outros
+                     setores fecharem a 2ª, a 3ª e a 4ª
+5ª aberta            a 5ª em "Em andamento"
+```
+
+O card de "Nao iniciado" diz **quem segura a fila**: "Aguardando a conclusao
+de", com cada etapa anterior que ainda nao fechou e os setores que ainda devem
+check nela.
+
+Obra de emergencia (Urgente) nunca tem "Nao iniciado": ali todas as etapas
+abrem de uma vez, e tudo o que falta fica em "Em andamento". Obra ENCERRADA fica de fora inteira — ela e registro, e um
 quadro que mistura o que acabou com o que falta para de responder a
 pergunta que existe para responder.
 
@@ -1906,6 +1923,28 @@ Quem faz isso e o `DadosContext` (`src/context/DadosContext.jsx`), o unico lugar
 que fala com a API. Cada acao muda a tela primeiro (para nao travar esperando a
 rede) e grava em seguida; se o servidor recusar, o estado volta a ser o do banco
 e o motivo aparece numa faixa vermelha no topo da tela.
+
+**Gravar e reler numa ida so.** Antes, cada acao (criar, editar, excluir,
+marcar) era seguida de cinco leituras separadas — quadro, cargos, titulos,
+usuarios e roteiro —, e a tela so fechava o pop-up depois da ultima. O quadro
+trazia junto a logo e a capa de todos os clientes (~1 MB) a cada vez, e na
+Vercel o pool tinha uma conexao so: as ~30 consultas da releitura iam para o
+banco uma atras da outra. Agora (`server/carga.js`):
+
+- **a carga** (`GET /api/carga`) traz quadro, equipe e roteiro numa chamada; a
+  primeira de cada sessao vem com as imagens;
+- **a carga junto**: enquanto o contexto grava (`comCarga`,
+  `src/services/api.js`), a chamada sai com `X-Carga: leve` e a resposta ja
+  volta com os dados relidos em `__carga` — inclusive a exclusao, que respondia
+  204 e passa a responder 200 so com a carga. A tela recebe o mesmo corpo de
+  antes;
+- **a carga leve** nao repete imagem: cada cliente vem com a `imagemVersao`
+  (md5 da logo e da capa) e cada pessoa com a `fotoVersao`. A tela reaproveita
+  as que ja tem quando a versao bate, e busca so as que mudaram em
+  `GET /api/carga/imagens?clientes=1,2&usuarios=3`;
+- **quatro conexoes** por funcao na Vercel (`server/db.js`), em vez de uma, e a
+  funcao roda em **Sao Paulo** (`"regions": ["gru1"]` no `vercel.json`), a mesma
+  regiao do banco no Neon (sa-east-1).
 
 O `localStorage` guarda so tres coisas, todas do navegador e nao do sistema: a
 sessao (`customers.session`), o tema (`customers.theme`) e a resposta ao aviso
