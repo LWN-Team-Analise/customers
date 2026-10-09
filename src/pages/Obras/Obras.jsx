@@ -6,6 +6,7 @@ import Seletor from '@/components/Seletor/Seletor'
 import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import {
+  cargosDoCheck,
   nomeProprioDaEtapa,
   PRIORIDADES,
   PRIORIDADE_PESO,
@@ -223,6 +224,32 @@ export default function Obras() {
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
   }, [obras, clientes, concluida, clienteId])
 
+  /**
+   * Os setores do filtro "Setor pendente": so os que sao DONOS de algum
+   * check — no roteiro de alguma obra aberta ou no modelo de hoje.
+   *
+   * A lista vinha do cadastro de setores inteiro: o Diretor, que nao tem
+   * check nenhum, e os setores com nome de cliente apareciam ali, e
+   * escolher qualquer um deles so podia devolver o quadro vazio.
+   *
+   * O setor ESCOLHIDO fica na lista mesmo que deixe de ter check: some-lo
+   * dali deixaria o filtro ligado num setor que nao da para desmarcar.
+   */
+  const setoresDoFiltro = useMemo(() => {
+    const donos = new Set()
+    const juntar = (etapas) =>
+      etapas.forEach((etapa) =>
+        etapa.cards.forEach((card) =>
+          (card.checks ?? []).forEach((check) =>
+            cargosDoCheck(check, card).forEach((s) => donos.add(s)),
+          ),
+        ),
+      )
+    juntar(roteiro)
+    obras.filter((o) => !concluida(o)).forEach((obra) => juntar(roteiroDaObra(obra)))
+    return cargos.filter((c) => donos.has(c.chave) || setores.includes(c.chave))
+  }, [cargos, roteiro, obras, concluida, roteiroDaObra, setores])
+
   const alternarSetor = (id) =>
     setSetores((atual) => (atual.includes(id) ? atual.filter((s) => s !== id) : [...atual, id]))
 
@@ -425,7 +452,7 @@ export default function Obras() {
               <div className="filtro filtro--setores">
                 <span className="filtro__nome">Setor pendente</span>
                 <FilaDeSetores
-                  cargos={cargos}
+                  cargos={setoresDoFiltro}
                   setores={setores}
                   aoAlternar={alternarSetor}
                   aoVerTodos={() => setModalSetores(true)}
@@ -716,6 +743,7 @@ export default function Obras() {
       <ModalSetores
         aberto={modalSetores}
         aoFechar={() => setModalSetores(false)}
+        setores={setoresDoFiltro}
         obras={visiveis}
         selecionados={setores}
         aoFiltrar={alternarSetor}

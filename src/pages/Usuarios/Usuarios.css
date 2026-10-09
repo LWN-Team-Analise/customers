@@ -53,9 +53,12 @@
   min-width: 0;
 }
 
+/* align-items: start — o card que abre cresce sozinho; os da mesma
+   linha continuam do tamanho deles */
 .usuarios__grade {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  align-items: start;
   gap: 13px;
   margin: 0;
   padding: 0;
@@ -77,7 +80,7 @@
 .pessoa {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   padding: 15px;
   /* tarja com a cor do cargo */
   padding-left: 20px;
@@ -149,9 +152,97 @@
   gap: 12px;
 }
 
-.pessoa__quem {
+/* o botao que abre o card: foto, nome, setor, cargo e a setinha */
+.pessoa__abrir {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex: 1;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pessoa__abrir:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.pessoa__quem {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.pessoa__seta {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--text-faint);
+  transition: transform var(--dur-base) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.pessoa__abrir:hover .pessoa__seta {
+  background: var(--control-bg-hover);
+  color: var(--text-strong);
+}
+
+.pessoa.is-aberto .pessoa__seta {
+  transform: rotate(180deg);
+  color: var(--text-strong);
+}
+
+/* O que o card guarda. Fechado tem altura zero; abre deslizando (a
+   linha da grade vai de 0fr a 1fr) e o conteudo aparece junto. */
+.pessoa__detalhe {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.pessoa.is-aberto .pessoa__detalhe {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.pessoa__dentro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pessoa__dentro > :first-child {
+  margin-top: 13px;
+}
+
+.pessoa__semcontato {
+  margin: 0;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pessoa__detalhe,
+  .pessoa__seta {
+    transition: none;
+  }
 }
 
 .pessoa__nome {

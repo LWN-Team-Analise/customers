@@ -7,10 +7,12 @@ import './ModalSetores.css'
  * setores, quando ha mais deles do que cabem no filtro.
  *
  * `obras` sao as que estao em exibicao no quadro — a conta e sobre elas,
- * nao sobre o sistema inteiro.
+ * nao sobre o sistema inteiro. `setores` e a mesma lista do filtro (so
+ * os que tem check); sem ela, vao todos os setores do cadastro.
  */
-export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, selecionados = [] }) {
-  const { cargos, clientePorId, roteiroDaObra, etapaDaObra, pendentesDaObra } = useDados()
+export default function ModalSetores({ aberto, aoFechar, obras = [], aoFiltrar, selecionados = [], setores }) {
+  const { cargos: todos, clientePorId, roteiroDaObra, etapaDaObra, pendentesDaObra } = useDados()
+  const cargos = setores ?? todos
 
   /* para cada setor, as obras em que ele ainda deve algo na etapa atual */
   const pendencias = cargos.map((cargo) => {
