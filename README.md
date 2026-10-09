@@ -144,7 +144,7 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-11.sql.txt`, `db/atualizacao-12.sql.txt`,
 > `db/atualizacao-13.sql.txt`, `db/atualizacao-14.sql.txt`,
 > `db/atualizacao-15.sql.txt`, `db/atualizacao-16.sql.txt` e, por ultimo,
-> `db/atualizacao-17.sql.txt` e `db/atualizacao-18.sql.txt`.
+> `db/atualizacao-17.sql.txt`, `db/atualizacao-18.sql.txt` e `db/atualizacao-19.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -204,6 +204,7 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-16.sql.txt` | etapas de volta a "1° Etapa"...; fim da regra dos 3 dias         |
 | `db/atualizacao-17.sql.txt` | ensaio HVAC/GASES; check "Material de gases" do sistema          |
 | `db/atualizacao-18.sql.txt` | checks proprios de cada obra (mexer dentro da obra vale so nela) |
+| `db/atualizacao-19.sql.txt` | check "Prazo da execucao" no card do Time Tecnico da 1a etapa    |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
@@ -1662,12 +1663,23 @@ transforma obra padrao em emergencia (a regra dos 3 dias saiu; a atualizacao
 16 devolveu a padrao as obras que ela tinha convertido).
 
 **O cadastro da obra tem so o inicio e o prazo final.** O periodo de execucao
-e definido DENTRO da obra, na 3a etapa.
+e definido DENTRO da obra, na **1a etapa**: o check do sistema **"Prazo da
+execucao"** (atualizacao 19) mora no card do Time Tecnico, logo depois do
+Planejamento de ensaios. O clique nele abre o "Periodo de execucao", e
+definir o prazo MARCA o check — ele nao se marca nem se desmarca na mao.
+Quem define e quem marca os checks desse card (o Tecnico) ou quem tem
+`definir_prazos`.
 
 **A execucao exige o prazo dela.** Na etapa de execucao nenhum check se marca
-sem o prazo da execucao; o bloco da etapa avisa e leva ao "Periodo de
-execucao", que grava so o periodo da 3a etapa (nunca o prazo final da obra,
-e nao deixa passar dele).
+sem o prazo da execucao. O bloco da 3a etapa mostra o periodo **travado**,
+com "definido na 1a etapa" — sem botao; sem o prazo, ele diz que o prazo vem
+da 1a etapa. O "Periodo de execucao" grava so o periodo da execucao (nunca o
+prazo final da obra, e nao deixa passar dele).
+
+O check vale para as obras criadas a partir da atualizacao 19. As que ja
+existiam nao o enxergam (ganhar um check na 1a etapa faria voltar de etapa
+quem ja passou dela) e continuam definindo o prazo no bloco da 3a etapa,
+como antes.
 
 **Planejamento de ensaios (1a etapa).** O check abre a escolha dos ensaios:
 a pessoa **arrasta** os ensaios do catalogo para a caixa da obra (e de volta

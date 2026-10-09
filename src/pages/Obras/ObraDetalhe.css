@@ -1591,6 +1591,14 @@ body.arrastando-check * {
   white-space: nowrap;
 }
 
+/* o prazo veio da 1a etapa: aqui so se le */
+.execbloco__origem {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .execbloco__botao {
   padding: 3px 10px;
   border: 1px solid var(--control-border);

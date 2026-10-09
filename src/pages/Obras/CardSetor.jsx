@@ -5,6 +5,7 @@ import {
   CHECK_EXECUCAO,
   CHECK_GASES,
   CHECK_PLANEJAMENTO,
+  CHECK_PRAZO_EXECUCAO,
   checksExigidos,
   checkTemDonoProprio,
   corDoSetorDoCard,
@@ -211,6 +212,7 @@ export default function CardSetor({
           /* "Material de gases": obrigatorio so com ensaio de GASES na obra.
              O porque vai na dica, antes das informacoes do check. */
           const gases = check.tipo === CHECK_GASES
+          const prazoDaExecucao = check.tipo === CHECK_PRAZO_EXECUCAO
           const porqueGases = !gases
             ? ''
             : modelo
@@ -296,6 +298,12 @@ export default function CardSetor({
                 )}
                 {execucaoDosEnsaios && !modelo && (
                   <span className="tarefa__ensaios">{execucao ? `${execucao.geral}%` : 'sem ensaios'}</span>
+                )}
+                {/* o prazo da execucao, que vale para a etapa de execucao */}
+                {prazoDaExecucao && !modelo && (
+                  <span className="tarefa__ensaios">
+                    {obra.execucaoPrazo ? `até ${dataBR(obra.execucaoPrazo)}` : 'definir'}
+                  </span>
                 )}
                 {gases && (
                   <span className="tarefa__gases" data-exigido={!modelo && !check.opcional ? 'sim' : undefined}>

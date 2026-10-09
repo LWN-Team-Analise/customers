@@ -340,6 +340,25 @@ export function etapaDeExecucao(roteiro) {
 export const CHECK_PLANEJAMENTO = 'planejamento_ensaios'
 export const CHECK_EXECUCAO = 'execucao_ensaios'
 export const CHECK_GASES = 'material_gases'
+/* o "Prazo da execucao" da 1a etapa (atualizacao 19): definir o prazo
+   da execucao marca ele, e a 3a etapa so mostra o prazo, travado */
+export const CHECK_PRAZO_EXECUCAO = 'prazo_execucao'
+
+/**
+ * Onde ESTA obra define o prazo da execucao: { etapa, card, check } do
+ * check "Prazo da execucao", ou null — a obra criada antes da
+ * atualizacao 19 nao tem esse check, e define o prazo na propria etapa
+ * de execucao, como sempre.
+ */
+export function checkDoPrazoDaExecucao(roteiro) {
+  for (const etapa of roteiro ?? []) {
+    for (const card of etapa.cards ?? []) {
+      const check = (card.checks ?? []).find((c) => c.tipo === CHECK_PRAZO_EXECUCAO)
+      if (check) return { etapa, card, check }
+    }
+  }
+  return null
+}
 
 /** true para os checks do sistema (nao se excluem nem se renomeiam). */
 export function checkDoSistema(check) {

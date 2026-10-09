@@ -342,8 +342,8 @@
    cinco pedacos de informacao curta boiando em vaos de cem pixels,
    com o cabecalho la em cima como unica pista do que era cada um.
 
-   Agora a sobra vai toda para as duas colunas de TEXTO (a tarefa e a
-   obra), e as cinco curtas encolhem ate o tamanho do que carregam,
+   Agora a sobra vai toda para as duas colunas de TEXTO (a obra e a
+   tarefa), e as cinco curtas encolhem ate o tamanho do que carregam,
    encostadas umas nas outras. O "1%" e o jeito de dizer "o minimo
    possivel" numa tabela: qualquer valor pequeno serve, e o navegador
    estica ate caber o conteudo. */
@@ -1206,8 +1206,17 @@
     color: var(--text-faint);
   }
 
-  /* a tarefa e o titulo do cartao: linha inteira, sem rotulo */
+  /* a tarefa e o titulo do cartao: linha inteira, sem rotulo. Na
+     tabela a obra vem antes dela; no cartao a tarefa sobe para o topo,
+     que e onde o titulo mora (`order`), e a obra vira a primeira linha
+     com rotulo logo abaixo. */
+  .grade__tabela tr {
+    display: flex;
+    flex-direction: column;
+  }
+
   .grade__tarefa {
+    order: -1;
     min-width: 0;
     padding-bottom: 6px;
     text-align: left;

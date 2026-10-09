@@ -564,8 +564,9 @@ function Grade({ tarefas, hoje, nomeDoCargo, corDoCargo, aoAbrir }) {
       <table className="grade__tabela">
         <thead>
           <tr>
-            <th scope="col">Tarefa</th>
+            {/* a OBRA primeiro: e por ela que a lista se le */}
             <th scope="col">Obra</th>
+            <th scope="col">Tarefa</th>
             <th scope="col">Etapa</th>
             {/* a coluna do setor vai CENTRADA: as etiquetas tem
                 larguras muito diferentes ("GQ" ao lado de "Garantia da
@@ -601,6 +602,11 @@ function Grade({ tarefas, hoje, nomeDoCargo, corDoCargo, aoAbrir }) {
                 onClick={() => aoAbrir(t)}
                 title={`Abrir ${daObra(t)}`}
               >
+                <td data-rotulo="Obra">
+                  <span className="grade__obra" data-tipo={t.obra.tipo}>
+                    {daObra(t)}
+                  </span>
+                </td>
                 <td className="grade__tarefa">
                   <button
                     type="button"
@@ -612,11 +618,6 @@ function Grade({ tarefas, hoje, nomeDoCargo, corDoCargo, aoAbrir }) {
                   >
                     {t.titulo}
                   </button>
-                </td>
-                <td data-rotulo="Obra">
-                  <span className="grade__obra" data-tipo={t.obra.tipo}>
-                    {daObra(t)}
-                  </span>
                 </td>
                 <td className="grade__etapa" data-rotulo="Etapa">
                   {t.etapaNome || `${t.etapaNumero}ª`}
@@ -646,15 +647,15 @@ function Grade({ tarefas, hoje, nomeDoCargo, corDoCargo, aoAbrir }) {
                 aria-disabled="true"
                 title="Esta tarefa é de outro setor"
               >
+                <td data-rotulo="Obra">
+                  <span className="grade__obra" data-tipo={t.obra.tipo}>
+                    {daObra(t)}
+                  </span>
+                </td>
                 <td className="grade__tarefa">
                   <span className="grade__travada">
                     <Icone.cadeado />
                     {t.titulo}
-                  </span>
-                </td>
-                <td data-rotulo="Obra">
-                  <span className="grade__obra" data-tipo={t.obra.tipo}>
-                    {daObra(t)}
                   </span>
                 </td>
                 <td className="grade__etapa" data-rotulo="Etapa">

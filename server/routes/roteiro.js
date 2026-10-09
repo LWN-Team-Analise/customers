@@ -176,7 +176,8 @@ export async function lerRoteiro() {
       /* o que o check pede — a dica que aparece ao passar o mouse */
       informacoes: l.informacoes ?? '',
       /* 'comum', ou um do sistema: 'planejamento_ensaios' e
-         'execucao_ensaios' (atualizacao 14), 'material_gases' (17) */
+         'execucao_ensaios' (atualizacao 14), 'material_gases' (17),
+         'prazo_execucao' (19) */
       tipo: l.tipo ?? 'comum',
       /* check PROPRIO de uma obra (atualizacao 18): so ela o enxerga.
          null = check do roteiro */
