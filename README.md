@@ -806,7 +806,12 @@ silencio, e so o log do servidor sabia.
 > tabela `cargo` e carrega as permissoes. Este aqui e o ramo do CLIENTE, e nao
 > decide nada alem de filtro e cor de etiqueta.
 
-O ramo em que a empresa atua (Farmaceutico, Alimenticio...). Vive em tabela
+O ramo em que a empresa atua. Desde 09/10/2026 sao **seis**, os mesmos do site
+da LWN (lwnengenharia.com.br/clientes): Setor Pharma, Setor Agro, Setor
+Alimenticio, Instituicoes de Saude, Setor de Engenharia e Outros Setores. A
+troca dos dezesseis de antes por estes (e de cada cliente para o seu) esta em
+`db/setores-de-clientes-6.sql.txt`, ja rodado no banco da maquina e no Neon.
+Vive em tabela
 propria (`setor_cliente`) e nao como texto no cliente, porque o setor tem que
 ser o MESMO em todos os cadastros — com texto livre, "Farmaceutico" e
 "farmaceutica" viram dois setores e o filtro deixa de funcionar.

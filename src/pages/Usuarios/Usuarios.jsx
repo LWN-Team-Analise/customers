@@ -51,6 +51,12 @@ const Icone = {
       <path d="M4.5 7h15M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2a1.4 1.4 0 0 1 1.4 1.4V7M6.5 7l.9 12.1A1.5 1.5 0 0 0 8.9 20.5h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7" />
     </svg>
   ),
+  /* a setinha do card: gira quando ele abre */
+  seta: () => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  ),
   lupa: () => (
     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
       <circle cx="11" cy="11" r="6.5" />
@@ -73,6 +79,11 @@ const semAcento = (texto) =>
  * Cada card mostra os dois: o SETOR (a etiqueta colorida, de onde saem
  * as permissoes) e, abaixo dele, o CARGO da pessoa dentro do setor
  * ("Analista de Qualidade") quando ela tem um cadastrado.
+ *
+ * FECHADO o card e so isso: foto, nome, setor e cargo — a equipe inteira
+ * cabe numa olhada. O clique ABRE o proprio card, ali mesmo, com o
+ * e-mail, o telefone, a avaliacao e as obras em andamento. Cada card abre
+ * e fecha sozinho: abrir um nao fecha o outro, e a fila nao pula.
  */
 export default function Usuarios() {
   const { isDark } = useTheme()
@@ -103,6 +114,15 @@ export default function Usuarios() {
   const [editando, setEditando] = useState(null)
   const [apagando, setApagando] = useState(null)
   const [recado, setRecado] = useState('')
+  /* os cards abertos (ids) */
+  const [abertos, setAbertos] = useState(() => new Set())
+  const alternarAberto = (id) =>
+    setAbertos((atual) => {
+      const novo = new Set(atual)
+      if (novo.has(id)) novo.delete(id)
+      else novo.add(id)
+      return novo
+    })
 
   /* dois filtros que se somam: o nome digitado e os setores marcados.
      O nome pode chegar pronto da busca do topo — ver Clientes.jsx. */
@@ -291,40 +311,54 @@ export default function Usuarios() {
               const cargo = cargoPorChave(pessoa.cargo)
               const { media, obrasAvaliadas } = mediaDoUsuario(pessoa.id)
               const emAndamento = obrasDaPessoa(pessoa.id).length
+              const aberto = abertos.has(pessoa.id)
+              const detalhe = `pessoa-${pessoa.id}-detalhe`
 
               return (
                 <li
                   key={pessoa.id}
-                  className={`pessoa ${pessoa.souEu ? 'is-eu' : ''}`.trim()}
+                  className={`pessoa ${pessoa.souEu ? 'is-eu' : ''} ${aberto ? 'is-aberto' : ''}`.trim()}
                   style={{ '--cargo-cor': cargo?.cor ?? '#6b7280' }}
                 >
                   <header className="pessoa__topo">
-                    <Avatar nome={pessoa.nome} foto={pessoa.foto} tamanho={46} titulo={pessoa.nome} />
-                    <div className="pessoa__quem">
-                      <h2 className="pessoa__nome">
-                        {pessoa.nome}
-                        {pessoa.souEu && <span className="pessoa__eu">você</span>}
-                      </h2>
+                    {/* o card inteiro (menos editar/excluir) e o botao que abre */}
+                    <button
+                      type="button"
+                      className="pessoa__abrir"
+                      aria-expanded={aberto}
+                      aria-controls={detalhe}
+                      onClick={() => alternarAberto(pessoa.id)}
+                    >
+                      <Avatar nome={pessoa.nome} foto={pessoa.foto} tamanho={46} titulo={pessoa.nome} />
+                      <span className="pessoa__quem">
+                        <span className="pessoa__nome">
+                          {pessoa.nome}
+                          {pessoa.souEu && <span className="pessoa__eu">você</span>}
+                        </span>
                       {/* O SETOR na etiqueta colorida — o acesso total dele
                           não aparece em lugar nenhum da tela, de propósito —
                           e, abaixo, o CARGO da pessoa dentro do setor. Sem
                           cargo cadastrado, a linha simplesmente não existe:
                           é campo opcional. */}
-                      <span className="pessoa__cargo">
-                        {cargo?.nome ?? pessoa.cargoNome ?? 'Sem setor'}
-                      </span>
-                      {pessoa.cargoTitulo && (
-                        <span className="pessoa__titulo">{pessoa.cargoTitulo}</span>
-                      )}
+                        <span className="pessoa__cargo">
+                          {cargo?.nome ?? pessoa.cargoNome ?? 'Sem setor'}
+                        </span>
+                        {pessoa.cargoTitulo && (
+                          <span className="pessoa__titulo">{pessoa.cargoTitulo}</span>
+                        )}
                       {/* cadastrado so pelo e-mail: o nome ainda e o
                           provisorio e faltam nascimento e CPF. Some
                           sozinho quando a pessoa completa em Configuracoes. */}
-                      {podeUsuarios && pessoa.cadastroPendente && (
-                        <span className="pessoa__pendente" title="A pessoa ainda não preencheu nome, nascimento e CPF">
-                          Cadastro incompleto
-                        </span>
-                      )}
-                    </div>
+                        {podeUsuarios && pessoa.cadastroPendente && (
+                          <span className="pessoa__pendente" title="A pessoa ainda não preencheu nome, nascimento e CPF">
+                            Cadastro incompleto
+                          </span>
+                        )}
+                      </span>
+                      <span className="pessoa__seta" aria-hidden="true">
+                        <Icone.seta />
+                      </span>
+                    </button>
 
                     {/* aparecem ao passar o mouse pelo card.
                         Sem a permissao, cada um so mexe no proprio
@@ -351,39 +385,46 @@ export default function Usuarios() {
                     )}
                   </header>
 
-                  {(pessoa.email || pessoa.telefone) && (
-                    <dl className="pessoa__contato">
-                      {pessoa.email && (
-                        <div>
-                          <dt>E-mail</dt>
-                          <dd>{pessoa.email}</dd>
-                        </div>
-                      )}
-                      {pessoa.telefone && (
-                        <div>
-                          <dt>Telefone</dt>
-                          <dd>{formatarTelefone(pessoa.telefone)}</dd>
-                        </div>
-                      )}
-                    </dl>
-                  )}
-
-                  <footer className="pessoa__base">
-                    <span className="pessoa__nota">
-                      {media === null ? (
-                        <span className="pessoa__semnota">Sem avaliação</span>
+                  {/* o que o card guarda: abre e fecha deslizando */}
+                  <div className="pessoa__detalhe" id={detalhe} aria-hidden={!aberto}>
+                    <div className="pessoa__dentro">
+                      {pessoa.email || pessoa.telefone ? (
+                        <dl className="pessoa__contato">
+                          {pessoa.email && (
+                            <div>
+                              <dt>E-mail</dt>
+                              <dd>{pessoa.email}</dd>
+                            </div>
+                          )}
+                          {pessoa.telefone && (
+                            <div>
+                              <dt>Telefone</dt>
+                              <dd>{formatarTelefone(pessoa.telefone)}</dd>
+                            </div>
+                          )}
+                        </dl>
                       ) : (
-                        <>
-                          <Estrelas nota={media} tamanho={13} />
-                          <strong>{media.toFixed(1)}</strong>
-                          <em>
-                            {obrasAvaliadas} obra{obrasAvaliadas === 1 ? '' : 's'}
-                          </em>
-                        </>
+                        <p className="pessoa__semcontato">Sem e-mail ou telefone cadastrado.</p>
                       )}
-                    </span>
-                    <span className="pessoa__andamento">{emAndamento} em andamento</span>
-                  </footer>
+
+                      <footer className="pessoa__base">
+                        <span className="pessoa__nota">
+                          {media === null ? (
+                            <span className="pessoa__semnota">Sem avaliação</span>
+                          ) : (
+                            <>
+                              <Estrelas nota={media} tamanho={13} />
+                              <strong>{media.toFixed(1)}</strong>
+                              <em>
+                                {obrasAvaliadas} obra{obrasAvaliadas === 1 ? '' : 's'}
+                              </em>
+                            </>
+                          )}
+                        </span>
+                        <span className="pessoa__andamento">{emAndamento} em andamento</span>
+                      </footer>
+                    </div>
+                  </div>
                 </li>
               )
             })}
