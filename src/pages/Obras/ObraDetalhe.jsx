@@ -16,6 +16,8 @@ import {
   chaveDoCargo,
   CHECK_EXECUCAO,
   CHECK_PLANEJAMENTO,
+  CHECK_PRAZO_EXECUCAO,
+  checkDoPrazoDaExecucao,
   corDoSetorDoCard,
   diasAte,
   nomeDoCard,
@@ -200,8 +202,15 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
    * Na etapa de EXECUCAO nada se marca sem o prazo DA EXECUCAO (o
    * servidor recusa igual): em vez de deixar o check piscar, a tela ja
    * diz o motivo. Desmarcar continua livre.
+   *
+   * O "Prazo da execucao" (1a etapa) nao marca no clique: abre o periodo
+   * de execucao, e definir o prazo e que marca ele.
    */
   const clicarCheck = (etapa, card, check) => {
+    if (check.tipo === CHECK_PRAZO_EXECUCAO) {
+      setPeriodo(true)
+      return
+    }
     if (check.tipo === CHECK_PLANEJAMENTO) {
       setPlanejando({ card, check })
       return
@@ -249,6 +258,13 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
   const podeObra = !soLeitura && pode('editar_obras')
   /* prazo de etapa e de check: permissao propria */
   const podePrazos = !soLeitura && pode('definir_prazos')
+
+  /* Onde esta obra define o prazo da execucao. Com o check da 1a etapa
+     (obra criada depois da atualizacao 19), a etapa de execucao so
+     MOSTRA o prazo: o botao de definir sai dela e do pop-up dos
+     ensaios. Sem ele (obra antiga), tudo continua como era. */
+  const prazoNaPrimeira = checkDoPrazoDaExecucao(roteiro)
+  const podePeriodoNaExecucao = podePrazos && !prazoNaPrimeira
   /**
    * Apagar a obra — DUAS permissoes, porque sao dois gestos:
    *
@@ -732,8 +748,9 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
                       hoje={hoje}
                       fechada={estado === 'concluida'}
                       execucao={execucaoDaObra(obra)}
-                      podePeriodo={podePrazos}
+                      podePeriodo={podePeriodoNaExecucao}
                       aoDefinir={() => setPeriodo(true)}
+                      definidoNa={prazoNaPrimeira?.etapa.numero ?? null}
                     />
                   )}
 
@@ -1063,7 +1080,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
           podeEditarCheck(user, executando.check, executando.card, obra)
         }
         marcado={Boolean(executando && obra.checks[executando.check.id])}
-        podePeriodo={podePrazos}
+        podePeriodo={podePeriodoNaExecucao}
         aoDefinirPeriodo={() => setPeriodo(true)}
         aoConcluir={() => alternarCheck(obra.id, executando.check.id)}
         aoDesmarcar={() => alternarCheck(obra.id, executando.check.id)}
@@ -1099,9 +1116,11 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
         <div className="formrot">
           <p className="formrot__sistema" role="note">
             A etapa de execução só anda com o prazo dela definido.{' '}
-            {podePrazos
-              ? 'Defina o período de execução e marque o check de novo.'
-              : 'Peça a quem pode definir prazos para preenchê-lo.'}
+            {prazoNaPrimeira
+              ? `Ele é definido na ${prazoNaPrimeira.etapa.numero}ª etapa, no check "${prazoNaPrimeira.check.titulo}". Defina lá e marque este check de novo.`
+              : podePrazos
+                ? 'Defina o período de execução e marque o check de novo.'
+                : 'Peça a quem pode definir prazos para preenchê-lo.'}
           </p>
           <footer className="formobra__acoes">
             <button
@@ -1111,7 +1130,7 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
             >
               Fechar
             </button>
-            {podePrazos && (
+            {podePeriodoNaExecucao && (
               <Button
                 type="button"
                 onClick={() => {
@@ -1258,8 +1277,12 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
  * checks dela nao marcam), e o bloco diz isso em vermelho. Com ele, o
  * bloco so informa o periodo e quanto falta: a cor do card da obra vem
  * do prazo final, nunca deste.
+ *
+ * `definidoNa` e a etapa onde esta obra define o prazo (a 1a, desde a
+ * atualizacao 19). Com ela o bloco fica TRAVADO: mostra o prazo e diz de
+ * onde ele veio, sem botao. Sem ela (obra antiga), o botao continua aqui.
  */
-function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir }) {
+function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir, definidoNa = null }) {
   const inicio = obra.execucaoInicio ?? obra.dataInicio
   const prazo = obra.execucaoPrazo
   const restam = prazo ? diasAte(prazo, hoje) : null
@@ -1286,6 +1309,11 @@ function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir }
           <span className="execbloco__periodo">
             Execução: <strong>{dataBR(inicio)}</strong> → <strong>{dataBR(prazo)}</strong>
           </span>
+        ) : definidoNa ? (
+          <span className="execbloco__periodo">
+            <strong>Prazo da execução ainda não definido.</strong> Ele é definido na {definidoNa}ª
+            etapa; até lá, os checks desta etapa ficam parados.
+          </span>
         ) : (
           <span className="execbloco__periodo">
             <strong>Prazo da execução obrigatório.</strong> Os checks desta etapa ficam parados até
@@ -1293,6 +1321,9 @@ function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir }
           </span>
         )}
         {quando && <em className="execbloco__selo">{quando}</em>}
+        {definidoNa && prazo && (
+          <span className="execbloco__origem">definido na {definidoNa}ª etapa</span>
+        )}
         {podePeriodo && !fechada && (
           <button type="button" className="execbloco__botao" onClick={aoDefinir}>
             {prazo ? 'Alterar' : 'Definir período'}

@@ -92,9 +92,9 @@ ALTER TABLE public.etapa_check ADD COLUMN IF NOT EXISTS tipo text NOT NULL DEFAU
 
 ALTER TABLE public.etapa_check DROP CONSTRAINT IF EXISTS etapa_check_tipo_valido;
 ALTER TABLE public.etapa_check ADD CONSTRAINT etapa_check_tipo_valido
-    -- 'material_gases' veio na atualizacao 17; ja vai aqui porque o
-    -- db:atualizar roda esta de novo depois dela
-    CHECK (tipo IN ('comum', 'planejamento_ensaios', 'execucao_ensaios', 'material_gases'));
+    -- 'material_gases' veio na atualizacao 17 e 'prazo_execucao' na 19;
+    -- ja vao aqui porque o db:atualizar roda esta de novo depois delas
+    CHECK (tipo IN ('comum', 'planejamento_ensaios', 'execucao_ensaios', 'material_gases', 'prazo_execucao'));
 
 COMMENT ON COLUMN public.etapa_check.tipo IS
     'comum, planejamento_ensaios ou execucao_ensaios. Os dois ultimos sao do sistema: nao se excluem.';

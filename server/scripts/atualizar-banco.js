@@ -39,6 +39,7 @@ const ARQUIVOS = [
   'db/atualizacao-16.sql.txt',
   'db/atualizacao-17.sql.txt',
   'db/atualizacao-18.sql.txt',
+  'db/atualizacao-19.sql.txt',
 ]
 
 /**
@@ -114,6 +115,7 @@ const CONFERENCIA = [
   ],
   ['ensaio.classificacao', col('ensaio', 'classificacao')],
   ['etapa_check.obra_id', col('etapa_check', 'obra_id')],
+  ['check prazo_execucao', "SELECT EXISTS (SELECT 1 FROM etapa_check WHERE tipo = 'prazo_execucao') AS ok"],
   ['obra.checks_proprios', col('obra', 'checks_proprios')],
   [
     'check Material de gases',

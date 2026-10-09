@@ -1451,7 +1451,8 @@ async function podeMarcar(usuarioId, checkId, obraId) {
  *   simNao  o check pede resposta Sim ou Nao. null quando o banco
  *           ainda nao tem a atualizacao 13 — ai nao existe pergunta
  *           nem coluna de resposta, e a marcacao segue como sempre;
- *   tipo    'comum', 'planejamento_ensaios' ou 'execucao_ensaios';
+ *   tipo    'comum', 'planejamento_ensaios', 'execucao_ensaios',
+ *           'material_gases' ou 'prazo_execucao';
  *   papel   o papel da etapa dele. Na de 'execucao' nada se marca
  *           sem o prazo da execucao.
  */
@@ -1626,6 +1627,18 @@ router.put('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req, re
       }
     }
 
+    /* O "Prazo da execucao" (1a etapa, atualizacao 19) nao se marca no
+       clique: ele marca sozinho quando o prazo e definido (PUT
+       /obras/:id/execucao). Sem o prazo, recusa com o motivo. */
+    if (regra.tipo === 'prazo_execucao') {
+      const datas = await datasDaObra(req.params.id)
+      if (!datas?.execucaoPrazo) {
+        return res.status(409).json({
+          erro: 'Este check fecha quando o prazo da execução é definido. Abra o período de execução e escolha a data.',
+        })
+      }
+    }
+
     /* os dois checks dos ensaios so fecham com o que eles pedem */
     if (regra.tipo === 'planejamento_ensaios' || regra.tipo === 'execucao_ensaios') {
       const ensaios = await andamentoDosEnsaios(req.params.id)
@@ -1694,6 +1707,12 @@ router.delete('/obras/:id/checks/:checkId', exigeSessao, obraAberta, async (req,
   try {
     if (!(await podeMarcar(req.dono.sub, req.params.checkId, req.params.id))) {
       return res.status(403).json({ erro: 'Este check é de outro setor.' })
+    }
+    /* o do prazo acompanha o prazo: com a data definida, ele fica marcado */
+    if ((await regraDoCheck(req.params.checkId)).tipo === 'prazo_execucao') {
+      return res.status(409).json({
+        erro: 'Este check acompanha o prazo da execução. Para mudar, altere a data no período de execução.',
+      })
     }
     const desmarcado = await query('DELETE FROM obra_check WHERE obra_id = $1 AND check_id = $2', [
       req.params.id,
@@ -1805,9 +1824,10 @@ router.put('/obras/:id/prazos', exigeSessao, exige('definir_prazos'), obraAberta
    execucao nao anda sem o prazo dela.
 
    Quem define e quem tem `definir_prazos` — a mesma permissao dos
-   prazos de check. Periodo curto (hoje, amanha) nao muda o tipo da
-   obra, e o prazo dela nao mexe na cor do card: a cor vem do prazo
-   final.
+   prazos de check — ou quem marca o check "Prazo da execucao" da 1a
+   etapa (o Time Tecnico; atualizacao 19). Definir o prazo MARCA esse
+   check. Periodo curto (hoje, amanha) nao muda o tipo da obra, e o
+   prazo dela nao mexe na cor do card: a cor vem do prazo final.
    ------------------------------------------------------------ */
 
 /**
@@ -1834,7 +1854,7 @@ function conferirDatas({ inicio, prazoFinal, execucaoInicio, execucaoPrazo }) {
   return null
 }
 
-router.put('/obras/:id/execucao', exigeSessao, exige('definir_prazos'), obraAberta, async (req, res) => {
+router.put('/obras/:id/execucao', exigeSessao, obraAberta, async (req, res) => {
   const inicio = texto(req.body?.inicio) || null
   const prazo = texto(req.body?.prazo)
 
@@ -1844,6 +1864,17 @@ router.put('/obras/:id/execucao', exigeSessao, exige('definir_prazos'), obraAber
   }
 
   try {
+    /* o check do prazo que ESTA obra enxerga (null na obra criada antes
+       da atualizacao 19 — ali so quem tem definir_prazos define) */
+    const checkPrazo = await checkDoSistema(req.params.id, 'prazo_execucao').catch(() => null)
+    const meu = await meuCargo(req.dono.sub)
+    const pode =
+      cargoPode(meu, 'definir_prazos') ||
+      (checkPrazo !== null && (await podeMarcar(req.dono.sub, checkPrazo, req.params.id)))
+    if (!pode) {
+      return res.status(403).json({ erro: 'Seu setor não pode definir o prazo da execução.' })
+    }
+
     const antes = await datasDaObra(req.params.id)
     if (!antes) return res.status(404).json({ erro: 'Obra não encontrada.' })
     const erroDeDatas = conferirDatas({ ...antes, execucaoInicio: inicio, execucaoPrazo: prazo })
@@ -1866,6 +1897,25 @@ router.put('/obras/:id/execucao', exigeSessao, exige('definir_prazos'), obraAber
         prazo_execucao: dataLida(prazo),
       },
     })
+
+    /* o prazo definido fecha o check da 1a etapa */
+    if (checkPrazo) {
+      const marcou = await query(
+        `INSERT INTO obra_check (obra_id, check_id, feito_por)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (obra_id, check_id) DO NOTHING`,
+        [req.params.id, checkPrazo, req.dono.sub],
+      )
+      if (marcou.rowCount > 0) {
+        await registrarAtividade(req, {
+          acao: 'check.marcado',
+          categoria: 'check',
+          entidade: ['obra', req.params.id],
+          descricao: 'Check concluído',
+          detalhes: { ...(await descreverObra(req.params.id)), ...(await descreverCheck(checkPrazo)) },
+        })
+      }
+    }
     return res.json({ ok: true })
   } catch (e) {
     if (e.code === '42703') {
