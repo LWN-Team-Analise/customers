@@ -7,7 +7,6 @@ import { useDados } from '@/context/DadosContext'
 import { useAuth } from '@/context/AuthContext'
 import {
   cargosDoCheck,
-  nomeProprioDaEtapa,
   PRIORIDADES,
   PRIORIDADE_PESO,
   situacaoDaObra,
@@ -326,18 +325,16 @@ export default function Obras() {
   const colunas = useMemo(() => {
     const etapas =
       roteiro.length > 0 ? roteiro : [{ id: 'sem-etapa', numero: 1, nome: '' }]
-    const base = etapas.map((etapa) => {
-      const rotulo = rotuloEtapa(etapa.numero)
-      return {
-        id: etapa.id,
-        numero: etapa.numero,
-        rotulo,
-        /* o nome so entra quando ACRESCENTA: uma etapa chamada "3° Etapa"
-           no roteiro daria "3ª Etapa  3° Etapa" */
-        nome: nomeProprioDaEtapa(etapa.nome, rotulo),
-        obras: [],
-      }
-    })
+    /* o mesmo cabecalho da etapa dentro da obra: o NOME no titulo
+       ("1° Etapa"; sem nome, o rotulo automatico) e a descricao embaixo
+       ("Comercial") */
+    const base = etapas.map((etapa) => ({
+      id: etapa.id,
+      numero: etapa.numero,
+      rotulo: etapa.nome || rotuloEtapa(etapa.numero),
+      descricao: etapa.descricao ?? '',
+      obras: [],
+    }))
     visiveis
       .filter((o) => o.tipo !== 'emergencia')
       .forEach((obra) => {
@@ -608,7 +605,7 @@ export default function Obras() {
               <Coluna
                 key={coluna.id}
                 titulo={coluna.rotulo}
-                subtitulo={coluna.nome}
+                subtitulo={coluna.descricao}
                 tom="etapa"
                 total={coluna.obras.length}
               >
@@ -766,7 +763,7 @@ export default function Obras() {
 }
 
 /**
- * Coluna do quadro: titulo (e o nome da etapa, quando ha), contador e a
+ * Coluna do quadro: titulo (e a descricao da etapa, quando ha), contador e a
  * pilha de cards. Vazia, fica em branco — a etapa sem obra aparece, so
  * que sem nada dentro.
  *
