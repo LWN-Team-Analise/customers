@@ -182,15 +182,76 @@
   line-height: 1.45;
 }
 
-/* duas datas lado a lado (periodo de execucao) */
-.formrot__datas {
+/* embaixo do calendario do periodo de execucao: quantos dias e os
+   atalhos (tirar fins de semana, limpar) na primeira linha, quais dias
+   na de baixo. As duas linhas tem altura reservada: o resumo nao pode
+   crescer enquanto a pessoa arrasta no calendario. */
+.formrot__diasresumo {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 28px minmax(36px, auto);
+  align-items: center;
+  column-gap: 10px;
 }
 
+.formrot__diasresumo strong {
+  font-size: 0.86rem;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.formrot__diasresumo strong[data-vazio] {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.formrot__diastexto {
+  grid-column: 1 / -1;
+  align-self: start;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.formrot__diasatalhos {
+  display: flex;
+  gap: 6px;
+}
+
+/* no telefone os atalhos nao cabem ao lado do total: descem para uma
+   linha propria, tambem com altura reservada */
 @media (max-width: 480px) {
-  .formrot__datas {
-    grid-template-columns: 1fr;
+  .formrot__diasresumo {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 24px minmax(36px, auto) 30px;
   }
+
+  .formrot__diasatalhos {
+    grid-row: 3;
+  }
+
+  .formrot__diastexto {
+    grid-row: 2;
+  }
+}
+
+.formrot__diasatalho {
+  padding: 5px 11px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-base);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.formrot__diasatalho:hover {
+  background: var(--control-bg-hover);
 }

@@ -6,6 +6,8 @@ const { Pool, types } = pg
 
 // DATE (oid 1082) volta como texto 'AAAA-MM-DD': sem Date, sem deslocamento de fuso
 types.setTypeParser(1082, (valor) => valor)
+// DATE[] (oid 1182) do mesmo jeito: '{2026-10-06,2026-10-08}' -> ['2026-10-06', '2026-10-08']
+types.setTypeParser(1182, (valor) => String(valor).replace(/[{}]/g, '').split(',').filter(Boolean))
 // BIGINT (oid 20) volta como numero: nossos ids cabem com folga em Number
 types.setTypeParser(20, (valor) => Number(valor))
 

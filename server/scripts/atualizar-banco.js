@@ -40,6 +40,7 @@ const ARQUIVOS = [
   'db/atualizacao-17.sql.txt',
   'db/atualizacao-18.sql.txt',
   'db/atualizacao-19.sql.txt',
+  'db/atualizacao-20.sql.txt',
 ]
 
 /**
@@ -121,6 +122,7 @@ const CONFERENCIA = [
     'check Material de gases',
     "SELECT EXISTS (SELECT 1 FROM etapa_check WHERE tipo = 'material_gases' AND vigente_ate IS NULL) AS ok",
   ],
+  ['obra.execucao_dias', col('obra', 'execucao_dias')],
 ]
 
 function col(tabela, coluna) {

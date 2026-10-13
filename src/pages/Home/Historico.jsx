@@ -52,6 +52,8 @@ const ROTULOS = {
   prazo: 'Prazo',
   prazo_final: 'Prazo final',
   inicio: 'Início',
+  prazo_execucao: 'Prazo da execução',
+  dias: 'Dias',
   dia: 'Dia',
   ensaio: 'Ensaio',
   ensaios: 'Ensaios',

@@ -499,6 +499,60 @@ export function diasAte(data, hoje) {
   return Math.round(emDias(data) - emDias(hoje))
 }
 
+/** 'AAAA-MM-DD' + n dias (n pode ser negativo). Sem fuso no caminho. */
+export function somarDias(iso, n) {
+  const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/* periodo corrido antigo maior que isto vira so o comeco: protege a tela
+   de um inicio de execucao digitado com o ano errado */
+const MAX_DIAS_CORRIDOS = 400
+
+/**
+ * Os DIAS da execucao, do primeiro ao ultimo ('AAAA-MM-DD').
+ *
+ * Desde a atualizacao 20 eles sao escolhidos um a um no calendario
+ * (obra.execucaoDias): uma execucao de 5 dias pode ser so nos dias
+ * uteis, pular uma semana, cair num feriado. A obra que definiu o
+ * periodo antes disso tem so o inicio e o prazo, e os dias dela sao
+ * todos os do meio — o periodo corrido de sempre.
+ *
+ * Lista vazia = sem prazo da execucao.
+ */
+export function diasDaExecucao(obra) {
+  if (obra?.execucaoDias?.length) return obra.execucaoDias
+  const prazo = obra?.execucaoPrazo
+  if (!prazo) return []
+  const inicio = obra.execucaoInicio ?? obra.dataInicio ?? prazo
+  if (inicio > prazo) return [prazo]
+  const total = Math.min(diasAte(prazo, inicio), MAX_DIAS_CORRIDOS)
+  return Array.from({ length: total + 1 }, (_, i) => somarDias(inicio, i))
+}
+
+/**
+ * Os dias agrupados em trechos seguidos:
+ *   ['06/10', '07/10', '08/10', '13/10'] -> [['06/10', '08/10'], ['13/10', '13/10']]
+ * (em 'AAAA-MM-DD', ja em ordem).
+ */
+export function trechosDosDias(dias) {
+  const trechos = []
+  for (const dia of dias) {
+    const ultimo = trechos.at(-1)
+    if (ultimo && somarDias(ultimo[1], 1) === dia) ultimo[1] = dia
+    else trechos.push([dia, dia])
+  }
+  return trechos
+}
+
+/** '06/10 a 08/10, 13/10' — os trechos por extenso, para dica e resumo. */
+export function resumoDosDias(dias) {
+  const curta = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+  return trechosDosDias(dias)
+    .map(([a, b]) => (a === b ? curta(a) : `${curta(a)} a ${curta(b)}`))
+    .join(', ')
+}
+
 /**
  * O relogio do prazo final da obra: 'ok' | 'atraso' (amarelo) |
  * 'laranja' | 'vermelho' | 'vencido'.

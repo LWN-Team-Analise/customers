@@ -20,8 +20,10 @@ import {
   checkDoPrazoDaExecucao,
   corDoSetorDoCard,
   diasAte,
+  diasDaExecucao,
   nomeDoCard,
   podeEditarCheck,
+  resumoDosDias,
   rotuloPrioridadeObra,
   tituloDaObra,
   tomPrioridadeObra,
@@ -1283,7 +1285,10 @@ export default function ObraDetalhe({ somenteLeitura = false, voltarPara = '/app
  * onde ele veio, sem botao. Sem ela (obra antiga), o botao continua aqui.
  */
 function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir, definidoNa = null }) {
-  const inicio = obra.execucaoInicio ?? obra.dataInicio
+  /* os dias marcados no periodo; o primeiro e a entrada em campo e o
+     ultimo, o prazo da execucao */
+  const dias = diasDaExecucao(obra)
+  const inicio = dias[0] ?? obra.execucaoInicio ?? obra.dataInicio
   const prazo = obra.execucaoPrazo
   const restam = prazo ? diasAte(prazo, hoje) : null
   const tom = fechada || prazo ? 'ok' : 'vencido'
@@ -1306,8 +1311,9 @@ function BlocoExecucao({ obra, hoje, fechada, execucao, podePeriodo, aoDefinir, 
       <div className="execbloco__linha">
         <Icone.prazo tamanho={14} />
         {prazo ? (
-          <span className="execbloco__periodo">
-            Execução: <strong>{dataBR(inicio)}</strong> → <strong>{dataBR(prazo)}</strong>
+          <span className="execbloco__periodo" title={resumoDosDias(dias)}>
+            Execução: <strong>{dataBR(inicio)}</strong> → <strong>{dataBR(prazo)}</strong> ·{' '}
+            {dias.length} {dias.length > 1 ? 'dias' : 'dia'}
           </span>
         ) : definidoNa ? (
           <span className="execbloco__periodo">

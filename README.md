@@ -144,7 +144,7 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-11.sql.txt`, `db/atualizacao-12.sql.txt`,
 > `db/atualizacao-13.sql.txt`, `db/atualizacao-14.sql.txt`,
 > `db/atualizacao-15.sql.txt`, `db/atualizacao-16.sql.txt` e, por ultimo,
-> `db/atualizacao-17.sql.txt`, `db/atualizacao-18.sql.txt` e `db/atualizacao-19.sql.txt`.
+> `db/atualizacao-17.sql.txt`, `db/atualizacao-18.sql.txt`, `db/atualizacao-19.sql.txt` e `db/atualizacao-20.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -205,6 +205,7 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-17.sql.txt` | ensaio HVAC/GASES; check "Material de gases" do sistema          |
 | `db/atualizacao-18.sql.txt` | checks proprios de cada obra (mexer dentro da obra vale so nela) |
 | `db/atualizacao-19.sql.txt` | check "Prazo da execucao" no card do Time Tecnico da 1a etapa    |
+| `db/atualizacao-20.sql.txt` | dias da execucao escolhidos um a um (`obra.execucao_dias`)        |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
@@ -1516,7 +1517,7 @@ A cor sai de `situacaoDaObra()` (`src/domain/obras.js`), e vale a mais urgente:
 **A cor vem do PRAZO FINAL DA OBRA** (`data_inicio` → `data_conclusao`), em
 qualquer etapa, enquanto houver check aberto. O vermelho chega **1 dia antes**.
 
-O **prazo da execucao** (`execucao_inicio` → `execucao_prazo`, so a 3a etapa)
+O **prazo da execucao** (o ultimo dos dias da execucao, so a 3a etapa)
 **nao mexe na cor**: com a execucao hoje ou amanha e o prazo final longe (ou
 sem prazo final), o card continua verde. Ele so serve para a 3a etapa andar e
 para o registro dos ensaios dia a dia.
@@ -1675,6 +1676,20 @@ sem o prazo da execucao. O bloco da 3a etapa mostra o periodo **travado**,
 com "definido na 1a etapa" — sem botao; sem o prazo, ele diz que o prazo vem
 da 1a etapa. O "Periodo de execucao" grava so o periodo da execucao (nunca o
 prazo final da obra, e nao deixa passar dele).
+
+**O periodo de execucao e escolhido DIA A DIA** (atualizacao 20). O "Periodo
+de execucao" e um calendario so: clique em cada dia, ou clique e arraste para
+marcar um trecho (comecando num dia marcado, o arraste tira); Shift + clique
+marca do ultimo dia clicado ate ali. Uma execucao de 5 dias nao precisa ser 5
+dias seguidos — so dias uteis, pulando uma semana, num feriado. O atalho
+"Tirar fins de semana" desmarca sabados e domingos. Os dias ficam em
+`obra.execucao_dias`; o primeiro e o ultimo continuam em `execucao_inicio` e
+`execucao_prazo` (o prazo da execucao e o ultimo dia marcado). Os dias fora
+da obra (antes do inicio, depois do prazo final) ficam travados. Obra que
+definiu o periodo antes disso (`execucao_dias` vazio) vale como periodo
+corrido e abre com todos aqueles dias marcados. Na Execucao dos ensaios, a
+fila de dias e a dos dias marcados; um dia fora deles se escolhe pelo campo
+de data e aparece tracejado.
 
 O check vale para as obras criadas a partir da atualizacao 19. As que ja
 existiam nao o enxergam (ganhar um check na 1a etapa faria voltar de etapa

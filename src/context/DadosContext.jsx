@@ -499,7 +499,7 @@ export function DadosProvider({ children }) {
      moram no servidor; aqui so grava e recarrega.
      ============================================================ */
 
-  /** { inicio?, prazo } — o periodo da execucao; o prazo e obrigatorio. */
+  /** { dias } — os dias da execucao ('AAAA-MM-DD'); o ultimo e o prazo dela. */
   const definirExecucao = useCallback(
     (obraId, campos) => gravar(() => dados.definirExecucao(obraId, campos)),
     [gravar],

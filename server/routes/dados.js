@@ -104,6 +104,23 @@ function soData(valor) {
   return `${valor.getFullYear()}-${mes}-${dia}`
 }
 
+/**
+ * Os dias da execucao (obra.execucao_dias, atualizacao 20), ou null
+ * quando o periodo e corrido: obra de antes da atualizacao, ou periodo
+ * gravado por quem ainda mandava so o inicio e o prazo.
+ *
+ * A lista so vale se o primeiro e o ultimo dia batem com
+ * execucao_inicio e execucao_prazo. Uma gravacao que trocou so os dois
+ * (o codigo antigo ainda no ar, depois do deploy) deixou a lista velha
+ * para tras — e o que vale e o que foi gravado por ultimo.
+ */
+function diasDaExecucao(o) {
+  const dias = Array.isArray(o.execucao_dias) ? o.execucao_dias.map(soData).filter(Boolean) : []
+  if (dias.length === 0) return null
+  if (dias[0] !== soData(o.execucao_inicio) || dias.at(-1) !== soData(o.execucao_prazo)) return null
+  return dias
+}
+
 const paraCliente = (l) => ({
   id: String(l.id),
   nome: l.nome,
@@ -394,6 +411,9 @@ export async function lerTudo(usuarioId, { imagens = true } = {}) {
       /* o prazo da ETAPA DE EXECUCAO (3a) — nao o da obra inteira, que e
          o dataConclusao. null = ainda nao definido */
       execucaoPrazo: soData(o.execucao_prazo ?? null),
+      /* os dias da execucao, escolhidos um a um (atualizacao 20). null =
+         periodo corrido, do inicio ao prazo da execucao */
+      execucaoDias: diasDaExecucao(o),
       /* a obra ja tem os checks PROPRIOS (atualizacao 18): le so eles,
          e nao mais o roteiro */
       checksProprios: o.checks_proprios === true,
@@ -1816,10 +1836,15 @@ router.put('/obras/:id/prazos', exigeSessao, exige('definir_prazos'), obraAberta
 })
 
 /* ------------------------------------------------------------
-   Periodo de EXECUCAO: entrada em campo -> prazo da execucao
+   Periodo de EXECUCAO: os DIAS da execucao
 
-   E o periodo SO da 3a etapa (execucao_inicio -> execucao_prazo). O
-   prazo final da obra (data_conclusao) NAO muda aqui: a obra continua
+   E o periodo SO da 3a etapa. Os dias sao escolhidos um a um no
+   calendario (atualizacao 20): uma execucao de 5 dias pode ser so nos
+   dias uteis, pular uma semana, cair num feriado. Eles vao para
+   execucao_dias, e o primeiro e o ultimo continuam em execucao_inicio
+   e execucao_prazo — e dali que o resto le o prazo da execucao.
+
+   O prazo final da obra (data_conclusao) NAO muda aqui: a obra continua
    depois da execucao, com a documentacao e a entrega. A etapa de
    execucao nao anda sem o prazo dela.
 
@@ -1854,13 +1879,46 @@ function conferirDatas({ inicio, prazoFinal, execucaoInicio, execucaoPrazo }) {
   return null
 }
 
-router.put('/obras/:id/execucao', exigeSessao, obraAberta, async (req, res) => {
-  const inicio = texto(req.body?.inicio) || null
-  const prazo = texto(req.body?.prazo)
+/* um ano de dias, no maximo: mais que isso e engano */
+const MAX_DIAS_EXECUCAO = 366
 
-  if (!prazo) return res.status(400).json({ erro: 'Informe o prazo da execução.' })
-  for (const data of [inicio, prazo]) {
-    if (data && !dataValida(data)) return res.status(400).json({ erro: 'Data inválida.' })
+/** ['2026-10-06', '2026-10-07', '2026-10-08', '2026-10-13'] -> '06/10 a 08/10, 13/10' */
+function resumoDosDias(dias) {
+  const curta = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+  const seguinte = (iso) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)
+  const trechos = []
+  for (const dia of dias) {
+    const ultimo = trechos.at(-1)
+    if (ultimo && seguinte(ultimo[1]) === dia) ultimo[1] = dia
+    else trechos.push([dia, dia])
+  }
+  return trechos.map(([a, b]) => (a === b ? curta(a) : `${curta(a)} a ${curta(b)}`)).join(', ')
+}
+
+router.put('/obras/:id/execucao', exigeSessao, obraAberta, async (req, res) => {
+  /* `dias`: os dias do calendario. Sem eles, o pedido de antes da
+     atualizacao 20 (uma aba que ainda nao recarregou): so o inicio e o
+     prazo, periodo corrido — e a lista de dias fica vazia */
+  let dias = null
+  let inicio
+  let prazo
+  if (Array.isArray(req.body?.dias)) {
+    const lista = req.body.dias.map(texto)
+    if (lista.length === 0) return res.status(400).json({ erro: 'Escolha ao menos um dia de execução.' })
+    if (lista.some((dia) => !dataValida(dia))) return res.status(400).json({ erro: 'Data inválida.' })
+    dias = [...new Set(lista)].sort()
+    if (dias.length > MAX_DIAS_EXECUCAO) {
+      return res.status(400).json({ erro: `São no máximo ${MAX_DIAS_EXECUCAO} dias de execução.` })
+    }
+    inicio = dias[0]
+    prazo = dias.at(-1)
+  } else {
+    inicio = texto(req.body?.inicio) || null
+    prazo = texto(req.body?.prazo)
+    if (!prazo) return res.status(400).json({ erro: 'Informe o prazo da execução.' })
+    for (const data of [inicio, prazo]) {
+      if (data && !dataValida(data)) return res.status(400).json({ erro: 'Data inválida.' })
+    }
   }
 
   try {
@@ -1877,14 +1935,25 @@ router.put('/obras/:id/execucao', exigeSessao, obraAberta, async (req, res) => {
 
     const antes = await datasDaObra(req.params.id)
     if (!antes) return res.status(404).json({ erro: 'Obra não encontrada.' })
+    /* os dias cabem dentro da obra: do inicio dela ao prazo final */
+    if (dias && antes.inicio && inicio < antes.inicio) {
+      return res.status(400).json({
+        erro: `Os dias da execução não podem ser antes do início da obra (${dataLida(antes.inicio)}).`,
+      })
+    }
+    if (dias && antes.prazoFinal && prazo > antes.prazoFinal) {
+      return res.status(400).json({
+        erro: `Os dias da execução não podem passar do prazo final da obra (${dataLida(antes.prazoFinal)}).`,
+      })
+    }
     const erroDeDatas = conferirDatas({ ...antes, execucaoInicio: inicio, execucaoPrazo: prazo })
     if (erroDeDatas) return res.status(400).json({ erro: erroDeDatas })
 
     await query(
       `UPDATE obra
-          SET execucao_inicio = $1, execucao_prazo = $2, atualizado_por = $3
-        WHERE id = $4`,
-      [inicio, prazo, req.dono.sub, req.params.id],
+          SET execucao_inicio = $1, execucao_prazo = $2, execucao_dias = $3::date[], atualizado_por = $4
+        WHERE id = $5`,
+      [inicio, prazo, dias, req.dono.sub, req.params.id],
     )
     await registrarAtividade(req, {
       acao: 'prazo.execucao',
@@ -1895,6 +1964,7 @@ router.put('/obras/:id/execucao', exigeSessao, obraAberta, async (req, res) => {
         ...(await descreverObra(req.params.id)),
         inicio: dataLida(inicio),
         prazo_execucao: dataLida(prazo),
+        ...(dias ? { dias: `${dias.length} — ${resumoDosDias(dias)}` } : {}),
       },
     })
 
@@ -1919,7 +1989,7 @@ router.put('/obras/:id/execucao', exigeSessao, obraAberta, async (req, res) => {
     return res.json({ ok: true })
   } catch (e) {
     if (e.code === '42703') {
-      return res.status(501).json({ erro: 'Período de execução ainda não existe no banco (atualizações 14 e 15).' })
+      return res.status(501).json({ erro: 'Os dias da execução ainda não existem no banco (atualizações 14, 15 e 20).' })
     }
     return tratar(e, res, 'dados/execucao-periodo')
   }

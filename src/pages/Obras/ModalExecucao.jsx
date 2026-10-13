@@ -2,21 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import Modal from '@/components/Modal/Modal'
 import Button from '@/components/Button/Button'
 import { useDados } from '@/context/DadosContext'
-import { diasAte } from '@/domain/obras'
+import { diasAte, diasDaExecucao, resumoDosDias, somarDias } from '@/domain/obras'
 import { dataBR, hojeISO } from '@/utils/formato'
 import './ModalEnsaios.css'
 
-/* acima disto a fila de dias vira so os dias com registro + o campo de data */
+/* acima disto a fila de dias vira so os dias com registro (o campo de data
+   continua escolhendo qualquer um) */
 const MAX_DIAS_NA_FILA = 45
 
 const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
-
-/** 'AAAA-MM-DD' + n dias. */
-function somarDias(iso, n) {
-  const [a, m, d] = iso.split('-').map(Number)
-  const data = new Date(Date.UTC(a, m - 1, d + n))
-  return data.toISOString().slice(0, 10)
-}
 
 const diaDaSemana = (iso) => {
   const [a, m, d] = iso.split('-').map(Number)
@@ -35,9 +29,10 @@ function textoDoPrazo(restam) {
  * EXECUCAO DOS ENSAIOS — o check do Time Tecnico na 3a etapa.
  *
  * Mostra so os ensaios escolhidos no Planejamento de ensaios. O
- * responsavel escolhe um DIA dentro do periodo de execucao (da entrada
- * em campo ao prazo da execucao — e, se ele ja passou, ate hoje) e diz
- * quanto cada ensaio estava feito naquele dia:
+ * responsavel escolhe um DIA da execucao (um dos marcados no periodo;
+ * se o prazo ja passou, tambem os de la ate hoje; ou qualquer outro
+ * desde o primeiro dia, pelo campo de data) e diz quanto cada ensaio
+ * estava feito naquele dia:
  *
  *   06/10  Vazao 50%   Smoke Test 50%
  *   07/10  Vazao 100%  Smoke Test 70%
@@ -67,26 +62,39 @@ export default function ModalExecucao({
 
   const execucao = obra ? execucaoDaObra(obra) : null
   const itens = execucao?.itens ?? []
-  const inicio = obra?.execucaoInicio ?? obra?.dataInicio ?? null
-  /* o prazo DA EXECUCAO (so a 3a etapa), e nao o final da obra */
+  /* os dias marcados no periodo de execucao (ou, na obra antiga, todos
+     os do inicio ao prazo) */
+  const planejados = useMemo(() => (obra ? diasDaExecucao(obra) : []), [obra])
+  const inicio = planejados[0] ?? obra?.execucaoInicio ?? obra?.dataInicio ?? null
+  /* o prazo DA EXECUCAO (so a 3a etapa) — o ultimo dia marcado —, e
+     nao o final da obra */
   const prazo = obra?.execucaoPrazo ?? null
   const semPrazo = !prazo
 
-  /* os dias que dao para registrar: do inicio ate hoje (inclusive os
-     depois do prazo, quando ele ja passou — a obra atrasada continua
-     sendo executada). Os dias futuros do periodo aparecem travados. */
+  const registrados = useMemo(() => execucao?.dias ?? [], [execucao])
+
+  /* os dias que aparecem para escolher: os marcados no periodo, os que
+     ja tem registro (mesmo fora deles) e, quando o prazo ja passou, os
+     de la ate hoje — a obra atrasada continua sendo executada. Os dias
+     futuros aparecem travados. Qualquer outro dia sai do campo de data. */
   const fila = useMemo(() => {
     if (!inicio || !prazo) return []
-    const ultimo = prazo > hoje ? prazo : hoje
-    const total = diasAte(ultimo, inicio)
-    if (total < 0) return []
-    if (total + 1 > MAX_DIAS_NA_FILA) return null
-    return Array.from({ length: total + 1 }, (_, i) => somarDias(inicio, i))
-  }, [inicio, prazo, hoje])
-
-  const registrados = execucao?.dias ?? []
+    const dias = new Set([...planejados, ...registrados])
+    if (hoje > prazo && diasAte(hoje, prazo) < MAX_DIAS_NA_FILA) {
+      for (let d = somarDias(prazo, 1); d <= hoje; d = somarDias(d, 1)) dias.add(d)
+    }
+    if (dias.size > MAX_DIAS_NA_FILA) return null
+    return [...dias].sort()
+  }, [inicio, prazo, hoje, planejados, registrados])
 
   const [dia, setDia] = useState('')
+
+  /* o dia escolhido pelo campo de data, fora da fila, entra nela */
+  const chips = useMemo(() => {
+    const base = fila ?? registrados
+    return dia && !base.includes(dia) ? [...base, dia].sort() : base
+  }, [fila, registrados, dia])
+  const doPeriodo = useMemo(() => new Set(planejados), [planejados])
   const [valores, setValores] = useState({})
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -97,10 +105,14 @@ export default function ModalExecucao({
       itens.map((i) => [i.id, i.dias.find((x) => x.dia === d)?.percentual ?? null]),
     )
 
+  /* abre em hoje, quando hoje esta na fila; senao no ultimo dia dela
+     que ja chegou; senao no primeiro (que ainda nao chegou) */
   useEffect(() => {
     if (!aberto) return
-    const dentro = inicio && hoje >= inicio
-    const inicial = dentro ? hoje : (registrados.at(-1) ?? inicio ?? hoje)
+    const lista = fila ?? registrados
+    const inicial = lista.includes(hoje)
+      ? hoje
+      : (lista.filter((d) => d <= hoje).at(-1) ?? lista[0] ?? inicio ?? hoje)
     setDia(inicial)
     setErro('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,8 +177,9 @@ export default function ModalExecucao({
           {semPrazo ? (
             <strong>Sem prazo da execução</strong>
           ) : (
-            <strong>
-              {dataBR(inicio)} → {dataBR(prazo)}
+            <strong title={resumoDosDias(planejados)}>
+              {dataBR(inicio)} → {dataBR(prazo)} · {planejados.length}{' '}
+              {planejados.length > 1 ? 'dias' : 'dia'}
             </strong>
           )}
           {!semPrazo && <em className="execucao__selo">{textoDoPrazo(restam)}</em>}
@@ -222,23 +235,27 @@ export default function ModalExecucao({
               <section className="execucao__dia">
                 <header className="execucao__diatopo">
                   <span className="execucao__rotulo">Dia</span>
-                  {fila === null && (
+                  {/* um dia que nao esta na fila (a execucao caiu num
+                      dia que nao estava marcado) sai daqui */}
+                  {inicio && hoje >= inicio && (
                     <input
                       type="date"
                       className="execucao__data"
                       value={dia}
-                      min={inicio ?? undefined}
+                      min={inicio}
                       max={hoje}
-                      onChange={(e) => setDia(e.target.value)}
-                      aria-label="Dia da execução"
+                      onChange={(e) => e.target.value && setDia(e.target.value)}
+                      aria-label="Escolher outro dia da execução"
+                      title="Registrar um dia que não está na lista"
                     />
                   )}
                 </header>
 
-                <div className="execucao__dias" role="listbox" aria-label="Dias do período">
-                  {(fila ?? registrados).map((d) => {
+                <div className="execucao__dias" role="listbox" aria-label="Dias da execução">
+                  {chips.map((d) => {
                     const futuro = d > hoje
                     const depoisDoPrazo = d > prazo
+                    const fora = !depoisDoPrazo && !doPeriodo.has(d)
                     return (
                       <button
                         key={d}
@@ -248,6 +265,7 @@ export default function ModalExecucao({
                         className={`execucao__chip ${d === dia ? 'is-atual' : ''}`.trim()}
                         data-registrado={registrados.includes(d) ? 'sim' : undefined}
                         data-atrasado={depoisDoPrazo ? 'sim' : undefined}
+                        data-fora={fora ? 'sim' : undefined}
                         disabled={futuro}
                         onClick={() => setDia(d)}
                         title={
@@ -255,9 +273,11 @@ export default function ModalExecucao({
                             ? 'Dia que ainda não chegou'
                             : depoisDoPrazo
                               ? 'Depois do prazo da execução'
-                              : registrados.includes(d)
-                                ? 'Tem registro'
-                                : undefined
+                              : fora
+                                ? 'Fora dos dias marcados para a execução'
+                                : registrados.includes(d)
+                                  ? 'Tem registro'
+                                  : undefined
                         }
                       >
                         <small>{diaDaSemana(d)}</small>

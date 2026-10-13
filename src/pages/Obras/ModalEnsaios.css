@@ -657,6 +657,11 @@
   border-color: var(--quadro-vermelho-borda);
 }
 
+/* dia que nao estava marcado no periodo de execucao */
+.execucao__chip[data-fora] {
+  border-style: dashed;
+}
+
 .execucao__chip.is-atual {
   border-color: var(--accent);
   background: var(--control-on-bg);
