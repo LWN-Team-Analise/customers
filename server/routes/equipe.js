@@ -4,6 +4,7 @@ import { query } from '../db.js'
 import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
 import { normalizar } from '../../src/domain/permissoes.js'
 import { gerarSenhaForte } from '../utils/senha.js'
+import { IMAGEM_INVALIDA, imagemValida } from '../utils/imagem.js'
 import { registrarAtividade } from '../atividade.js'
 
 const router = Router()
@@ -20,6 +21,21 @@ const router = Router()
    movia) alguem para a diretoria e ficava com a senha dele.
    ------------------------------------------------------------ */
 const SO_ACESSO_TOTAL = 'Só quem tem acesso total pode dar acesso total a alguém.'
+
+/* A mesma trava no sentido contrario: a CONTA de quem tem acesso total
+   so e mexida por quem tambem tem. Sem ela, quem tinha "editar usuario"
+   trocava o e-mail do diretor pelo proprio, pedia o "esqueci minha
+   senha" e entrava como diretor — ou desativava a diretoria inteira. */
+const SO_ACESSO_TOTAL_MEXE = 'Só quem tem acesso total pode alterar o cadastro de quem tem acesso total.'
+
+/** A pessoa `id` esta num setor com acesso total? */
+async function temAcessoTotal(id) {
+  const { rows } = await query(
+    `SELECT c.acesso_total FROM usuario u LEFT JOIN cargo c ON c.id = u.cargo_id WHERE u.id = $1`,
+    [id],
+  )
+  return rows[0]?.acesso_total === true
+}
 
 /* o nome de cada coluna do usuario como o historico escreve "o que mudou" */
 const ROTULO_CAMPO_USUARIO = {
@@ -608,6 +624,9 @@ router.post('/usuarios', exigeSessao, async (req, res) => {
     if (cpf && cpf.length !== 11) {
       return res.status(400).json({ erro: 'O CPF precisa ter 11 dígitos.' })
     }
+    if (!imagemValida(req.body?.foto) || !imagemValida(req.body?.fotoOriginal)) {
+      return res.status(400).json({ erro: IMAGEM_INVALIDA })
+    }
 
     const cargo = await query('SELECT id, nome, acesso_total FROM cargo WHERE chave = $1', [chaveCargo])
     if (!cargo.rows[0]) return res.status(400).json({ erro: 'Escolha o setor.' })
@@ -687,6 +706,9 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
     if (!souEu && !cargoPode(meu, 'editar_usuario')) {
       return res.status(403).json({ erro: 'Você só pode editar o seu próprio cadastro.' })
     }
+    if (!souEu && !meu.acessoTotal && (await temAcessoTotal(alvo))) {
+      return res.status(403).json({ erro: SO_ACESSO_TOTAL_MEXE })
+    }
 
     const campos = []
     const valores = []
@@ -721,6 +743,9 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
       }
       // opcional: apagado vira NULL, nao string vazia
       por('telefone', telefone || null)
+    }
+    if (!imagemValida(req.body?.foto) || !imagemValida(req.body?.fotoOriginal)) {
+      return res.status(400).json({ erro: IMAGEM_INVALIDA })
     }
     if (req.body?.foto !== undefined) por('foto', req.body.foto || null)
     if (req.body?.fotoOriginal !== undefined) por('foto_original', req.body.fotoOriginal || null)
@@ -760,6 +785,12 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
       if (troca) {
         if (!cargoPode(meu, 'editar_usuario')) {
           return res.status(403).json({ erro: 'Seu setor não pode mudar o setor de ninguém.' })
+        }
+        /* mudar o PROPRIO setor e escolher as proprias permissoes: com
+           "editar setor" junto, dava para encher um setor de permissoes
+           e se mudar para ele */
+        if (souEu && !meu.acessoTotal) {
+          return res.status(403).json({ erro: 'Você não pode mudar o seu próprio setor. Peça à diretoria.' })
         }
         if (cargo.rows[0].acesso_total && !meu.acessoTotal) {
           return res.status(403).json({ erro: SO_ACESSO_TOTAL })
@@ -827,8 +858,12 @@ router.patch('/usuarios/:id', exigeSessao, async (req, res) => {
 router.delete('/usuarios/:id', exigeSessao, async (req, res) => {
   try {
     const meu = await meuCargo(req.dono.sub)
-    if (!cargoPode(meu, 'editar_usuario') && String(req.dono.sub) !== String(req.params.id)) {
+    const souEu = String(req.dono.sub) === String(req.params.id)
+    if (!cargoPode(meu, 'editar_usuario') && !souEu) {
       return res.status(403).json({ erro: 'Seu setor não pode excluir colaboradores.' })
+    }
+    if (!souEu && !meu.acessoTotal && (await temAcessoTotal(req.params.id))) {
+      return res.status(403).json({ erro: SO_ACESSO_TOTAL_MEXE })
     }
 
     const { rows } = await query(

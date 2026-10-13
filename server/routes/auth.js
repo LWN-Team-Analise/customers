@@ -1,7 +1,10 @@
+import crypto from 'node:crypto'
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { query } from '../db.js'
+import { donoDoToken, marcaDaSenha, SEGREDO, tokenDo } from '../sessao.js'
+import { anotar, chaveDaConta, esquecer, estourou, ipDe } from '../limite.js'
 import { enviarCodigo, temEmail } from '../email.js'
 import { configurado as temOutlook, perfilDoCodigo, urlDeEntrada } from '../outlook.js'
 import { normalizar } from '../../src/domain/permissoes.js'
@@ -11,16 +14,28 @@ import { registrarAtividade } from '../atividade.js'
 
 const router = Router()
 
-const SEGREDO = process.env.JWT_SECRET
-if (!SEGREDO) {
-  throw new Error('JWT_SECRET não está definido no ambiente. Defina esta variável de ambiente com uma string aleatória forte.')
-}
 const EXPIRA = process.env.JWT_EXPIRES || '8h'
 
 /** O codigo do "esqueci minha senha" vale 3 minutos, como pedido. */
 const MINUTOS_DO_CODIGO = 3
 /** Depois de cinco palpites errados, o codigo morre. */
 const TENTATIVAS_MAXIMAS = 5
+
+/* O freio da forca bruta (server/limite.js). A janela e de 15 minutos:
+   oito senhas erradas numa conta travam aquela conta; quarenta vindas
+   do mesmo endereco travam o endereco — e o que pega quem testa uma
+   senha em muitas contas. */
+const JANELA = 15
+const ERROS_POR_CONTA = 8
+const ERROS_POR_IP = 40
+const CODIGOS_POR_CONTA = 3
+const CODIGOS_POR_IP = 10
+const PALPITES_POR_IP = 20
+const MUITAS = 'Muitas tentativas. Aguarde 15 minutos e tente de novo.'
+
+/* hash de uma senha que ninguem tem: a conta que NAO existe tambem paga
+   o bcrypt, e o tempo da resposta deixa de dizer quem esta cadastrado */
+const HASH_VAZIO = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 12)
 
 const soDigitos = (valor) => String(valor ?? '').replace(/\D/g, '')
 const texto = (valor) => String(valor ?? '').trim()
@@ -90,12 +105,21 @@ async function buscarUsuario(condicao, valores) {
   }
 }
 
+/**
+ * O token de sessao. O `sh` e a marca da senha (server/sessao.js):
+ * trocar a senha derruba todo token emitido com a antiga.
+ */
+function tokenDeSessao(id, senhaHash) {
+  return jwt.sign({ sub: id, sh: marcaDaSenha(senhaHash) }, SEGREDO, {
+    expiresIn: EXPIRA,
+    algorithm: 'HS256',
+  })
+}
+
 /** Monta o token e carimba o ultimo acesso. */
 async function abrirSessao(linha) {
   const usuario = paraUsuario(linha)
-  const token = jwt.sign({ sub: usuario.id, cargo: usuario.cargo }, SEGREDO, {
-    expiresIn: EXPIRA,
-  })
+  const token = tokenDeSessao(usuario.id, linha.senha_hash)
   await query('UPDATE usuario SET ultimo_acesso = now() WHERE id = $1', [usuario.id])
   return { token, user: usuario }
 }
@@ -109,7 +133,20 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ erro: 'Informe seu e-mail ou CPF e a senha.' })
   }
 
+  const contaChave = `login:${chaveDaConta(identificador)}`
+  const ip = ipDe(req)
+  const ipChave = ip ? `login-ip:${ip}` : null
+
   try {
+    if (
+      await estourou([
+        { chave: contaChave, maximo: ERROS_POR_CONTA, minutos: JANELA },
+        { chave: ipChave, maximo: ERROS_POR_IP, minutos: JANELA },
+      ])
+    ) {
+      return res.status(429).json({ erro: MUITAS })
+    }
+
     const { rows } = await buscarUsuario(
       'lower(u.email) = lower($1) OR u.cpf = $2',
       [identificador, soDigitos(identificador)],
@@ -120,7 +157,13 @@ router.post('/login', async (req, res) => {
     // ao atacante a informacao de qual e-mail/CPF existe no sistema
     const generica = 'E-mail/CPF ou senha incorretos.'
 
-    if (!linha || !linha.senha_hash) {
+    /* a senha e conferida ANTES de qualquer outra resposta, e a conta
+       que nao existe compara com um hash qualquer: nem o tempo nem o
+       "acesso desativado" contam a quem nao sabe a senha que a conta
+       existe */
+    const confere = await bcrypt.compare(senha, linha?.senha_hash || HASH_VAZIO)
+    if (!linha || !linha.senha_hash || !confere) {
+      await anotar(contaChave, ipChave)
       return res.status(401).json({ erro: generica })
     }
 
@@ -128,11 +171,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ erro: 'Este acesso está desativado. Fale com o administrador.' })
     }
 
-    const confere = await bcrypt.compare(senha, linha.senha_hash)
-    if (!confere) {
-      return res.status(401).json({ erro: generica })
-    }
-
+    await esquecer(contaChave)
     return res.json(await abrirSessao(linha))
   } catch (erro) {
     if (erro.code === '42P01') {
@@ -147,18 +186,18 @@ router.post('/login', async (req, res) => {
 
 /** GET /api/auth/me — devolve o usuario do token. */
 router.get('/me', async (req, res) => {
-  const cabecalho = req.headers.authorization ?? ''
-  const token = cabecalho.startsWith('Bearer ') ? cabecalho.slice(7) : null
-
+  const token = tokenDo(req)
   if (!token) return res.status(401).json({ erro: 'Sessão não informada.', sessao: false })
 
   try {
-    const { sub } = jwt.verify(token, SEGREDO)
-    const { rows } = await buscarUsuario('u.id = $1', [sub])
+    const dono = await donoDoToken(token)
+    if (!dono) return res.status(401).json({ erro: 'Sessão expirada. Entre de novo.', sessao: false })
+    const { rows } = await buscarUsuario('u.id = $1', [dono.sub])
     if (!rows[0]) return res.status(401).json({ erro: 'Sessão inválida.', sessao: false })
     return res.json({ user: paraUsuario(rows[0]) })
-  } catch {
-    return res.status(401).json({ erro: 'Sessão expirada. Entre de novo.', sessao: false })
+  } catch (erro) {
+    logger.error('auth/me', erro.message)
+    return res.status(503).json({ erro: 'Não foi possível conferir a sessão agora.' })
   }
 })
 
@@ -169,8 +208,7 @@ router.get('/me', async (req, res) => {
  * senha_temporaria vira false e a tela para de cobrar.
  */
 router.post('/senha', async (req, res) => {
-  const cabecalho = req.headers.authorization ?? ''
-  const token = cabecalho.startsWith('Bearer ') ? cabecalho.slice(7) : null
+  const token = tokenDo(req)
   if (!token) return res.status(401).json({ erro: 'Sessão não informada.', sessao: false })
 
   const atual = String(req.body?.atual ?? '')
@@ -189,7 +227,9 @@ router.post('/senha', async (req, res) => {
   }
 
   try {
-    const { sub } = jwt.verify(token, SEGREDO)
+    const dono = await donoDoToken(token)
+    if (!dono) return res.status(401).json({ erro: 'Sessão expirada. Entre de novo.', sessao: false })
+    const { sub } = dono
     const { rows } = await query('SELECT senha_hash FROM usuario WHERE id = $1', [sub])
     if (!rows[0]) return res.status(401).json({ erro: 'Sessão inválida.', sessao: false })
 
@@ -207,7 +247,9 @@ router.post('/senha', async (req, res) => {
       entidade: ['usuario', sub],
       descricao: 'Senha alterada',
     })
-    return res.json({ ok: true })
+    /* a senha nova derruba as sessoes abertas com a antiga — inclusive
+       esta. O token novo volta junto para quem trocou nao cair. */
+    return res.json({ ok: true, token: tokenDeSessao(sub, hash) })
   } catch (erro) {
     if (erro.name === 'JsonWebTokenError' || erro.name === 'TokenExpiredError') {
       return res.status(401).json({ erro: 'Sessão expirada. Entre de novo.', sessao: false })
@@ -241,7 +283,9 @@ router.post('/senha', async (req, res) => {
      tabela nao conseguiria entrar na conta de ninguem.
    ============================================================ */
 
-const seisDigitos = () => String(Math.floor(100000 + Math.random() * 900000))
+/* crypto, e nao Math.random: o Math.random nao e feito para segredo, e
+   da para prever a sequencia dele a partir de saidas anteriores */
+const seisDigitos = () => String(crypto.randomInt(100000, 1000000))
 
 router.post('/recuperar', async (req, res) => {
   const identificador = texto(req.body?.identificador)
@@ -249,14 +293,38 @@ router.post('/recuperar', async (req, res) => {
     return res.status(400).json({ erro: 'Informe seu e-mail ou CPF.' })
   }
 
-  /* a resposta e a mesma para conta que existe e conta que nao existe */
+  /* a resposta e a mesma para conta que existe e conta que nao existe —
+     inclusive sem o e-mail mascarado, que so a conta que existe tinha e
+     por isso respondia "existe" para quem estivesse testando */
   const resposta = {
     ok: true,
     validoPor: MINUTOS_DO_CODIGO * 60,
     recado: 'Se essa conta existir, o código chega em instantes no e-mail cadastrado.',
   }
 
+  if (!temEmail()) {
+    return res.status(503).json({
+      erro: 'O envio de e-mail não está configurado no servidor. Fale com a diretoria.',
+    })
+  }
+
+  /* cada pedido manda um e-mail de verdade: sem freio, dava para
+     encher a caixa de alguem de codigos */
+  const contaChave = `recuperar:${chaveDaConta(identificador)}`
+  const ip = ipDe(req)
+  const ipChave = ip ? `recuperar-ip:${ip}` : null
+
   try {
+    if (
+      await estourou([
+        { chave: contaChave, maximo: CODIGOS_POR_CONTA, minutos: JANELA },
+        { chave: ipChave, maximo: CODIGOS_POR_IP, minutos: JANELA },
+      ])
+    ) {
+      return res.status(429).json({ erro: 'Muitos pedidos de código. Aguarde 15 minutos e tente de novo.' })
+    }
+    await anotar(contaChave, ipChave)
+
     const { rows } = await query(
       `SELECT id, name, email FROM usuario
         WHERE ativo AND (lower(email) = lower($1) OR cpf = $2) LIMIT 1`,
@@ -264,12 +332,6 @@ router.post('/recuperar', async (req, res) => {
     )
     const pessoa = rows[0]
     if (!pessoa) return res.json(resposta)
-
-    if (!temEmail()) {
-      return res.status(503).json({
-        erro: 'O envio de e-mail não está configurado no servidor. Fale com a diretoria.',
-      })
-    }
 
     // pedido novo invalida o anterior: so o ultimo codigo funciona
     await query(
@@ -291,11 +353,12 @@ router.post('/recuperar', async (req, res) => {
       codigo,
       minutos: MINUTOS_DO_CODIGO,
     })
-    if (!envio.ok) return res.status(502).json({ erro: envio.motivo })
-
-    // o destino sai mascarado: confirma que foi para a conta certa sem
-    // mostrar o e-mail inteiro para quem estiver olhando a tela
-    return res.json({ ...resposta, destino: mascarar(pessoa.email) })
+    if (!envio.ok) {
+      /* a falha fica no log; a resposta continua a mesma, senao ela
+         diria que a conta existe */
+      logger.error('auth/recuperar', `envio falhou: ${envio.motivo}`)
+    }
+    return res.json(resposta)
   } catch (erro) {
     if (erro.code === '42P01') {
       return res.status(503).json({
@@ -307,21 +370,21 @@ router.post('/recuperar', async (req, res) => {
   }
 })
 
-/** 'willian.ito@lwn.com.br' -> 'wi••••••@lwn.com.br' */
-function mascarar(email) {
-  const [nome, dominio] = String(email ?? '').split('@')
-  if (!dominio) return ''
-  const visivel = nome.slice(0, 2)
-  return `${visivel}${'•'.repeat(Math.max(3, nome.length - 2))}@${dominio}`
-}
-
 router.post('/codigo', async (req, res) => {
   const identificador = texto(req.body?.identificador)
   const codigo = soDigitos(req.body?.codigo)
 
   if (codigo.length !== 6) return res.status(400).json({ erro: 'O código tem 6 dígitos.' })
 
+  /* cada codigo morre em 5 palpites; o freio por endereco pega quem
+     tenta muitos codigos (de muitas contas) seguidos */
+  const ip = ipDe(req)
+  const ipChave = ip ? `codigo-ip:${ip}` : null
+
   try {
+    if (await estourou([{ chave: ipChave, maximo: PALPITES_POR_IP, minutos: JANELA }])) {
+      return res.status(429).json({ erro: MUITAS })
+    }
     const pessoa = await query(
       `SELECT id FROM usuario
         WHERE ativo AND (lower(email) = lower($1) OR cpf = $2) LIMIT 1`,
@@ -346,6 +409,7 @@ router.post('/codigo', async (req, res) => {
 
     const confere = await bcrypt.compare(codigo, guardado.codigo_hash)
     if (!confere) {
+      await anotar(ipChave)
       await query('UPDATE senha_codigo SET tentativas = tentativas + 1 WHERE id = $1', [
         guardado.id,
       ])
@@ -357,7 +421,7 @@ router.post('/codigo', async (req, res) => {
     const permissao = jwt.sign(
       { sub: pessoa.rows[0].id, uso: 'redefinir', cod: guardado.id },
       SEGREDO,
-      { expiresIn: '10m' },
+      { expiresIn: '10m', algorithm: 'HS256' },
     )
     return res.json({ ok: true, permissao })
   } catch (erro) {
@@ -389,7 +453,7 @@ router.post('/redefinir', async (req, res) => {
   }
 
   try {
-    const dono = jwt.verify(permissao, SEGREDO)
+    const dono = jwt.verify(permissao, SEGREDO, { algorithms: ['HS256'] })
     if (dono.uso !== 'redefinir') {
       return res.status(401).json({ erro: 'Permissão inválida. Recomece a recuperação.' })
     }
@@ -457,7 +521,7 @@ router.post('/outlook/inicio', (req, res) => {
   const redirecionar = texto(req.body?.redirecionar)
   if (!redirecionar) return res.status(400).json({ erro: 'Endereço de retorno não informado.' })
 
-  const estado = Math.random().toString(36).slice(2)
+  const estado = crypto.randomBytes(16).toString('base64url')
   return res.json({ url: urlDeEntrada({ redirecionar, estado }), estado })
 })
 
@@ -513,15 +577,16 @@ router.post('/outlook/entrar', async (req, res) => {
  * como pedido — assim ninguem fica com duas senhas para lembrar.
  */
 router.post('/outlook/vincular', async (req, res) => {
-  const cabecalho = req.headers.authorization ?? ''
-  const token = cabecalho.startsWith('Bearer ') ? cabecalho.slice(7) : null
+  const token = tokenDo(req)
   if (!token) return res.status(401).json({ erro: 'Sessão não informada.', sessao: false })
   if (!temOutlook()) {
     return res.status(503).json({ erro: 'O login com Outlook ainda não foi configurado.' })
   }
 
   try {
-    const { sub } = jwt.verify(token, SEGREDO)
+    const dono = await donoDoToken(token)
+    if (!dono) return res.status(401).json({ erro: 'Sessão expirada. Entre de novo.', sessao: false })
+    const { sub } = dono
     const perfil = await perfilDoCodigo(texto(req.body?.codigo), texto(req.body?.redirecionar))
 
     const meu = await query('SELECT email FROM usuario WHERE id = $1', [sub])

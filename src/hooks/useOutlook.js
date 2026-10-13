@@ -51,7 +51,10 @@ export default function useOutlook() {
 
   const abrir = useCallback(async () => {
     const redirecionar = RETORNO()
-    const { url } = await inicioDoOutlook(redirecionar)
+    /* o `estado` volta da Microsoft no retorno: so o codigo que traz o
+       MESMO estado e desta janela. Sem a conferencia, um codigo de outra
+       conta, empurrado para o /outlook, entraria no lugar do nosso. */
+    const { url, estado } = await inicioDoOutlook(redirecionar)
 
     /* a janela e aberta ANTES do await sempre que possivel; como aqui
        ela vem depois de uma chamada, alguns navegadores podem barrar —
@@ -77,6 +80,9 @@ export default function useOutlook() {
         if (evento.origin !== window.location.origin) return
         if (evento.data?.origem !== 'outlook') return
         if (evento.data.erro) terminar(recusar, new Error(evento.data.erro))
+        else if (estado && evento.data.estado !== estado) {
+          terminar(recusar, new Error('A resposta da Microsoft não é desta janela. Tente de novo.'))
+        }
         else if (evento.data.codigo) terminar(resolver, { codigo: evento.data.codigo, redirecionar })
         else terminar(recusar, new Error('A Microsoft não devolveu o código de entrada.'))
       }

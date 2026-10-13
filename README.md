@@ -144,7 +144,7 @@ claro atras da frase "Trajetoria de Clientes".
 > `db/atualizacao-11.sql.txt`, `db/atualizacao-12.sql.txt`,
 > `db/atualizacao-13.sql.txt`, `db/atualizacao-14.sql.txt`,
 > `db/atualizacao-15.sql.txt`, `db/atualizacao-16.sql.txt` e, por ultimo,
-> `db/atualizacao-17.sql.txt`, `db/atualizacao-18.sql.txt`, `db/atualizacao-19.sql.txt` e `db/atualizacao-20.sql.txt`.
+> `db/atualizacao-17.sql.txt`, `db/atualizacao-18.sql.txt`, `db/atualizacao-19.sql.txt`, `db/atualizacao-20.sql.txt` e `db/atualizacao-21.sql.txt`.
 >
 > **Banco que JA roda — um comando so:**
 >
@@ -206,6 +206,7 @@ O schema esta em **quatro arquivos, nesta ordem**:
 | `db/atualizacao-18.sql.txt` | checks proprios de cada obra (mexer dentro da obra vale so nela) |
 | `db/atualizacao-19.sql.txt` | check "Prazo da execucao" no card do Time Tecnico da 1a etapa    |
 | `db/atualizacao-20.sql.txt` | dias da execucao escolhidos um a um (`obra.execucao_dias`)        |
+| `db/atualizacao-21.sql.txt` | limite de tentativas: login, codigo de senha e sugestao          |
 
 Rode o primeiro na ordem indicada dentro dele; depois rode os outros
 inteiros, conectado ao banco `TrajetoClientes`. Todos, do segundo em diante,
