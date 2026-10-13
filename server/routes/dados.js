@@ -4,6 +4,7 @@ import { cargoPode, exige, exigeSessao, meuCargo, tratar } from '../sessao.js'
 import { enviarAviso, temEmail } from '../email.js'
 import { logger } from '../logger.js'
 import { descreverObra, registrarAtividade } from '../atividade.js'
+import { IMAGEM_INVALIDA, imagemValida } from '../utils/imagem.js'
 
 const router = Router()
 
@@ -606,6 +607,10 @@ function camposImagem(corpo) {
   }
 }
 
+/** A logo, a original e a capa: so imagem de verdade (server/utils/imagem.js). */
+const imagemDoClienteValida = (imagem) =>
+  imagemValida(imagem.logo) && imagemValida(imagem.logo_original) && imagemValida(imagem.capa)
+
 /* ============================================================
    SETORES DO CLIENTE
 
@@ -699,6 +704,7 @@ router.post('/clientes', exigeSessao, exige('editar_clientes'), async (req, res)
   if (erro) return res.status(400).json({ erro })
 
   const imagem = camposImagem(req.body) ?? {}
+  if (!imagemDoClienteValida(imagem)) return res.status(400).json({ erro: IMAGEM_INVALIDA })
   const colunas = Object.keys(imagem)
 
   try {
@@ -729,6 +735,7 @@ router.patch('/clientes/:id', exigeSessao, exige('editar_clientes'), async (req,
   /* a imagem so entra no UPDATE quando a tela mexeu nela; sem isso,
      salvar um endereco novo apagaria a logo do cliente */
   const imagem = camposImagem(req.body) ?? {}
+  if (!imagemDoClienteValida(imagem)) return res.status(400).json({ erro: IMAGEM_INVALIDA })
   const todos = [...valores, ...Object.values(imagem)]
   const extras = Object.keys(imagem)
     .map((coluna, i) => `, ${coluna} = $${valores.length + i + 1}`)

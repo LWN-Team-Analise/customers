@@ -122,6 +122,16 @@ export function AuthProvider({ children }) {
     setSession((atual) => (atual ? { ...atual, user: { ...atual.user, ...campos } } : atual))
   }, [])
 
+  /**
+   * Troca o token da sessao aberta. A troca de senha devolve um token
+   * novo: o antigo deixa de valer no servidor junto com a senha antiga.
+   */
+  const renovarToken = useCallback((token) => {
+    if (!token) return
+    guardarToken(token)
+    setSession((atual) => (atual ? { ...atual, token } : atual))
+  }, [])
+
   const logout = useCallback(async () => {
     await authService.signOut()
     setExpirou(false)
@@ -139,8 +149,9 @@ export function AuthProvider({ children }) {
       entrarComSessao,
       logout,
       atualizarPerfil,
+      renovarToken,
     }),
-    [session, loading, expirou, login, entrarComSessao, logout, atualizarPerfil],
+    [session, loading, expirou, login, entrarComSessao, logout, atualizarPerfil, renovarToken],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

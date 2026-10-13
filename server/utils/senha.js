@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+
 /**
  * Validação de força de senha.
  *
@@ -74,22 +76,25 @@ export function gerarSenhaForte(tamanho = 16) {
   const especiais = '!@#$%^&*()_+-=[]{}|;:,.<>?'
 
   const todos = letrasMaiusculas + letrasMinusculas + numeros + especiais
-  let senha = ''
+  /* crypto, e nao Math.random: a senha temporaria e um segredo, e a
+     sequencia do Math.random da para prever */
+  const sorteio = (texto) => texto[crypto.randomInt(texto.length)]
 
   // Garante pelo menos um de cada tipo
-  senha += letrasMaiusculas[Math.floor(Math.random() * letrasMaiusculas.length)]
-  senha += letrasMinusculas[Math.floor(Math.random() * letrasMinusculas.length)]
-  senha += numeros[Math.floor(Math.random() * numeros.length)]
-  senha += especiais[Math.floor(Math.random() * especiais.length)]
+  const letras = [
+    sorteio(letrasMaiusculas),
+    sorteio(letrasMinusculas),
+    sorteio(numeros),
+    sorteio(especiais),
+  ]
 
   // Preenche o resto
-  for (let i = senha.length; i < tamanho; i++) {
-    senha += todos[Math.floor(Math.random() * todos.length)]
-  }
+  while (letras.length < tamanho) letras.push(sorteio(todos))
 
-  // Embaralha a senha
-  return senha
-    .split('')
-    .sort(() => Math.random() - 0.5)
-    .join('')
+  // Embaralha (Fisher-Yates: o sort com aleatorio nao embaralha por igual)
+  for (let i = letras.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1)
+    ;[letras[i], letras[j]] = [letras[j], letras[i]]
+  }
+  return letras.join('')
 }

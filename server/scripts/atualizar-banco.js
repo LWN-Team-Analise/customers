@@ -41,6 +41,7 @@ const ARQUIVOS = [
   'db/atualizacao-18.sql.txt',
   'db/atualizacao-19.sql.txt',
   'db/atualizacao-20.sql.txt',
+  'db/atualizacao-21.sql.txt',
 ]
 
 /**
@@ -123,6 +124,7 @@ const CONFERENCIA = [
     "SELECT EXISTS (SELECT 1 FROM etapa_check WHERE tipo = 'material_gases' AND vigente_ate IS NULL) AS ok",
   ],
   ['obra.execucao_dias', col('obra', 'execucao_dias')],
+  ['tentativa_acesso', "SELECT to_regclass('public.tentativa_acesso') IS NOT NULL AS ok"],
 ]
 
 function col(tabela, coluna) {

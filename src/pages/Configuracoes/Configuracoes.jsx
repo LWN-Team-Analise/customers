@@ -572,7 +572,7 @@ function BlocoOutlook() {
  * conta Microsoft.
  */
 function TrocarSenha({ chamado = null }) {
-  const { user, atualizarPerfil } = useAuth()
+  const { user, atualizarPerfil, renovarToken } = useAuth()
 
   const caixa = useRef(null)
   /* aceso = o bloco acabou de ser apontado pela ilha do topo. E so um
@@ -619,7 +619,9 @@ function TrocarSenha({ chamado = null }) {
 
     setSalvando(true)
     try {
-      await trocarSenha(atual, nova)
+      const resposta = await trocarSenha(atual, nova)
+      /* a senha nova derruba o token antigo no servidor: o novo vem junto */
+      renovarToken(resposta?.token)
       atualizarPerfil({ senhaTemporaria: false })
       setAtual('')
       setNova('')

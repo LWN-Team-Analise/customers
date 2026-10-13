@@ -2,6 +2,10 @@ import { Router } from 'express'
 import { query } from '../db.js'
 import { enviarSugestao } from '../email.js'
 import { exigeSessao, meuCargo, tratar } from '../sessao.js'
+import { anotar, estourou } from '../limite.js'
+
+/* sugestoes por pessoa por hora (server/limite.js) */
+const SUGESTOES_POR_HORA = 5
 /* a lista de assuntos e a MESMA que a tela usava quando o bot respondia
    por regras. Agora ela nao decide nada: entra no system como material
    de consulta, e quem escreve a resposta e o modelo. Um arquivo so
@@ -294,6 +298,13 @@ router.post('/sugestao', exigeSessao, async (req, res) => {
   }
 
   try {
+    /* cada sugestao e um e-mail para o setor inteiro: um freio por
+       pessoa impede que um clique repetido (ou um script) encha a caixa */
+    const chave = `sugestao:${req.dono.sub}`
+    if (await estourou([{ chave, maximo: SUGESTOES_POR_HORA, minutos: 60 }])) {
+      return res.status(429).json({ erro: 'Muitas sugestões em pouco tempo. Tente de novo daqui a uma hora.' })
+    }
+
     const para = await quemRecebe()
     if (para.length === 0) {
       return res.status(503).json({
@@ -304,6 +315,7 @@ router.post('/sugestao', exigeSessao, async (req, res) => {
     const autor = anonima ? null : await quemFala(req.dono.sub)
     const envio = await enviarSugestao({ para, texto, autor })
     if (!envio.ok) return res.status(502).json({ erro: envio.motivo })
+    await anotar(chave)
 
     return res.json({ ok: true, como: anonima ? 'anônima' : 'identificada' })
   } catch (erro) {
